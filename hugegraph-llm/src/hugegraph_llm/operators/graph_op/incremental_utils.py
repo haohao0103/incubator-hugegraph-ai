@@ -112,9 +112,9 @@ def _ensure_community_id_property(client: Any) -> None:
     # Create property key (if not exists)
     try:
         schema.propertyKey("community_id").ifNotExist().asText().create()
-    except Exception:
+    except Exception as e:
         # May already exist — that's fine
-        pass
+        log.debug("propertyKey 'community_id' create skipped: %s", e)
 
 
 def clear_stale_community_assignments(
@@ -139,7 +139,8 @@ def clear_stale_community_assignments(
     try:
         total_resp = client.gremlin().exec(groovy)
         total = _parse_gremlin_count(total_resp)
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to count vertices with community_id: %s", e)
         total = 0
 
     if keep_community_ids is not None and keep_community_ids:

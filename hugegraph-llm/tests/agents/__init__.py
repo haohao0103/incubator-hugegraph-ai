@@ -14,16 +14,3 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-import os
-from typing import Optional
-
-from .models import BaseConfig
-
-
-class AdminConfig(BaseConfig):
-    """Admin settings for authentication and authorization."""
-
-    enable_login: Optional[str] = "False"
-    user_token: Optional[str] = os.environ.get("HUGEGRAPH_USER_TOKEN", "4321")
-    admin_token: Optional[str] = os.environ.get("HUGEGRAPH_ADMIN_TOKEN", "")

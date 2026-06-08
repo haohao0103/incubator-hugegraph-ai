@@ -446,3 +446,150 @@ Your goal is to generate a new, tailored "Graph Extract Prompt Header" based on 
 ## Language Requirement:
 Please generate the prompt in {language} language.
 """
+
+    # ── Agent system prompt (used by ReActAgent) ─────────────
+
+    agent_system_prompt_EN: str = """You are an intelligent knowledge graph analysis agent. Your task is to answer user questions by reasoning step-by-step and using available tools to explore the graph.
+
+## Available Tools
+{tool_descriptions}
+
+## Response Format
+You MUST respond using the following format:
+
+Thought: <reason about what you need to do next>
+Action: <the name of the tool to call>
+Action Input: <JSON object with tool parameters>
+
+... (repeat Thought/Action/Action Input as needed)
+
+When you have enough information to answer the question, respond with:
+
+Thought: I now have enough information to answer the question.
+Final Answer: <your comprehensive answer>
+
+## Important Rules
+1. Always start by extracting keywords from the user query using keyword_extract.
+2. Use semantic_id_lookup to find vertex IDs for the keywords before doing graph traversals.
+3. Use schema_lookup to understand the graph structure before writing complex queries.
+4. Use graph_traverse to explore relationships between entities.
+5. Use text2gremlin for complex graph queries that need precise traversal patterns.
+6. Use vector_search to find relevant document passages for factual questions.
+7. Use answer_synthesize ONLY as the final step to produce a natural language answer.
+8. NEVER fabricate information. If tools don't return what you need, say so honestly.
+9. Each step should make progress toward answering the question.
+10. If the same tool returns the same results, stop and synthesize what you have.
+
+## Current Conversation
+{conversation_history}"""
+
+    agent_system_prompt_CN: str = """你是一个智能知识图谱分析代理。你的任务是通过逐步推理并使用可用工具来探索图谱，回答用户的问题。
+
+## 可用工具
+{tool_descriptions}
+
+## 回复格式
+你必须按以下格式回复：
+
+Thought: <推理下一步需要做什么>
+Action: <要调用的工具名称>
+Action Input: <JSON 格式的工具参数>
+
+... (重复 Thought/Action/Action Input 根据需要)
+
+当你获得足够信息回答问题后，回复：
+
+Thought: 我已有足够的信息来回答问题。
+Final Answer: <你的综合答案>
+
+## 重要规则
+1. 始终先从用户查询中提取关键词，使用 keyword_extract。
+2. 在进行图遍历之前，使用 semantic_id_lookup 查找关键词对应的顶点 ID。
+3. 在编写复杂查询之前，使用 schema_lookup 了解图结构。
+4. 使用 graph_traverse 探索实体之间的关系。
+5. 使用 text2gremlin 处理需要精确遍历模式的复杂图查询。
+6. 使用 vector_search 查找事实性问题相关的文档段落。
+7. 仅将 answer_synthesize 作为最后一步，产生自然语言答案。
+8. 绝不要编造信息。如果工具没有返回你需要的内容，请如实说明。
+9. 每一步都应该推进回答问题。
+10. 如果同样的工具返回同样的结果，停止并综合你已有信息。
+
+## 当前对话
+{conversation_history}"""
+
+    # ── Query classifier prompt ─────────────────────────────
+
+    query_classifier_prompt_EN: str = """Classify the following query as 'simple' or 'complex'.
+
+Simple queries ask for specific facts about known entities.
+Example: 'Who is Sarah?', 'What is the capital of France?', 'Find entity X'
+
+Complex queries require multi-step reasoning, comparison, analysis,
+or understanding relationships between entities.
+Example: 'Compare the relationships between entity A and B',
+'Analyze how X influences Y through the network',
+'Find all entities connected to both A and B'
+
+Query: {query}
+
+Respond with exactly one word: 'simple' or 'complex'."""
+
+    query_classifier_prompt_CN: str = """将以下查询分类为 'simple' 或 'complex'。
+
+简单查询询问关于已知实体的具体事实。
+示例：'Sarah 是谁？'、'法国的首都是什么？'、'查找实体 X'
+
+复杂查询需要多步推理、比较、分析或理解实体之间的关系。
+示例：'比较实体 A 和 B 之间的关系'、
+'分析 X 如何通过网络影响 Y'、
+'查找同时连接到 A 和 B 的所有实体'
+
+查询: {query}
+
+只回复一个词：'simple' 或 'complex'。"""
+
+    # ── Community report prompt ──────────────────────────────
+
+    community_report_prompt_EN: str = """Generate a structured report for a community of connected entities.
+
+Community Size: {community_size} | Density: {community_density}
+
+Entities: {entity_list}
+Relationships: {relationship_list}
+
+Output: Title, Summary (2-3 sentences), Key Entities (top 3-5), Patterns (2-3), Score (0-10)."""
+
+    community_report_prompt_CN: str = """为一个连接实体社区生成结构化报告。
+
+社区大小: {community_size} | 密度: {community_density}
+
+实体: {entity_list}
+关系: {relationship_list}
+
+输出: 标题, 摘要(2-3句), 关键实体(前3-5个), 模式(2-3个), 评分(0-10)。"""
+
+    # ── Global search prompts ────────────────────────────────
+
+    global_search_map_prompt_EN: str = """Find key points relevant to: {query}
+
+Community: {community_title} (score: {importance_score:.1f})
+{report_text}
+
+List findings, each tagged with score (0-10). Format: Finding: <text> | Score: <0-10>"""
+
+    global_search_map_prompt_CN: str = """找出与问题相关的关键点: {query}
+
+社区: {community_title} (评分: {importance_score:.1f})
+{report_text}
+
+列出发现，每个标注评分(0-10)。格式: 发现: <文本> | 评分: <0-10>"""
+
+    global_search_reduce_prompt_EN: str = """Synthesize into ONE comprehensive answer.
+
+Question: {query}
+
+Findings (sorted by importance):
+{findings_text}
+
+Integrate themes across communities into a coherent analytical response."""
+

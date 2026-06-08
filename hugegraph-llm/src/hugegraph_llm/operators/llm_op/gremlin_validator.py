@@ -150,9 +150,9 @@ class GremlinRetryLoop:
         )
         result = retry_loop.generate_and_execute("Find all suppliers of part A")
         if result["success"]:
-            print(result["result"])
+            log.info("Gremlin result: %s", result["result"])
         else:
-            print("Fallback to BFS")
+            log.warning("Gremlin failed, falling back to BFS")
     """
 
     MAX_RETRIES = 3

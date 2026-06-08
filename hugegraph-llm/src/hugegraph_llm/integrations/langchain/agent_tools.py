@@ -17,9 +17,29 @@
 
 """HugeGraph tools for LangChain agents."""
 
+import re
 from typing import Any, Dict, List, Optional
 
 from hugegraph_llm.utils.log import log
+
+
+# Characters that could cause Gremlin injection if unescaped
+_GREMLIN_DANGEROUS_CHARS = re.compile(r'[\"\'\\)\(;\[\]{}]')
+_GREMLIN_SANITIZE_MAX_LEN = 256
+
+
+def _sanitize_gremlin_value(value: str) -> str:
+    """Sanitize a value that will be interpolated into a Gremlin query string.
+
+    Removes dangerous characters and truncates to a safe length.
+    This is a defense-in-depth measure; for production use,
+    prefer parameterized queries where the backend supports them.
+    """
+    value = value.strip()[:_GREMLIN_SANITIZE_MAX_LEN]
+    value = _GREMLIN_DANGEROUS_CHARS.sub("", value)
+    if not value:
+        raise ValueError("Sanitized value is empty — possible injection attempt")
+    return value
 
 
 class HugeGraphTool:
@@ -53,7 +73,8 @@ class GremlinQueryTool(HugeGraphTool):
             resp = self._graph_client.gremlin(query).exec()
             return str(resp)
         except Exception as e:
-            return f"Gremlin query error: {e}"
+            log.error("GremlinQueryTool error: %s", e)
+            raise
 
 
 class VectorSearchTool(HugeGraphTool):
@@ -82,7 +103,8 @@ class VectorSearchTool(HugeGraphTool):
             results = self._vector_index.search(vec, top_k)
             return str(results)
         except Exception as e:
-            return f"Vector search error: {e}"
+            log.error("VectorSearchTool error: %s", e)
+            raise
 
 
 class EntitySearchTool(HugeGraphTool):
@@ -100,16 +122,18 @@ class EntitySearchTool(HugeGraphTool):
 
     def run(self, query: str, label: str = "Entity", **kwargs) -> str:
         try:
-            safe_query = query.replace("'", "\\'")
+            safe_query = _sanitize_gremlin_value(query)
+            safe_label = _sanitize_gremlin_value(label)
             gremlin = (
-                f'g.V().hasLabel("{label}")'
+                f'g.V().hasLabel("{safe_label}")'
                 f'.has("name", containing("{safe_query}"))'
                 f'.limit(10).valueMap()'
             )
             resp = self._graph_client.gremlin(gremlin).exec()
             return str(resp)
         except Exception as e:
-            return f"Entity search error: {e}"
+            log.error("EntitySearchTool error: %s", e)
+            raise
 
 
 class CommunityInfoTool(HugeGraphTool):
@@ -127,7 +151,7 @@ class CommunityInfoTool(HugeGraphTool):
 
     def run(self, query: str, **kwargs) -> str:
         try:
-            community_id = query.strip()
+            community_id = _sanitize_gremlin_value(query.strip())
             gremlin = (
                 f'g.V().hasLabel("Community")'
                 f'.has("community_id", "{community_id}")'
@@ -136,7 +160,8 @@ class CommunityInfoTool(HugeGraphTool):
             resp = self._graph_client.gremlin(gremlin).exec()
             return str(resp)
         except Exception as e:
-            return f"Community info error: {e}"
+            log.error("CommunityInfoTool error: %s", e)
+            raise
 
 
 class SchemaInfoTool(HugeGraphTool):
@@ -165,7 +190,8 @@ class SchemaInfoTool(HugeGraphTool):
             schema["edge_labels"] = str(el_resp) if el_resp else "[]"
             return str(schema)
         except Exception as e:
-            return f"Schema info error: {e}"
+            log.error("SchemaInfoTool error: %s", e)
+            raise
 
 
 class PathFindTool(HugeGraphTool):
@@ -187,7 +213,7 @@ class PathFindTool(HugeGraphTool):
             parts = query.split("|")
             if len(parts) != 2:
                 return "Format: 'entity1|entity2'"
-            src, dst = [p.strip().replace("'", "\\'") for p in parts]
+            src, dst = [_sanitize_gremlin_value(p) for p in parts]
             gremlin = (
                 f'g.V().has("name", "{src}").'
                 f'repeat(out().simplePath()).'
@@ -198,7 +224,8 @@ class PathFindTool(HugeGraphTool):
             resp = self._graph_client.gremlin(gremlin).exec()
             return str(resp)
         except Exception as e:
-            return f"Path find error: {e}"
+            log.error("PathFindTool error: %s", e)
+            raise
 
 
 class NeighborExploreTool(HugeGraphTool):
@@ -216,7 +243,7 @@ class NeighborExploreTool(HugeGraphTool):
 
     def run(self, query: str, depth: int = 1, **kwargs) -> str:
         try:
-            safe_query = query.strip().replace("'", "\\'")
+            safe_query = _sanitize_gremlin_value(query)
             gremlin = (
                 f'g.V().has("name", "{safe_query}").'
                 f'repeat(out()).times({depth}).'
@@ -225,7 +252,8 @@ class NeighborExploreTool(HugeGraphTool):
             resp = self._graph_client.gremlin(gremlin).exec()
             return str(resp)
         except Exception as e:
-            return f"Neighbor explore error: {e}"
+            log.error("NeighborExploreTool error: %s", e)
+            raise
 
 
 # Tool registry

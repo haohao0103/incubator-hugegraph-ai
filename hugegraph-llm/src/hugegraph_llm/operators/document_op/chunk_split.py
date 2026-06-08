@@ -34,12 +34,17 @@ class ChunkSplit:
         texts: Union[str, List[str]],
         split_type: Literal["document", "paragraph", "sentence"] = SPLIT_TYPE_DOCUMENT,
         language: Literal["zh", "en"] = LANGUAGE_ZH,
+        doc_name: Optional[str] = None,
+        doc_source: Optional[str] = None,
     ):
         if isinstance(texts, str):
             texts = [texts]
         self.texts = texts
         self.separators = self._get_separators(language)
         self.text_splitter = self._get_text_splitter(split_type)
+        # Provenance metadata (optional)
+        self.doc_name = doc_name or "unknown"
+        self.doc_source = doc_source or ""
 
     def _get_separators(self, language: str) -> List[str]:
         if language == LANGUAGE_ZH:
@@ -61,11 +66,20 @@ class ChunkSplit:
 
     def run(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         all_chunks = []
+        chunk_metadata = []
         for text in self.texts:
             chunks = self.text_splitter(text)
-            all_chunks.extend(chunks)
+            for i, chunk in enumerate(chunks):
+                all_chunks.append(chunk)
+                chunk_metadata.append({
+                    "text": chunk,
+                    "index": i,
+                    "doc_name": self.doc_name,
+                    "doc_source": self.doc_source,
+                })
 
         if context is None:
-            return {"chunks": all_chunks}
+            return {"chunks": all_chunks, "chunk_metadata": chunk_metadata}
         context["chunks"] = all_chunks
+        context["chunk_metadata"] = chunk_metadata
         return context

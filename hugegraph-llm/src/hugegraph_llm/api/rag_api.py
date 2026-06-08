@@ -96,26 +96,33 @@ def rag_http_api(
                 detail="Query must not be empty.",
             )
 
-        result = rag_answer_func(
-            text=req.query,
-            raw_answer=req.raw_answer,
-            vector_only_answer=req.vector_only,
-            graph_only_answer=req.graph_only,
-            graph_vector_answer=req.graph_vector_answer,
-            graph_ratio=req.graph_ratio,
-            rerank_method=req.rerank_method,
-            near_neighbor_first=req.near_neighbor_first,
-            gremlin_tmpl_num=req.gremlin_tmpl_num,
-            max_graph_items=req.max_graph_items,
-            topk_return_results=req.topk_return_results,
-            vector_dis_threshold=req.vector_dis_threshold,
-            topk_per_keyword=req.topk_per_keyword,
-            # Keep prompt params in the end
-            custom_related_information=req.custom_priority_info,
-            answer_prompt=req.answer_prompt or prompt.answer_prompt,
-            keywords_extract_prompt=req.keywords_extract_prompt or prompt.keywords_extract_prompt,
-            gremlin_prompt=req.gremlin_prompt or prompt.gremlin_generate_prompt,
-        )
+        try:
+            result = rag_answer_func(
+                text=req.query,
+                raw_answer=req.raw_answer,
+                vector_only_answer=req.vector_only,
+                graph_only_answer=req.graph_only,
+                graph_vector_answer=req.graph_vector_answer,
+                graph_ratio=req.graph_ratio,
+                rerank_method=req.rerank_method,
+                near_neighbor_first=req.near_neighbor_first,
+                gremlin_tmpl_num=req.gremlin_tmpl_num,
+                max_graph_items=req.max_graph_items,
+                topk_return_results=req.topk_return_results,
+                vector_dis_threshold=req.vector_dis_threshold,
+                topk_per_keyword=req.topk_per_keyword,
+                # Keep prompt params in the end
+                custom_related_information=req.custom_priority_info,
+                answer_prompt=req.answer_prompt or prompt.answer_prompt,
+                keywords_extract_prompt=req.keywords_extract_prompt or prompt.keywords_extract_prompt,
+                gremlin_prompt=req.gremlin_prompt or prompt.gremlin_generate_prompt,
+            )
+        except Exception as e:
+            log.error("Error in rag_answer_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process RAG query.",
+            ) from e
         # Enrich with provenance citations if requested
         citations = []
         if req.include_provenance and result:
