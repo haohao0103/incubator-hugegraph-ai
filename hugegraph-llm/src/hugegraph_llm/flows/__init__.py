@@ -38,3 +38,4 @@ class FlowName(str, Enum):
     PROVENANCE_KG_BUILD = "provenance_kg_build"
     GRAPH_RAG_SEARCH = "graph_rag_search"
     INCREMENTAL_INDEX = "incremental_index"
+    DRIFT_SEARCH = "drift_search"

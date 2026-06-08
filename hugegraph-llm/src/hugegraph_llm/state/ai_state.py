@@ -89,6 +89,10 @@ class WkFlowInput(GParam):
     hyde_mode: Optional[str] = None  # HyDE mode: off | prefix | full
     hyde_max_query_length: Optional[int] = None  # Skip HyDE for long queries
 
+    # DRIFT fields (Sprint 4)
+    drift_max_depth: Optional[int] = None  # Max iteration depth
+    drift_communities_top_k: Optional[int] = None  # Top-K communities to match
+
     def reset(self, _: CStatus) -> None:
         self.texts = None
         self.language = None
@@ -147,6 +151,8 @@ class WkFlowInput(GParam):
         self.enable_hyde = None
         self.hyde_mode = None
         self.hyde_max_query_length = None
+        self.drift_max_depth = None
+        self.drift_communities_top_k = None
 
 
 class WkFlowState(GParam):
@@ -244,6 +250,13 @@ class WkFlowState(GParam):
     # HyDE fields (Sprint 3)
     hyde_query: Optional[str] = None  # HyDE-enhanced query text
     hyde_applied: Optional[bool] = None  # Whether HyDE was applied
+
+    # DRIFT fields (Sprint 4)
+    drift_answer: Optional[str] = None  # DRIFT final answer
+    drift_findings: Optional[List[Dict[str, Any]]] = None  # DRIFT findings list
+    drift_communities_used: Optional[int] = None  # Communities used
+    drift_depth_reached: Optional[int] = None  # Actual depth reached
+    drift_primer: Optional[Dict[str, Any]] = None  # Primer output
 
     def setup(self) -> CStatus:
         self.schema = None

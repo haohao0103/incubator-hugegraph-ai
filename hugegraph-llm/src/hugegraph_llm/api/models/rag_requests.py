@@ -266,3 +266,18 @@ class GraphRAGSearchRequest(BaseModel):
     client_config: Optional[GraphConfigRequest] = Query(
         None, description="HugeGraph server config (uses default if not provided)."
     )
+
+
+class DriftSearchRequest(BaseModel):
+    """Request model for DRIFT search.
+
+    DRIFT combines Global Search breadth with Local Search depth
+    through a 5-step pipeline (HyDE → Community Match → Primer →
+    Parallel Local Search → Reduce).
+    """
+
+    query: str = Query(..., description="The analytical question to answer.")
+    graph_name: Optional[str] = Query(None, description="Graph name (uses config default if not specified).")
+    max_depth: int = Query(2, description="Max iteration depth for local search (1-3).", ge=1, le=3)
+    communities_top_k: int = Query(5, description="Number of top communities to match.", ge=1, le=20)
+    language: str = Query("en", description="Language for prompts: 'en' or 'cn'.")
