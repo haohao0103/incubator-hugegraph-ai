@@ -84,6 +84,11 @@ class WkFlowInput(GParam):
     max_steps: Optional[int] = None  # Maximum ReAct steps for agent
     tools_filter: Optional[List[str]] = None  # Optional tool name filter
 
+    # HyDE fields (Sprint 3)
+    enable_hyde: Optional[bool] = None  # Enable HyDE query enhancement
+    hyde_mode: Optional[str] = None  # HyDE mode: off | prefix | full
+    hyde_max_query_length: Optional[int] = None  # Skip HyDE for long queries
+
     def reset(self, _: CStatus) -> None:
         self.texts = None
         self.language = None
@@ -139,6 +144,9 @@ class WkFlowInput(GParam):
 
         self.max_steps = None
         self.tools_filter = None
+        self.enable_hyde = None
+        self.hyde_mode = None
+        self.hyde_max_query_length = None
 
 
 class WkFlowState(GParam):
@@ -232,6 +240,10 @@ class WkFlowState(GParam):
     resolution_batch_size: Optional[int] = None
     resolution_vertex_labels: Optional[List[str]] = None
     merged_result: Optional[Dict[str, Any]] = None  # deprecated: use resolution_result
+
+    # HyDE fields (Sprint 3)
+    hyde_query: Optional[str] = None  # HyDE-enhanced query text
+    hyde_applied: Optional[bool] = None  # Whether HyDE was applied
 
     def setup(self) -> CStatus:
         self.schema = None
