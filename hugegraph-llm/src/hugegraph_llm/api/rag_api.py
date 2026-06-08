@@ -30,6 +30,7 @@ from hugegraph_llm.api.models.rag_requests import (
     GraphRAGSearchRequest,
     GremlinGenerateRequest,
     IncrementalIndexRequest,
+    DriftSearchRequest,
     LLMConfigRequest,
     RAGRequest,
     RerankerConfigRequest,
@@ -81,6 +82,7 @@ def rag_http_api(
     global_search_func=None,
     graph_rag_search_func=None,
     incremental_index_func=None,
+    drift_search_func=None,
 ):
     @router.post("/rag", status_code=status.HTTP_200_OK)
     def rag_answer_api(req: RAGRequest):
@@ -441,6 +443,57 @@ def rag_http_api(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Incremental indexing failed.",
+            ) from e
+
+    @router.post("/rag/drift", status_code=status.HTTP_200_OK)
+    def drift_search_api(req: DriftSearchRequest):
+        """DRIFT (Dynamic Reasoning and Inference with Flexible Traversal) search.
+
+        A 5-step deep retrieval strategy combining Global Search breadth
+        with Local Search depth:
+
+        1. HyDE: Generate hypothetical answer for the query
+        2. Community Match: Find top-K relevant communities
+        3. Primer: Initial analysis + follow-up sub-questions
+        4. Parallel Local Search: Iterative deep fact retrieval
+        5. Reduce: Synthesize comprehensive answer
+
+        Best for complex analytical questions that require both overview
+        understanding and specific factual details.
+        """
+        try:
+            set_graph_config(req)
+
+            if drift_search_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="DRIFT search function is not configured.",
+                )
+
+            result = drift_search_func(
+                query=req.query,
+                graph_name=req.graph_name or huge_settings.graph_name,
+                max_depth=req.max_depth,
+                communities_top_k=req.communities_top_k,
+                language=req.language,
+            )
+
+            return {
+                "status_code": result.get("status_code", 200),
+                "drift_answer": result.get("drift_answer", ""),
+                "communities_used": result.get("drift_communities_used", 0),
+                "depth_reached": result.get("drift_depth_reached", 0),
+                "findings_count": len(result.get("drift_findings", [])),
+                "call_count": result.get("call_count", 0),
+            }
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            log.error("Error in drift_search_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="DRIFT search failed.",
             ) from e
 
     @router.post("/rag/global", status_code=status.HTTP_200_OK)

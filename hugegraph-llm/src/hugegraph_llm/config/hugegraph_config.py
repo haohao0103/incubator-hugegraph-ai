@@ -62,3 +62,7 @@ class HugeGraphConfig(BaseConfig):
     enable_hyde: bool = False  # Enable HyDE query enhancement
     hyde_mode: str = "prefix"  # off | prefix | full
     hyde_max_query_length: int = 100  # Skip HyDE for queries longer than this
+
+    # DRIFT config (Sprint 4)
+    drift_max_depth: int = 2  # Max iteration depth for parallel local search (1-3)
+    drift_communities_top_k: int = 5  # Number of top communities to match
