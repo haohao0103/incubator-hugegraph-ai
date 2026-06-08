@@ -281,3 +281,24 @@ class DriftSearchRequest(BaseModel):
     max_depth: int = Query(2, description="Max iteration depth for local search (1-3).", ge=1, le=3)
     communities_top_k: int = Query(5, description="Number of top communities to match.", ge=1, le=20)
     language: str = Query("en", description="Language for prompts: 'en' or 'cn'.")
+
+
+class SchemaValidationRequest(BaseModel):
+    """Request model for schema validation of extracted entities.
+
+    Validates a batch of entities and relations against the schema,
+    returning violations and suggested fixes.
+    """
+
+    entities: List[dict] = Query(
+        default_factory=list,
+        description="List of entity dicts: [{label, properties}, ...]"
+    )
+    relations: List[dict] = Query(
+        default_factory=list,
+        description="List of relation dicts: [{relation_label, source_label, target_label, properties}, ...]"
+    )
+    strict_mode: bool = Query(
+        False,
+        description="If True, unknown properties cause errors instead of warnings."
+    )

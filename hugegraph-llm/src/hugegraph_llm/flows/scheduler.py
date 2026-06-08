@@ -31,6 +31,7 @@ from hugegraph_llm.flows.graph_extract import GraphExtractFlow
 from hugegraph_llm.flows.import_graph_data import ImportGraphDataFlow
 from hugegraph_llm.flows.incremental_index_flow import IncrementalIndexFlow
 from hugegraph_llm.flows.drift_flow import DriftFlow
+from hugegraph_llm.flows.schema_validation_flow import SchemaValidationFlow
 from hugegraph_llm.flows.prompt_generate import PromptGenerateFlow
 from hugegraph_llm.flows.rag_flow_graph_only import RAGGraphOnlyFlow
 from hugegraph_llm.flows.rag_flow_graph_vector import RAGGraphVectorFlow
@@ -125,6 +126,10 @@ class Scheduler:
         self.pipeline_pool[FlowName.DRIFT_SEARCH] = {
             "manager": GPipelineManager(),
             "flow": DriftFlow(),
+        }
+        self.pipeline_pool[FlowName.SCHEMA_VALIDATION] = {
+            "manager": GPipelineManager(),
+            "flow": SchemaValidationFlow(),
         }
         self.max_pipeline = max_pipeline
 

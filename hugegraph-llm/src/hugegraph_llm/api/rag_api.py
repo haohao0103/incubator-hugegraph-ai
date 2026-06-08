@@ -34,6 +34,7 @@ from hugegraph_llm.api.models.rag_requests import (
     LLMConfigRequest,
     RAGRequest,
     RerankerConfigRequest,
+    SchemaValidationRequest,
 )
 from hugegraph_llm.api.models.rag_response import RAGResponse
 from hugegraph_llm.config import huge_settings, llm_settings, prompt
@@ -494,6 +495,87 @@ def rag_http_api(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="DRIFT search failed.",
+            ) from e
+
+    @router.post("/rag/schema/validate", status_code=status.HTTP_200_OK)
+    def schema_validate_api(req: SchemaValidationRequest):
+        """Validate entities and relations against the schema.
+
+        Checks property types, required fields, relation constraints,
+        and cardinality rules. Returns validation report with violations
+        and suggested fixes.
+
+        Usage:
+            POST /rag/schema/validate
+            {
+                "entities": [{"label": "Person", "properties": {"name": "Alice", "age": 30}}],
+                "relations": [{"relation_label": "works_at", "source_label": "Person", "target_label": "Company"}],
+                "strict_mode": false
+            }
+        """
+        try:
+            from hugegraph_llm.operators.graph_op.schema_validator import (
+                SchemaValidator,
+            )
+
+            validator = SchemaValidator(strict_mode=req.strict_mode)
+
+            # Validate entities
+            entity_results = []
+            for i, ent in enumerate(req.entities):
+                label = ent.get("label", "Entity")
+                props = ent.get("properties", ent)
+                vr = validator.validate_entity(label, props)
+                entity_results.append({
+                    "index": i,
+                    "label": label,
+                    "is_valid": vr.is_valid,
+                    "errors": [v.message for v in vr.errors],
+                    "warnings": [v.message for v in vr.warnings],
+                })
+
+            # Validate relations
+            relation_results = []
+            for i, rel in enumerate(req.relations):
+                rel_label = rel.get("relation_label", rel.get("label", ""))
+                src = rel.get("source_label", rel.get("source", ""))
+                tgt = rel.get("target_label", rel.get("target", ""))
+                props = rel.get("properties", {})
+                vr = validator.validate_relation(rel_label, src, tgt, props)
+                relation_results.append({
+                    "index": i,
+                    "relation_label": rel_label,
+                    "is_valid": vr.is_valid,
+                    "errors": [v.message for v in vr.errors],
+                    "warnings": [v.message for v in vr.warnings],
+                })
+
+            total_errors = sum(
+                len(r["errors"]) for r in entity_results + relation_results
+            )
+            total_warnings = sum(
+                len(r["warnings"]) for r in entity_results + relation_results
+            )
+
+            return {
+                "schema_version": validator._schema.version,
+                "total_entities": len(req.entities),
+                "total_relations": len(req.relations),
+                "valid_entities": sum(1 for r in entity_results if r["is_valid"]),
+                "valid_relations": sum(
+                    1 for r in relation_results if r["is_valid"]
+                ),
+                "total_errors": total_errors,
+                "total_warnings": total_warnings,
+                "entity_results": entity_results,
+                "relation_results": relation_results,
+            }
+
+        except Exception as e:
+            log.error("Error in schema_validate_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Schema validation failed.",
             ) from e
 
     @router.post("/rag/global", status_code=status.HTTP_200_OK)

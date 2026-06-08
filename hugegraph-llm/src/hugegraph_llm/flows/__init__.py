@@ -39,3 +39,4 @@ class FlowName(str, Enum):
     GRAPH_RAG_SEARCH = "graph_rag_search"
     INCREMENTAL_INDEX = "incremental_index"
     DRIFT_SEARCH = "drift_search"
+    SCHEMA_VALIDATION = "schema_validation"
