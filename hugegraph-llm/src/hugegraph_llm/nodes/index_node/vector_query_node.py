@@ -13,25 +13,31 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from hugegraph_llm.config import index_settings
 from hugegraph_llm.models.embeddings.init_embedding import Embeddings
 from hugegraph_llm.nodes.base_node import BaseNode
 from hugegraph_llm.operators.index_op.vector_index_query import VectorIndexQuery
+from hugegraph_llm.operators.llm_op.hyde_generate import HyDEGenerate
 from hugegraph_llm.utils.log import log
 
 
 class VectorQueryNode(BaseNode):
     """
-    Vector query node, responsible for retrieving relevant documents from the vector index
+    Vector query node, responsible for retrieving relevant documents from the vector index.
+
+    Supports optional HyDE (Hypothetical Document Embeddings) enhancement:
+    when ``enable_hyde`` is True, the query is enriched with an LLM-generated
+    hypothetical answer passage before vector retrieval.
     """
 
     operator: VectorIndexQuery
+    hyde_enhancer: Optional[HyDEGenerate] = None
 
     def node_init(self):
         """
-        Initialize the vector query operator
+        Initialize the vector query operator and optional HyDE enhancer
         """
         try:
             # Lazy import to avoid circular dependency
@@ -44,6 +50,14 @@ class VectorQueryNode(BaseNode):
             max_items = self.wk_input.max_items if self.wk_input.max_items is not None else 3
 
             self.operator = VectorIndexQuery(vector_index=vector_index, embedding=embedding, topk=max_items)
+
+            # Initialize HyDE enhancer if enabled
+            if getattr(self.wk_input, "enable_hyde", False):
+                hyde_mode = getattr(self.wk_input, "hyde_mode", "prefix")
+                hyde_max_len = getattr(self.wk_input, "hyde_max_query_length", 100)
+                self.hyde_enhancer = HyDEGenerate(mode=hyde_mode, max_query_length=hyde_max_len)
+                log.info("HyDE enabled in VectorQueryNode (mode=%s)", hyde_mode)
+
             return super().node_init()
         except Exception as e:  # pylint: disable=broad-exception-caught
             log.error("Failed to initialize VectorQueryNode: %s", e)
@@ -53,7 +67,7 @@ class VectorQueryNode(BaseNode):
 
     def operator_schedule(self, data_json: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute the vector query operation
+        Execute the vector query operation, with optional HyDE query enhancement.
         """
         try:
             # Get the query text from input
@@ -62,11 +76,19 @@ class VectorQueryNode(BaseNode):
                 log.warning("No query text provided for vector query")
                 return data_json
 
-            # Perform the vector query
-            result = self.operator.run({"query": query})
+            # HyDE hook: enhance query for better vector retrieval
+            search_query = query
+            if self.hyde_enhancer is not None:
+                search_query = self.hyde_enhancer.enhance(query)
+
+            # Perform the vector query with (possibly enhanced) query
+            result = self.operator.run({"query": search_query})
 
             # Update the state
             data_json.update(result)
+            if self.hyde_enhancer is not None and search_query != query:
+                data_json["hyde_applied"] = True
+                data_json["hyde_query"] = search_query
             log.info(
                 "Vector query completed, found %d results",
                 len(result.get("vector_result", [])),

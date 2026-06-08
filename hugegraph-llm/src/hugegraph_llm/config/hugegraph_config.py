@@ -57,3 +57,8 @@ class HugeGraphConfig(BaseConfig):
     entity_resolution_threshold: float = 0.85  # Cosine similarity threshold
     entity_resolution_batch_size: int = 50  # LLM verify batch size
     entity_resolution_strategy: str = "hybrid"  # exact_match | embedding | llm_verify | hybrid
+
+    # HyDE config (Sprint 3)
+    enable_hyde: bool = False  # Enable HyDE query enhancement
+    hyde_mode: str = "prefix"  # off | prefix | full
+    hyde_max_query_length: int = 100  # Skip HyDE for queries longer than this
