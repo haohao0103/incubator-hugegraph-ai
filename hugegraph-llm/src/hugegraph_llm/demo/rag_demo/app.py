@@ -28,6 +28,9 @@ from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.config import admin_settings, huge_settings, prompt
 from hugegraph_llm.demo.rag_demo.admin_block import create_admin_block, log_stream
 from hugegraph_llm.demo.rag_demo.agent_block import create_agent_block
+from hugegraph_llm.demo.rag_demo.advanced_graphrag_block import (
+    create_advanced_graphrag_block,
+)
 from hugegraph_llm.demo.rag_demo.agent_handlers import (
     agent_answer,
     community_build,
@@ -117,6 +120,8 @@ def init_rag_ui() -> gr.Interface:
             create_other_block()
         with gr.Tab(label="6. Admin Tools 🛠"):
             create_admin_block()
+        with gr.Tab(label="7. Advanced GraphRAG 🚀"):
+            create_advanced_graphrag_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
