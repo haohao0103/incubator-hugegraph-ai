@@ -80,6 +80,10 @@ class WkFlowInput(GParam):
     # used for build text2gremin index
     examples: Optional[List[Dict[str, str]]] = None
 
+    # Agent flow fields
+    max_steps: Optional[int] = None  # Maximum ReAct steps for agent
+    tools_filter: Optional[List[str]] = None  # Optional tool name filter
+
     def reset(self, _: CStatus) -> None:
         self.texts = None
         self.language = None
@@ -132,6 +136,9 @@ class WkFlowInput(GParam):
         self.examples = None
         self.is_graph_rag_recall = False
         self.is_vector_only = False
+
+        self.max_steps = None
+        self.tools_filter = None
 
 
 class WkFlowState(GParam):
@@ -192,6 +199,40 @@ class WkFlowState(GParam):
     embed_dim: Optional[int] = None
     is_graph_rag_recall: Optional[bool] = None
 
+    # Agent flow state fields
+    agent_answer: Optional[str] = None
+    agent_trace: Optional[List[Dict[str, Any]]] = None
+    agent_total_steps: Optional[int] = None
+    agent_is_simple_query: Optional[bool] = None
+    agent_error: Optional[str] = None
+
+    # Community detection & Global Search state fields
+    communities: Optional[List[Dict[str, Any]]] = None
+    community_count: Optional[int] = None
+    community_reports: Optional[List[Dict[str, Any]]] = None
+    community_matches: Optional[List[Dict[str, Any]]] = None
+    community_index_built: Optional[bool] = None
+    community_index_count: Optional[int] = None
+    global_answer: Optional[str] = None
+    map_findings: Optional[List[Dict[str, Any]]] = None
+    communities_used: Optional[int] = None
+    nx_graph: Optional[Any] = None
+
+    # Provenance fields
+    include_provenance: Optional[bool] = None
+    provenance_records: Optional[List[Dict[str, Any]]] = None
+    citations: Optional[List[str]] = None
+    provenance_link_count: Optional[int] = None
+    doc_id: Optional[str] = None
+
+    # Entity Resolution fields (Sprint 1)
+    resolution_result: Optional[Dict[str, Any]] = None
+    resolution_strategy: Optional[str] = None
+    resolution_threshold: Optional[float] = None
+    resolution_batch_size: Optional[int] = None
+    resolution_vertex_labels: Optional[List[str]] = None
+    merged_result: Optional[Dict[str, Any]] = None  # deprecated: use resolution_result
+
     def setup(self) -> CStatus:
         self.schema = None
         self.simple_schema = None
@@ -249,6 +290,35 @@ class WkFlowState(GParam):
 
         self.embed_dim = None
         self.is_graph_rag_recall = None
+
+        self.agent_answer = None
+        self.agent_trace = None
+        self.agent_total_steps = None
+        self.agent_is_simple_query = None
+        self.agent_error = None
+
+        self.communities = None
+        self.community_count = None
+        self.community_reports = None
+        self.community_matches = None
+        self.community_index_built = None
+        self.community_index_count = None
+        self.global_answer = None
+        self.map_findings = None
+        self.communities_used = None
+        self.nx_graph = None
+
+        self.include_provenance = None
+        self.provenance_records = None
+        self.citations = None
+        self.provenance_link_count = None
+        self.doc_id = None
+
+        self.resolution_result = None
+        self.resolution_strategy = None
+        self.resolution_threshold = None
+        self.resolution_batch_size = None
+        self.resolution_vertex_labels = None
         return CStatus()
 
     def to_json(self):

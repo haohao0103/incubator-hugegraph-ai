@@ -19,6 +19,9 @@ from typing import Any, Dict
 from pycgraph import GPipeline, GPipelineManager
 
 from hugegraph_llm.flows import FlowName
+from hugegraph_llm.flows.agent_flow import AgentFlow
+from hugegraph_llm.flows.community_flow import CommunityDetectionFlow, GlobalSearchFlow
+from hugegraph_llm.flows.provenance_flow import ProvenanceAwareKGFlow
 from hugegraph_llm.flows.build_example_index import BuildExampleIndexFlow
 from hugegraph_llm.flows.build_schema import BuildSchemaFlow
 from hugegraph_llm.flows.build_vector_index import BuildVectorIndexFlow
@@ -26,6 +29,7 @@ from hugegraph_llm.flows.common import BaseFlow
 from hugegraph_llm.flows.get_graph_index_info import GetGraphIndexInfoFlow
 from hugegraph_llm.flows.graph_extract import GraphExtractFlow
 from hugegraph_llm.flows.import_graph_data import ImportGraphDataFlow
+from hugegraph_llm.flows.incremental_index_flow import IncrementalIndexFlow
 from hugegraph_llm.flows.prompt_generate import PromptGenerateFlow
 from hugegraph_llm.flows.rag_flow_graph_only import RAGGraphOnlyFlow
 from hugegraph_llm.flows.rag_flow_graph_vector import RAGGraphVectorFlow
@@ -97,11 +101,58 @@ class Scheduler:
             "manager": GPipelineManager(),
             "flow": BuildExampleIndexFlow(),
         }
+        self.pipeline_pool[FlowName.AGENT] = {
+            "manager": GPipelineManager(),
+            "flow": AgentFlow(),
+        }
+        self.pipeline_pool[FlowName.COMMUNITY_DETECT] = {
+            "manager": GPipelineManager(),
+            "flow": CommunityDetectionFlow(),
+        }
+        self.pipeline_pool[FlowName.GLOBAL_SEARCH] = {
+            "manager": GPipelineManager(),
+            "flow": GlobalSearchFlow(),
+        }
+        self.pipeline_pool[FlowName.PROVENANCE_KG_BUILD] = {
+            "manager": GPipelineManager(),
+            "flow": ProvenanceAwareKGFlow(),
+        }
+        self.pipeline_pool[FlowName.INCREMENTAL_INDEX] = {
+            "manager": GPipelineManager(),
+            "flow": IncrementalIndexFlow(),
+        }
         self.max_pipeline = max_pipeline
 
-    # TODO: Implement Agentic Workflow
-    def agentic_flow(self):
-        pass
+    def agentic_flow(self, tool_registry=None, llm=None, **kwargs):
+        """Execute the agentic workflow for multi-step graph reasoning.
+
+        This replaces the stub implementation with a fully functional
+        ReAct agent loop using the ToolRegistry and LLM.
+
+        Args:
+            tool_registry: ToolRegistry with registered tools.
+            llm: LLM instance for agent reasoning.
+            **kwargs: Additional parameters (query, max_steps, etc.).
+
+        Returns:
+            Dict with agent answer and execution trace.
+        """
+        if FlowName.AGENT not in self.pipeline_pool:
+            raise ValueError("Agent flow is not registered in the pipeline pool.")
+
+        flow_entry = self.pipeline_pool[FlowName.AGENT]
+        flow: AgentFlow = flow_entry["flow"]
+
+        # Configure the agent flow with provided dependencies
+        if tool_registry is not None:
+            flow.set_tool_registry(tool_registry)
+        if llm is not None:
+            flow.set_llm(llm)
+        if "max_steps" in kwargs:
+            flow.set_max_steps(kwargs["max_steps"])
+
+        # Delegate to the standard schedule_flow mechanism
+        return self.schedule_flow(FlowName.AGENT, **kwargs)
 
     def schedule_flow(self, flow_name: str, *args, **kwargs):
         if flow_name not in self.pipeline_pool:

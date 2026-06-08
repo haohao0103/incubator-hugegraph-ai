@@ -21,9 +21,15 @@ from fastapi import APIRouter, HTTPException, status
 
 from hugegraph_llm.api.exceptions.rag_exceptions import generate_response
 from hugegraph_llm.api.models.rag_requests import (
+    AgentRequest,
+    CommunityBuildRequest,
+    GlobalSearchRequest,
     GraphConfigRequest,
     GraphRAGRequest,
+    GraphRAGSearchMode,
+    GraphRAGSearchRequest,
     GremlinGenerateRequest,
+    IncrementalIndexRequest,
     LLMConfigRequest,
     RAGRequest,
     RerankerConfigRequest,
@@ -32,6 +38,32 @@ from hugegraph_llm.api.models.rag_response import RAGResponse
 from hugegraph_llm.config import huge_settings, llm_settings, prompt
 from hugegraph_llm.utils.graph_index_utils import get_vertex_details
 from hugegraph_llm.utils.log import log
+
+
+def _enrich_with_provenance(result: tuple) -> list:
+    """Try to add source citations to the answer using ProvenanceManager."""
+    try:
+        from hugegraph_llm.operators.hugegraph_op.provenance_manager import ProvenanceManager
+
+        pm = ProvenanceManager()
+        citations = []
+        # Collect entity IDs from match_vids if available
+        match_vids = getattr(result, "match_vids", None) or []
+        if isinstance(result, dict):
+            match_vids = result.get("match_vids", [])
+        if match_vids:
+            records = pm.get_provenance_for_answer(match_vids, max_per_entity=1)
+            seen = set()
+            for recs in records.values():
+                for rec in recs:
+                    key = rec.chunk_text[:100]
+                    if key not in seen:
+                        seen.add(key)
+                        citations.append(rec.to_citation(max_text_len=200))
+            return citations[:5]
+    except Exception as e:
+        log.debug("Provenance enrichment skipped: %s", e)
+    return []
 
 
 # pylint: disable=too-many-statements
@@ -44,6 +76,11 @@ def rag_http_api(
     apply_embedding_conf,
     apply_reranker_conf,
     gremlin_generate_selective_func,
+    agent_answer_func=None,
+    community_build_func=None,
+    global_search_func=None,
+    graph_rag_search_func=None,
+    incremental_index_func=None,
 ):
     @router.post("/rag", status_code=status.HTTP_200_OK)
     def rag_answer_api(req: RAGRequest):
@@ -76,8 +113,13 @@ def rag_http_api(
             keywords_extract_prompt=req.keywords_extract_prompt or prompt.keywords_extract_prompt,
             gremlin_prompt=req.gremlin_prompt or prompt.gremlin_generate_prompt,
         )
-        # TODO: we need more info in the response for users to understand the query logic
-        return {
+        # Enrich with provenance citations if requested
+        citations = []
+        if req.include_provenance and result:
+            citations = _enrich_with_provenance(result)
+
+        # Build response
+        response = {
             "query": req.query,
             **{
                 key: value
@@ -88,6 +130,13 @@ def rag_http_api(
                 if getattr(req, key)
             },
         }
+        if citations:
+            for key in list(response.keys()):
+                if key.endswith("_answer") and response[key]:
+                    response[key] = f"{response[key]}\n\n## 来源\n" + "\n".join(
+                        f"{i}. {c}" for i, c in enumerate(citations, 1)
+                    )
+        return response
 
     def set_graph_config(req):
         if req.client_config:
@@ -228,4 +277,280 @@ def rag_http_api(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An unexpected error occurred during Gremlin generation.",
+            ) from e
+
+    @router.post("/agent", status_code=status.HTTP_200_OK)
+    def agent_answer_api(req: AgentRequest):
+        """Agent-based multi-step graph reasoning endpoint.
+
+        For complex queries, runs a ReAct (Reasoning + Acting) loop where
+        the LLM selects and executes tools to explore the knowledge graph.
+        Simple queries are routed to existing fast RAG flows.
+
+        Returns the final answer along with the full reasoning trace.
+        """
+        try:
+            set_graph_config(req)
+
+            # Validate query
+            if not req.query or not str(req.query).strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Query must not be empty.",
+                )
+
+            if agent_answer_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="Agent function is not configured. Set up agent LLM and ToolRegistry.",
+                )
+
+            result = agent_answer_func(
+                query=req.query,
+                max_steps=req.max_steps,
+                tools_filter=req.tools_filter,
+                stream=req.stream,
+                verbose=req.verbose,
+            )
+
+            # Handle routing case (simple query)
+            if isinstance(result, dict) and result.get("is_simple_query"):
+                return {
+                    "status_code": 200,
+                    "message": "Query routed to fast RAG flow",
+                    "is_simple_query": True,
+                    "simple_flow_used": result.get("simple_flow_used", "graph_only"),
+                    "hint": "Re-run with /rag endpoint for direct answer",
+                }
+
+            return {
+                "query": req.query,
+                "answer": result.get("answer", ""),
+                "trace": result.get("trace", []),
+                "total_steps": result.get("total_steps", 0),
+                "status_code": result.get("status_code", 200),
+                "message": result.get("message", "Agent execution completed"),
+            }
+
+        except HTTPException as e:
+            raise e
+        except ValueError as e:
+            log.error("ValueError in agent_answer_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            ) from e
+        except Exception as e:
+            log.error("Unexpected error in agent_answer_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred during agent execution.",
+            ) from e
+
+    @router.post("/community/build", status_code=status.HTTP_201_CREATED)
+    def community_build_api(req: CommunityBuildRequest):
+        """Build community detection index for the knowledge graph.
+
+        This offline endpoint triggers:
+        1. Community detection (Leiden/Louvain) on the graph
+        2. LLM-based community report generation
+        3. Vector index construction for community-level retrieval
+
+        After building, the /rag/global endpoint can answer
+        macro-level questions about the entire graph.
+        """
+        try:
+            set_graph_config(req)
+
+            if community_build_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="Community build function is not configured.",
+                )
+
+            result = community_build_func(
+                graph_name=req.graph_name or huge_settings.graph_name,
+                algorithm=req.algorithm,
+                max_levels=req.max_levels,
+            )
+
+            return {
+                "status_code": result.get("status_code", 200),
+                "message": result.get("message", "Community detection completed"),
+                "community_count": result.get("community_count", 0),
+                "report_count": result.get("report_count", 0),
+                "index_built": result.get("index_built", False),
+            }
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            log.error("Error in community_build_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Community detection failed.",
+            ) from e
+
+    @router.post("/rag/incremental", status_code=status.HTTP_201_CREATED)
+    def incremental_index_api(req: IncrementalIndexRequest):
+        """Incremental document indexing for the knowledge graph.
+
+        Indexes new documents without full graph reconstruction.
+        Only processes new content and updates affected portions:
+
+        1. Chunk splitting and entity/relation extraction
+        2. Entity resolution (merge new entities with existing)
+        3. Append new vertices/edges to HugeGraph
+        4. Detect affected communities from new vertices
+        5. Regenerate community reports for affected communities
+        6. Incrementally add new chunk vectors to FAISS index
+
+        Much faster than full re-indexing for small batches of documents.
+        """
+        try:
+            set_graph_config(req)
+
+            if incremental_index_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="Incremental index function is not configured.",
+                )
+
+            result = incremental_index_func(
+                texts=req.texts,
+                graph_name=req.graph_name or huge_settings.graph_name,
+                entity_resolution_strategy=req.entity_resolution_strategy,
+                community_hop=req.community_hop,
+            )
+
+            return {
+                "status_code": result.get("status_code", 201),
+                "message": result.get("message", "Incremental indexing completed"),
+                "vertices_added": result.get("vertices_added", 0),
+                "edges_added": result.get("edges_added", 0),
+                "entities_merged": result.get("entities_merged", 0),
+                "affected_communities": result.get("affected_communities", 0),
+                "vectors_added": result.get("vectors_added", 0),
+                "community_reports_updated": result.get("community_reports_updated", 0),
+            }
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            log.error("Error in incremental_index_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Incremental indexing failed.",
+            ) from e
+
+    @router.post("/rag/global", status_code=status.HTTP_200_OK)
+    def global_search_api(req: GlobalSearchRequest):
+        """Macro-level Global Search over community reports.
+
+        Answers broad, thematic questions about the entire knowledge
+        graph using MapReduce over pre-computed community summaries.
+
+        Requires community reports to have been built first via
+        POST /community/build.
+        """
+        try:
+            if not req.query or not str(req.query).strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Query must not be empty.",
+                )
+
+            if global_search_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="Global search function is not configured.",
+                )
+
+            result = global_search_func(query=req.query)
+
+            return {
+                "query": req.query,
+                "answer": result.get("answer", ""),
+                "communities_used": result.get("communities_used", 0),
+                "map_findings": result.get("map_findings", []),
+            }
+
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            log.error("Error in global_search_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Global search failed.",
+            ) from e
+
+    @router.post("/rag/graph/search", status_code=status.HTTP_200_OK)
+    def graph_rag_search_api(req: GraphRAGSearchRequest):
+        """Direct graph RAG search operations endpoint.
+
+        Executes one of the supported graph-level operations
+        (graph_traverse, semantic_id_lookup, text2gremlin, schema_lookup)
+        without requiring the full agent loop.
+
+        This endpoint exposes the same graph tools that the ReAct agent
+        uses internally, making them available for direct API access.
+        """
+        try:
+            set_graph_config(req)
+
+            if graph_rag_search_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="Graph RAG search function is not configured.",
+                )
+
+            # Validate required parameters per mode
+            if req.mode == GraphRAGSearchMode.GRAPH_TRAVERSE:
+                if not req.vertex_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="vertex_ids is required for graph_traverse mode.",
+                    )
+            elif req.mode == GraphRAGSearchMode.SEMANTIC_ID_LOOKUP:
+                if not req.keywords:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="keywords is required for semantic_id_lookup mode.",
+                    )
+            elif req.mode == GraphRAGSearchMode.TEXT2GREMLIN:
+                if not req.query or not str(req.query).strip():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="query is required for text2gremlin mode.",
+                    )
+
+            result = graph_rag_search_func(
+                mode=req.mode.value,
+                query=req.query,
+                vertex_ids=req.vertex_ids,
+                max_depth=req.max_depth,
+                max_items=req.max_items,
+                keywords=req.keywords,
+                gremlin_example_num=req.gremlin_example_num,
+            )
+
+            return {
+                "mode": req.mode.value,
+                "query": req.query,
+                "result": result,
+            }
+
+        except HTTPException as e:
+            raise e
+        except ValueError as e:
+            log.error("ValueError in graph_rag_search_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            ) from e
+        except Exception as e:
+            log.error("Unexpected error in graph_rag_search_api: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Graph RAG search operation failed.",
             ) from e
