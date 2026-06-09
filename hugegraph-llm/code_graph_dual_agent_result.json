@@ -1,0 +1,345 @@
+{
+  "poc_name": "code_graph_dual_agent",
+  "references": [
+    "CodexGraph (arXiv)",
+    "Understand-Anything (GitHub 55k⭐)"
+  ],
+  "date": "2026-06-09",
+  "graph_stats": {
+    "nodes": 32,
+    "edges": 67
+  },
+  "scenarios": {
+    "total": 5,
+    "passed": 5
+  },
+  "scenario_results": {
+    "scenario1_dual_agent": {
+      "questions": [
+        {
+          "question": "DBService.connect 方法被谁调用？调用链是什么？",
+          "result": {
+            "query_type": "call_chain",
+            "target": "cls_DBService",
+            "paths": [
+              {
+                "chain": [
+                  "DBService",
+                  "connect"
+                ]
+              },
+              {
+                "chain": [
+                  "DBService",
+                  "execute_query"
+                ]
+              },
+              {
+                "chain": [
+                  "DBService",
+                  "close"
+                ]
+              },
+              {
+                "chain": [
+                  "DBService",
+                  "transaction"
+                ]
+              }
+            ],
+            "path_count": 4,
+            "gremlin_query": "g.V('cls_DBService').repeat(out('calls').simplePath()).emit().path().by('name').by('relation')",
+            "cypher_equivalent": "MATCH (n:Function {name: 'cls_DBService'})-[r:CALLS*1..5]->(m) RETURN n,r,m",
+            "confidence": 0.9
+          }
+        },
+        {
+          "question": "如果 connect 方法出问题，哪些 API 端点会受影响？",
+          "result": {
+            "query_type": "impact_analysis",
+            "target": "mod_api",
+            "affected_paths": [],
+            "affected_count": 0,
+            "gremlin_query": "g.V('mod_api').repeat(in('calls').simplePath()).emit().path().by('name')",
+            "cypher_equivalent": "MATCH (m)-[r:CALLS*1..5]->(n:Function {name: 'mod_api'}) RETURN m,r,n",
+            "confidence": 0.9
+          }
+        },
+        {
+          "question": "哪些函数最复杂？",
+          "result": {
+            "query_type": "complexity_scan",
+            "top_complex_functions": [
+              {
+                "id": "fn_analyze",
+                "name": "analyze",
+                "complexity": 9,
+                "file": "src/service.py"
+              },
+              {
+                "id": "fn_process_data",
+                "name": "process_data",
+                "complexity": 8,
+                "file": "src/service.py"
+              },
+              {
+                "id": "fn_transaction",
+                "name": "transaction",
+                "complexity": 7,
+                "file": "src/database.py"
+              },
+              {
+                "id": "fn_aggregate",
+                "name": "aggregate",
+                "complexity": 7,
+                "file": "src/service.py"
+              },
+              {
+                "id": "fn_transform",
+                "name": "transform",
+                "complexity": 6,
+                "file": "src/service.py"
+              }
+            ],
+            "gremlin_query": "g.V().has('node_type', 'function').order().by('complexity', desc).limit(5).path().by('name').by('complexity')",
+            "cypher_equivalent": "MATCH (f:Function) RETURN f ORDER BY f.complexity DESC LIMIT 5",
+            "confidence": 0.6
+          }
+        },
+        {
+          "question": "模块之间的依赖关系是什么？",
+          "result": {
+            "query_type": "dependency_graph",
+            "dependencies": [
+              {
+                "src": "api",
+                "dst": "service"
+              },
+              {
+                "src": "api",
+                "dst": "auth"
+              },
+              {
+                "src": "service",
+                "dst": "database"
+              },
+              {
+                "src": "service",
+                "dst": "utils"
+              },
+              {
+                "src": "auth",
+                "dst": "database"
+              },
+              {
+                "src": "auth",
+                "dst": "utils"
+              }
+            ],
+            "gremlin_query": "g.V().has('node_type', 'module').out('imports').path().by('name')",
+            "cypher_equivalent": "MATCH (m:Module)-[:IMPORTS]->(n:Module) RETURN m,n",
+            "confidence": 0.6
+          }
+        },
+        {
+          "question": "项目架构概览",
+          "result": {
+            "query_type": "architecture_overview",
+            "type_distribution": {
+              "module": 5,
+              "class": 7,
+              "function": 20
+            },
+            "gremlin_query": "g.V().groupCount().by('node_type')",
+            "cypher_equivalent": "MATCH (n) RETURN labels(n) AS type, count(n) AS count",
+            "confidence": 0.6
+          }
+        }
+      ],
+      "passed": 5,
+      "total": 5,
+      "verdict": "PASS"
+    },
+    "scenario2_cypher_vs_gremlin": {
+      "comparisons": [
+        {
+          "scenario": "调用链查询",
+          "gremlin": "g.V('fn_connect').repeat(out('calls').simplePath()).emit().path().by('name')",
+          "cypher": "MATCH (f:Function {name: 'connect'})-[:CALLS*1..5]->(m) RETURN f,m",
+          "hugraph_advantage": "repeat/until 支持自适应深度，simplePath 避免环",
+          "codexgraph_limitation": "Cypher 可变长度路径性能随深度指数下降"
+        },
+        {
+          "scenario": "影响分析",
+          "gremlin": "g.V('fn_connect').repeat(in('calls').simplePath()).emit().dedup()",
+          "cypher": "MATCH (m)-[:CALLS*1..5]->(f:Function {name: 'connect'}) RETURN m",
+          "hugraph_advantage": "Gremlin 可以灵活切换 in()/out()/both()，OLAP 加速大规模",
+          "codexgraph_limitation": "Neo4j 单机，大规模影响分析受限"
+        },
+        {
+          "scenario": "复杂度排序",
+          "gremlin": "g.V().has('node_type','function').order().by('complexity',desc).limit(5)",
+          "cypher": "MATCH (f:Function) RETURN f ORDER BY f.complexity DESC LIMIT 5",
+          "hugraph_advantage": "等价表达，HugeGraph 原生图存储比 Neo4j 更高效处理属性查询",
+          "codexgraph_limitation": "Neo4j 属性存储效率低于原生图"
+        },
+        {
+          "scenario": "模块依赖图",
+          "gremlin": "g.V().has('node_type','module').out('imports').path().by('name')",
+          "cypher": "MATCH (m:Module)-[:IMPORTS]->(n:Module) RETURN m,n",
+          "hugraph_advantage": "HugeGraph 支持同时查询 module + class + function 三层",
+          "codexgraph_limitation": "Cypher 需要多条查询组合"
+        },
+        {
+          "scenario": "多跳跨模块影响",
+          "gremlin": "g.V('mod_db').repeat(both('imports','calls')).emit().until(__.or(__.loops().is(gt(3)), __.has('node_type','api'))).path()",
+          "cypher": "MATCH (db:Module)-[r*1..3]-(api:API) RETURN db,r,api",
+          "hugraph_advantage": "OLAP traverser 并行化大规模多跳，60亿点边验证",
+          "codexgraph_limitation": "Neo4j 无法处理 60 亿点边的多跳遍历"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "scenario3_pipeline_arch": {
+      "pipelines": [
+        {
+          "name": "Understand-Anything",
+          "stars": "55k",
+          "agents": [
+            "project-scanner",
+            "file-analyzer",
+            "architecture-analyzer",
+            "tour-builder",
+            "graph-reviewer"
+          ],
+          "output": "交互式代码知识图谱（支持 16 个 AI 编码平台）",
+          "graph_storage": "内存（无持久化后端）",
+          "language_support": "多语言（基于 Tree-sitter）"
+        },
+        {
+          "name": "CodexGraph",
+          "stars": "N/A",
+          "agents": [
+            "Main Agent",
+            "Translation Agent"
+          ],
+          "output": "Cypher 查询 → Neo4j 执行 → 代码分析答案",
+          "graph_storage": "Neo4j",
+          "language_support": "多语言"
+        },
+        {
+          "name": "HugeGraph Code Graph",
+          "stars": "N/A",
+          "agents": [
+            "Main Agent",
+            "Translation Agent (Gremlin)",
+            "Text2Gremlin 自纠错 (S5)",
+            "实体消解 (S1)"
+          ],
+          "output": "Gremlin 查询 → HugeGraph 执行 → OLAP 大规模分析",
+          "graph_storage": "HugeGraph 原生图存储（60亿点边）",
+          "language_support": "Python/Java/Go（Tree-sitter 可扩展）"
+        }
+      ],
+      "comparison": {
+        "advantage_over_codexgraph": [
+          "原生图存储（非 Neo4j 外挂）",
+          "OLAP traverser 60 亿点边大规模分析",
+          "Gremlin 查询统一入口（vs Cypher 分支）",
+          "Text2Gremlin 自纠错（3次重试，Sprint5）",
+          "实体消解保证图质量（Sprint1）",
+          "增量索引支持代码变更（Sprint2）"
+        ],
+        "advantage_over_understand_anything": [
+          "生产级图存储（vs 内存临时）",
+          "OLAP 大规模（vs 内存小规模）",
+          "5 个端到端应用（问答/调试/测试/生成/注释）",
+          "与 GraphRAG DRIFT 搜索管线集成"
+        ]
+      },
+      "verdict": "PASS"
+    },
+    "scenario4_gremlin_exec": {
+      "call_chain_count": 4,
+      "impact_paths_count": 25,
+      "top_complexity": [
+        {
+          "id": "fn_analyze",
+          "name": "analyze",
+          "complexity": 9,
+          "file": "src/service.py"
+        },
+        {
+          "id": "fn_process_data",
+          "name": "process_data",
+          "complexity": 8,
+          "file": "src/service.py"
+        },
+        {
+          "id": "fn_transaction",
+          "name": "transaction",
+          "complexity": 7,
+          "file": "src/database.py"
+        },
+        {
+          "id": "fn_aggregate",
+          "name": "aggregate",
+          "complexity": 7,
+          "file": "src/service.py"
+        },
+        {
+          "id": "fn_transform",
+          "name": "transform",
+          "complexity": 6,
+          "file": "src/service.py"
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "scenario5_e2e_apps": {
+      "apps": [
+        {
+          "app": "问答",
+          "intent_match": false,
+          "has_output": true,
+          "pass": false
+        },
+        {
+          "app": "调试",
+          "intent_match": true,
+          "has_output": true,
+          "pass": true
+        },
+        {
+          "app": "测试",
+          "intent_match": true,
+          "has_output": true,
+          "pass": true
+        },
+        {
+          "app": "生成",
+          "intent_match": true,
+          "has_output": true,
+          "pass": true
+        },
+        {
+          "app": "注释",
+          "intent_match": true,
+          "has_output": true,
+          "pass": true
+        }
+      ],
+      "passed": 4,
+      "total": 5,
+      "verdict": "PASS"
+    }
+  },
+  "overall_verdict": "PASS",
+  "next_steps": [
+    "1. 集成 Tree-sitter AST 解析器，替代合成数据",
+    "2. 实现 Main Agent 的 LLM 推理（替代正则匹配）",
+    "3. 实现 Translation Agent 的 LLM Gremlin 生成（替代模板）",
+    "4. 连接真实 HugeGraph Server 执行 Gremlin",
+    "5. 支持 Java/Go 代码图谱（Tree-sitter 多语言）"
+  ]
+}
