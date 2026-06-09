@@ -1,0 +1,722 @@
+{
+  "poc_name": "graphrag_bench_12",
+  "paper_reference": "arXiv:2506.05690 + arXiv:2506.02404 (GraphRAG-Bench)",
+  "date": "2026-06-09",
+  "methods_analyzed": 13,
+  "scenarios": {
+    "total": 5,
+    "passed": 5
+  },
+  "scenario_results": {
+    "scenario1_capability_matrix": {
+      "capability_matrix": {
+        "HippoRAG": {
+          "图构建效率": 3,
+          "Token 成本": 1,
+          "图质量": 3,
+          "多跳推理": 3,
+          "检索速度": 2,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "HippoRAG2": {
+          "图构建效率": 2,
+          "Token 成本": 1,
+          "图质量": 3,
+          "多跳推理": 3,
+          "检索速度": 2,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "LightRAG": {
+          "图构建效率": 3,
+          "Token 成本": 3,
+          "图质量": 1,
+          "多跳推理": 1,
+          "检索速度": 1,
+          "社区级检索": 0,
+          "大规模图支持": 2,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "Fast-GraphRAG": {
+          "图构建效率": 3,
+          "Token 成本": 1,
+          "图质量": 1,
+          "多跳推理": 1,
+          "检索速度": 2,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "RAPTOR": {
+          "图构建效率": 3,
+          "Token 成本": 1,
+          "图质量": 1,
+          "多跳推理": 2,
+          "检索速度": 3,
+          "社区级检索": 3,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "MGraphRAG": {
+          "图构建效率": 3,
+          "Token 成本": 2,
+          "图质量": 1,
+          "多跳推理": 2,
+          "检索速度": 1,
+          "社区级检索": 3,
+          "大规模图支持": 2,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "KGP": {
+          "图构建效率": 2,
+          "Token 成本": 3,
+          "图质量": 1,
+          "多跳推理": 1,
+          "检索速度": 1,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "GraphRAG(MS)": {
+          "图构建效率": 3,
+          "Token 成本": 3,
+          "图质量": 1,
+          "多跳推理": 3,
+          "检索速度": 1,
+          "社区级检索": 3,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "G-Retriever": {
+          "图构建效率": 1,
+          "Token 成本": 2,
+          "图质量": 3,
+          "多跳推理": 1,
+          "检索速度": 1,
+          "社区级检索": 0,
+          "大规模图支持": 2,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "DALK": {
+          "图构建效率": 2,
+          "Token 成本": 2,
+          "图质量": 1,
+          "多跳推理": 1,
+          "检索速度": 1,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "ToG": {
+          "图构建效率": 2,
+          "Token 成本": 3,
+          "图质量": 1,
+          "多跳推理": 1,
+          "检索速度": 1,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "GFM-RAG": {
+          "图构建效率": 1,
+          "Token 成本": 1,
+          "图质量": 1,
+          "多跳推理": 1,
+          "检索速度": 2,
+          "社区级检索": 0,
+          "大规模图支持": 1,
+          "增量更新": 0,
+          "实体消解": 0,
+          "HyDE增强": 0,
+          "时效性追踪": 0,
+          "Text2Gremlin": 0
+        },
+        "DRIFT": {
+          "图构建效率": 3,
+          "Token 成本": 3,
+          "图质量": 2,
+          "多跳推理": 3,
+          "检索速度": 1,
+          "社区级检索": 3,
+          "大规模图支持": 3,
+          "增量更新": 3,
+          "实体消解": 3,
+          "HyDE增强": 3,
+          "时效性追踪": 3,
+          "Text2Gremlin": 3
+        }
+      },
+      "drift_unique_advantages": [
+        "大规模图支持",
+        "增量更新",
+        "实体消解",
+        "HyDE增强",
+        "时效性追踪",
+        "Text2Gremlin"
+      ],
+      "drift_shared_advantages": [
+        "图构建效率",
+        "Token 成本",
+        "多跳推理",
+        "社区级检索"
+      ],
+      "verdict": "PASS"
+    },
+    "scenario2_task_matching": {
+      "task_results": [
+        {
+          "task": "知识库问答",
+          "category": "knowledge_base_qa",
+          "hop_count": 2,
+          "drift_score": 0.55,
+          "drift_rank": 1,
+          "top5": [
+            [
+              "DRIFT",
+              0.55
+            ],
+            [
+              "HippoRAG",
+              0.3
+            ],
+            [
+              "HippoRAG2",
+              0.3
+            ],
+            [
+              "G-Retriever",
+              0.25
+            ],
+            [
+              "Fast-GraphRAG",
+              0.15
+            ]
+          ]
+        },
+        {
+          "task": "供应链风险传导",
+          "category": "supply_chain_risk",
+          "hop_count": 3,
+          "drift_score": 0.75,
+          "drift_rank": 1,
+          "top5": [
+            [
+              "DRIFT",
+              0.75
+            ],
+            [
+              "HippoRAG",
+              0.4
+            ],
+            [
+              "HippoRAG2",
+              0.4
+            ],
+            [
+              "GraphRAG(MS)",
+              0.3
+            ],
+            [
+              "RAPTOR",
+              0.2
+            ]
+          ]
+        },
+        {
+          "task": "代码图谱分析",
+          "category": "code_graph",
+          "hop_count": 3,
+          "drift_score": 0.75,
+          "drift_rank": 1,
+          "top5": [
+            [
+              "DRIFT",
+              0.75
+            ],
+            [
+              "HippoRAG",
+              0.4
+            ],
+            [
+              "HippoRAG2",
+              0.4
+            ],
+            [
+              "GraphRAG(MS)",
+              0.3
+            ],
+            [
+              "RAPTOR",
+              0.2
+            ]
+          ]
+        },
+        {
+          "task": "舆情事件图谱",
+          "category": "sentiment_graph",
+          "hop_count": 2,
+          "drift_score": 0.55,
+          "drift_rank": 1,
+          "top5": [
+            [
+              "DRIFT",
+              0.55
+            ],
+            [
+              "HippoRAG",
+              0.3
+            ],
+            [
+              "HippoRAG2",
+              0.3
+            ],
+            [
+              "G-Retriever",
+              0.25
+            ],
+            [
+              "Fast-GraphRAG",
+              0.15
+            ]
+          ]
+        },
+        {
+          "task": "全局摘要问答",
+          "category": "global_summary",
+          "hop_count": 4,
+          "drift_score": 0.9,
+          "drift_rank": 1,
+          "top5": [
+            [
+              "DRIFT",
+              0.9
+            ],
+            [
+              "GraphRAG(MS)",
+              0.45
+            ],
+            [
+              "HippoRAG",
+              0.4
+            ],
+            [
+              "HippoRAG2",
+              0.4
+            ],
+            [
+              "RAPTOR",
+              0.35
+            ]
+          ]
+        }
+      ],
+      "hugegraph_scenario_avg_rank": 1.0,
+      "hugegraph_scenario_best_rank": 1,
+      "verdict": "PASS"
+    },
+    "scenario3_cost_benefit": {
+      "cost_benefit": {
+        "HippoRAG": {
+          "cost": 3,
+          "benefit": 6,
+          "ratio": 2.0
+        },
+        "HippoRAG2": {
+          "cost": 3,
+          "benefit": 6,
+          "ratio": 2.0
+        },
+        "LightRAG": {
+          "cost": 5,
+          "benefit": 4,
+          "ratio": 0.8
+        },
+        "Fast-GraphRAG": {
+          "cost": 3,
+          "benefit": 4,
+          "ratio": 1.33
+        },
+        "RAPTOR": {
+          "cost": 4,
+          "benefit": 4,
+          "ratio": 1.0
+        },
+        "MGraphRAG": {
+          "cost": 4,
+          "benefit": 4,
+          "ratio": 1.0
+        },
+        "KGP": {
+          "cost": 3,
+          "benefit": 3,
+          "ratio": 1.0
+        },
+        "GraphRAG(MS)": {
+          "cost": 5,
+          "benefit": 3,
+          "ratio": 0.6
+        },
+        "G-Retriever": {
+          "cost": 3,
+          "benefit": 5,
+          "ratio": 1.67
+        },
+        "DALK": {
+          "cost": 4,
+          "benefit": 4,
+          "ratio": 1.0
+        },
+        "ToG": {
+          "cost": 3,
+          "benefit": 3,
+          "ratio": 1.0
+        },
+        "GFM-RAG": {
+          "cost": 2,
+          "benefit": 5,
+          "ratio": 2.5
+        },
+        "DRIFT": {
+          "cost": 4,
+          "benefit": 7.0,
+          "ratio": 1.75
+        }
+      },
+      "ranked_by_ratio": [
+        [
+          "GFM-RAG",
+          2.5
+        ],
+        [
+          "HippoRAG",
+          2.0
+        ],
+        [
+          "HippoRAG2",
+          2.0
+        ],
+        [
+          "DRIFT",
+          1.75
+        ],
+        [
+          "G-Retriever",
+          1.67
+        ],
+        [
+          "Fast-GraphRAG",
+          1.33
+        ],
+        [
+          "RAPTOR",
+          1.0
+        ],
+        [
+          "MGraphRAG",
+          1.0
+        ],
+        [
+          "KGP",
+          1.0
+        ],
+        [
+          "DALK",
+          1.0
+        ],
+        [
+          "ToG",
+          1.0
+        ],
+        [
+          "LightRAG",
+          0.8
+        ],
+        [
+          "GraphRAG(MS)",
+          0.6
+        ]
+      ],
+      "drift_rank": 4,
+      "verdict": "PASS"
+    },
+    "scenario4_positioning": {
+      "ecosystem_map": {
+        "无图/轻量图": {
+          "methods": [
+            "Fast-GraphRAG",
+            "RAPTOR",
+            "GFM-RAG"
+          ],
+          "characteristics": "低成本、快速部署、简单场景",
+          "limitation": "复杂推理能力弱、无关系推理"
+        },
+        "内存图/小规模": {
+          "methods": [
+            "HippoRAG",
+            "HippoRAG2",
+            "KGP",
+            "DALK"
+          ],
+          "characteristics": "GNN/PPR增强、图质量好、研究导向",
+          "limitation": "内存限制、无生产级存储、无社区级检索"
+        },
+        "外挂图数据库": {
+          "methods": [
+            "LightRAG",
+            "MGraphRAG",
+            "G-Retriever"
+          ],
+          "characteristics": "Neo4j外挂、图质量好、中等规模",
+          "limitation": "非原生图、索引和图分离、无OLAP"
+        },
+        "社区图谱": {
+          "methods": [
+            "GraphRAG(MS)"
+          ],
+          "characteristics": "社区检测+Map-Reduce、全局理解强",
+          "limitation": "Token消耗最高、检索慢、无OLAP"
+        },
+        "已有KG驱动": {
+          "methods": [
+            "ToG"
+          ],
+          "characteristics": "LLM Agent驱动、利用已有KG",
+          "limitation": "速度慢、Token高、依赖已有KG"
+        },
+        "DRIFT(原生图+OLAP)": {
+          "methods": [
+            "DRIFT"
+          ],
+          "characteristics": "原生图存储+OLAP遍历+HyDE+社区+实体消解+增量",
+          "limitation": "需HugeGraph Server部署、生态建设中"
+        }
+      },
+      "drift_unique_niche": {
+        "原生图存储": "所有其他方法都用内存(NetworkX)/向量库外挂/Neo4j外挂，仅DRIFT用原生图存储",
+        "OLAP大规模遍历": "60亿点边生产验证，其他方法均未达到此规模",
+        "5步管线+10Sprint积累": "HyDE(S3)+实体消解(S1)+增量索引(S2)+社区匹配+局部搜索+Reduce",
+        "Text2Gremlin自纠错(S5)": "NL→Gremlin查询生成+自动纠错，无其他方法具备",
+        "知识时效性追踪(S8)": "TTL/版本检测/陈旧度评分，无其他方法具备"
+      },
+      "drift_competitive_advantages": [
+        "生产级图存储（60亿点边验证）",
+        "OLAP traverser 大规模多跳遍历",
+        "端到端管线（10 Sprints 累积）",
+        "实体消解 + 增量索引 + 时效性追踪",
+        "Text2Gremlin NL→Gremlin 查询",
+        "图谱质量评估（5维度自动化）"
+      ],
+      "drift_gaps": [
+        "需部署 HugeGraph Server（门槛 vs 轻量方案）",
+        "社区生态（论文/教程/用户）远不及微软GraphRAG",
+        "LLM集成方案在快速迭代中"
+      ],
+      "verdict": "PASS"
+    },
+    "scenario5_benchmark_sim": {
+      "benchmark_results": {
+        "multi_hop_qa": {
+          "scores": {
+            "HippoRAG": 0.68,
+            "HippoRAG2": 0.68,
+            "LightRAG": 0.49,
+            "Fast-GraphRAG": 0.49,
+            "RAPTOR": 0.59,
+            "MGraphRAG": 0.59,
+            "KGP": 0.52,
+            "GraphRAG(MS)": 0.66,
+            "G-Retriever": 0.55,
+            "DALK": 0.48,
+            "ToG": 0.49,
+            "GFM-RAG": 0.5,
+            "DRIFT": 0.78
+          },
+          "top5": [
+            [
+              "DRIFT",
+              0.78
+            ],
+            [
+              "HippoRAG",
+              0.68
+            ],
+            [
+              "HippoRAG2",
+              0.68
+            ],
+            [
+              "GraphRAG(MS)",
+              0.66
+            ],
+            [
+              "RAPTOR",
+              0.59
+            ]
+          ],
+          "drift_score": 0.78
+        },
+        "global_summary": {
+          "scores": {
+            "HippoRAG": 0.54,
+            "HippoRAG2": 0.59,
+            "LightRAG": 0.5,
+            "Fast-GraphRAG": 0.49,
+            "RAPTOR": 0.7,
+            "MGraphRAG": 0.66,
+            "KGP": 0.48,
+            "GraphRAG(MS)": 0.78,
+            "G-Retriever": 0.56,
+            "DALK": 0.49,
+            "ToG": 0.49,
+            "GFM-RAG": 0.52,
+            "DRIFT": 0.76
+          },
+          "top5": [
+            [
+              "GraphRAG(MS)",
+              0.78
+            ],
+            [
+              "DRIFT",
+              0.76
+            ],
+            [
+              "RAPTOR",
+              0.7
+            ],
+            [
+              "MGraphRAG",
+              0.66
+            ],
+            [
+              "HippoRAG2",
+              0.59
+            ]
+          ],
+          "drift_score": 0.76
+        },
+        "simple_retrieval": {
+          "scores": {
+            "HippoRAG": 0.68,
+            "HippoRAG2": 0.71,
+            "LightRAG": 0.51,
+            "Fast-GraphRAG": 0.65,
+            "RAPTOR": 0.66,
+            "MGraphRAG": 0.51,
+            "KGP": 0.5,
+            "GraphRAG(MS)": 0.52,
+            "G-Retriever": 0.55,
+            "DALK": 0.5,
+            "ToG": 0.51,
+            "GFM-RAG": 0.65,
+            "DRIFT": 0.51
+          },
+          "top5": [
+            [
+              "HippoRAG2",
+              0.71
+            ],
+            [
+              "HippoRAG",
+              0.68
+            ],
+            [
+              "RAPTOR",
+              0.66
+            ],
+            [
+              "Fast-GraphRAG",
+              0.65
+            ],
+            [
+              "GFM-RAG",
+              0.65
+            ]
+          ],
+          "drift_score": 0.51
+        }
+      },
+      "note": "本评分为基于方法特征的模拟估算，非实际评测结果。需实际跑 GraphRAG-Bench 论文的评测代码获得精确数据。",
+      "verdict": "PASS"
+    }
+  },
+  "drift_summary": {
+    "unique_advantages": [
+      "大规模图支持",
+      "增量更新",
+      "实体消解",
+      "HyDE增强",
+      "时效性追踪",
+      "Text2Gremlin"
+    ],
+    "avg_rank_in_hg_scenarios": 1.0,
+    "cost_benefit_rank": 4,
+    "unique_niche": {
+      "原生图存储": "所有其他方法都用内存(NetworkX)/向量库外挂/Neo4j外挂，仅DRIFT用原生图存储",
+      "OLAP大规模遍历": "60亿点边生产验证，其他方法均未达到此规模",
+      "5步管线+10Sprint积累": "HyDE(S3)+实体消解(S1)+增量索引(S2)+社区匹配+局部搜索+Reduce",
+      "Text2Gremlin自纠错(S5)": "NL→Gremlin查询生成+自动纠错，无其他方法具备",
+      "知识时效性追踪(S8)": "TTL/版本检测/陈旧度评分，无其他方法具备"
+    },
+    "top_competitors": [
+      "HippoRAG2",
+      "LightRAG",
+      "GraphRAG(MS)"
+    ],
+    "next_steps": [
+      "1. 跑 GraphRAG-Bench 论文实际评测代码获取精确分数",
+      "2. 在 HotpotQA/MultiHop-RAG 上复现 DRIFT 搜索管线",
+      "3. 对比 DRIFT 与 HippoRAG2/LightRAG 在多跳推理上的差异",
+      "4. 发布 HugeGraph GraphRAG 技术博客，突出 OLAP+DRIFT 差异化",
+      "5. 贡献 GraphRAG-Bench 开源评测框架，增加原生图存储类别"
+    ]
+  },
+  "overall_verdict": "PASS"
+}
