@@ -5,6 +5,8 @@
 *.db
 *.index
 *.index.meta.json
+memory_bm25/
+memory_provenance.json
 out/production/
 
 # Local PR review scratch artifacts

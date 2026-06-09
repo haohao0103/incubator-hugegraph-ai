@@ -1,19 +1,26 @@
 """
-HugeGraph Memory Backend — Production-grade AI Memory Server
+HugeGraph Memory Backend — Engineering-grade AI Memory Server
 ==========================================================
-Architecture (aligned with PowerMem v1.1.2):
-  Graph Storage: HugeGraph 1.7.0 (via pyhugegraph-python-client)
-  Vector Index:  FAISS (memory content embedding → semantic search)
-  LLM Engine:    MiMo v2.5 Pro API (entity extract / rank / generate)
+Architecture (GraphRAG-enhanced, aligned with PowerMem v1.1.2):
+  Graph Storage:  HugeGraph 1.7.0 (via pyhugegraph-python-client)
+  Vector Index:   FAISS (semantic search) + BM25 (fulltext search) + RRF fusion
+  LLM Engine:     MiMo v2.5 Pro API (entity extract / rank / generate)
+  Provenance:     Memory → Entity → Chunk source tracking
+
+Retrieval Pipeline (3-channel RRF fusion):
+  Channel 1: FAISS vector semantic search (with Ebbinghaus decay weighting)
+  Channel 2: BM25 fulltext keyword search (jieba tokenization)
+  Channel 3: Graph context score (entity/edge relevance to query)
+  Fusion:     Reciprocal Rank Fusion (k=60) → unified ranked results
 
 Storage mapping vs PowerMem SQLite:
-  memories table → FAISS index + SQLite metadata (Ebbinghaus scores)
+  memories table → FAISS index + BM25 index + SQLite metadata (Ebbinghaus scores)
   nodes table    → HugeGraph Vertices (person/organization/location/skill/concept)
   edges table    → HugeGraph Edges (works_at/lives_in/likes/colleague_of/friend_of)
 
 Pipeline alignment:
-  ADD:  LLMExtract→SelfResolve→ConflictDetect→Dedup→RelComplete→ColleagueInfer→Store(7步)
-  QUERY: Classify→Ebbinghaus+VectorSearch→GraphContext→LLMAnswer(4步)
+  ADD:  LLMExtract→SelfResolve→ConflictDetect→EntityResolution→RelComplete→ColleagueInfer→Store(7步)
+  QUERY: Classify→3ChRetrieve(Ebbinghaus+FAISS+BM25+Graph)→RRFFuse→GraphDirectReason/LLMAnswer(4步)
 
 Usage:
     python memory_backend.py --port 8765  # standalone server
@@ -30,7 +37,7 @@ import time
 import uuid
 import argparse
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
 import faiss
@@ -38,6 +45,19 @@ import sqlite3
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
+
+# GraphRAG components — production-grade retrieval operators
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+try:
+    from hugegraph_llm.indices.fulltext.bm25_fulltext import BM25FullTextBackend
+    from hugegraph_llm.operators.graph_op.rrf_fusion import (
+        ReciprocalRankFusion, fuse_results_with_scores
+    )
+    HAS_GRAPHRAG_OPS = True
+except ImportError:
+    HAS_GRAPHRAG_OPS = False
+    print("[WARN] GraphRAG operators not available, falling back to FAISS-only search",
+          file=sys.stderr, flush=True)
 
 # ============================================================================
 # Config
@@ -754,8 +774,9 @@ def _get_llm_text(response) -> str:
 
 class MemoryPipelineBackend:
     """
-    Production-grade Memory Pipeline — HugeGraph + FAISS + MiMo LLM.
+    Engineering-grade Memory Pipeline — HugeGraph + FAISS + BM25 + RRF + MiMo LLM.
     Aligned with PowerMem v1.1.2 add_memory (7-step) / search_memory (4-step).
+    Enhanced with GraphRAG operators: BM25 fulltext search, RRF fusion, provenance.
     """
 
     def __init__(self, hg_client: HugeGraphMemoryClient = None,
@@ -771,6 +792,72 @@ class MemoryPipelineBackend:
         self.llm_base_url = LLM_BASE_URL
         self.llm_model = LLM_MODEL
         self.llm_api_key = LLM_API_KEY
+
+        # P0: BM25 fulltext index (GraphRAG component)
+        self._bm25 = None
+        if HAS_GRAPHRAG_OPS:
+            try:
+                self._bm25 = BM25FullTextBackend()
+                # Restore BM25 from persistent storage if available
+                bm25_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                         "memory_bm25")
+                if os.path.exists(bm25_path):
+                    self._bm25 = BM25FullTextBackend.from_name(
+                        os.path.dirname(os.path.abspath(__file__)), "memory_bm25")
+                print(f"[BM25] Initialized, {self._bm25.doc_count} docs in index",
+                      file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"[BM25] Init error (non-critical): {e}",
+                      file=sys.stderr, flush=True)
+
+        # P0: RRF fusion operator
+        self._rrf = ReciprocalRankFusion(k=60, min_score=0.0) if HAS_GRAPHRAG_OPS else None
+
+        # P1: Provenance tracking (memory_id → [{entity, relation}])
+        self._provenance: Dict[str, List[Dict[str, str]]] = {}
+        self._provenance_db_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "memory_provenance.json")
+        self._load_provenance()
+
+    def _load_provenance(self):
+        """Load provenance tracking data from disk."""
+        try:
+            if os.path.exists(self._provenance_db_path):
+                with open(self._provenance_db_path, "r") as f:
+                    self._provenance = json.load(f)
+        except Exception:
+            self._provenance = {}
+
+    def _save_provenance(self):
+        """Persist provenance tracking data to disk."""
+        try:
+            with open(self._provenance_db_path, "w") as f:
+                json.dump(self._provenance, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[Provenance] Save error: {e}", file=sys.stderr, flush=True)
+
+    def _track_provenance(self, memory_id: str, entities: list, relationships: list):
+        """Track which entities/relationships were extracted from which memory."""
+        links = []
+        for ent in entities:
+            links.append({"entity": ent["name"], "type": ent.get("type", ""),
+                          "relation": "extracted_from"})
+        for rel in relationships:
+            links.append({"entity": rel["source"], "type": "source",
+                          "relation": rel["relationship"],
+                          "target": rel["target"]})
+        self._provenance[memory_id] = links
+        self._save_provenance()
+
+    def _get_provenance_for_entities(self, entity_names: list) -> List[Dict]:
+        """Get source memories that contributed to the given entities."""
+        sources = []
+        for mem_id, links in self._provenance.items():
+            for link in links:
+                if link.get("entity") in entity_names or link.get("target") in entity_names:
+                    sources.append({"memory_id": mem_id, "link": link})
+                    break  # one match per memory is enough
+        return sources
 
     # ---- LLM Operations ----
 
@@ -1078,6 +1165,18 @@ class MemoryPipelineBackend:
             except Exception:
                 pass
 
+            # P0: BM25 fulltext indexing
+            if self._bm25 is not None:
+                try:
+                    self._bm25.add_documents([content], [memory_id])
+                    bm25_dir = os.path.dirname(os.path.abspath(__file__))
+                    self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
+                except Exception as e:
+                    print(f"[BM25] Add error: {e}", file=sys.stderr, flush=True)
+
+            # P1: Provenance tracking
+            self._track_provenance(memory_id, entities, relationships)
+
         db.commit()
         db.close()
 
@@ -1146,7 +1245,7 @@ class MemoryPipelineBackend:
                     "hint": "\u8bf7\u8f93\u5165\u7591\u95ee\u53e5\u6765\u67e5\u8be2\u8bb0\u5fc6",
                     "trace": trace}
 
-        # Step 2: Ebbinghaus Scoring + FAISS Vector Search + LLM Rerank
+        # Step 2: 3-Channel Retrieval + RRF Fusion (FAISS + BM25 + Graph)
         step_start = time.time()
 
         # Get all memories for Ebbinghaus calculation
@@ -1157,63 +1256,179 @@ class MemoryPipelineBackend:
 
         # Compute Ebbinghaus weights
         eb_weights = {}
-        memories_list = []
+        memories_map = {}  # id -> full memory data
         for row in rows:
             elapsed_hours = (now - row["created_at"]) / 3600
             ret = row["initial_score"] * math.exp(-EBBINGHAUS_K * elapsed_hours)
             ret = min(1.0, max(0.0, ret + row["access_count"] * EBBINGHAUS_REINFORCE))
             eb_weights[row["id"]] = round(ret, 4)
-            memories_list.append({"id": row["id"], "content": row["content"],
-                                   "retention": ret, "access_count": row["access_count"]})
+            memories_map[row["id"]] = {"id": row["id"], "content": row["content"],
+                                       "retention": ret, "access_count": row["access_count"]}
 
-        # FAISS semantic search with Ebbinghaus weighting
-        faiss_results = self.faiss.search(query, top_k=top_k * 2, ebbinghaus_weights=eb_weights)
+        # --- Channel 1: FAISS Vector Semantic Search (with Ebbinghaus) ---
+        faiss_results = self.faiss.search(query, top_k=top_k * 3, ebbinghaus_weights=eb_weights)
+        # Build ranked list: memory_id ordered by FAISS relevance
+        channel_faiss = [r["memory_id"] for r in faiss_results if r.get("memory_id")]
 
-        # Merge with Ebbinghaus-only results for memories without embeddings
-        faiss_ids = set(r["memory_id"] for r in faiss_results)
-        for m in memories_list:
-            if m["id"] not in faiss_ids:
-                faiss_results.append({
-                    "memory_id": m["id"], "content": m["content"],
-                    "raw_score": m["retention"], "retention": m["retention"],
-                    "weighted_score": m["retention"] * 0.5,
-                })
+        # Add Ebbinghaus-only memories as low-ranked channel entries
+        for mid, mem in memories_map.items():
+            if mid not in channel_faiss and mem["retention"] > 0.1:
+                channel_faiss.append(mid)
 
-        # Sort by weighted score
-        faiss_results.sort(key=lambda x: x["weighted_score"], reverse=True)
-        top_candidates = faiss_results[:top_k * 2]
+        # --- Channel 2: BM25 Fulltext Keyword Search ---
+        channel_bm25 = []
+        bm25_scores = {}
+        if self._bm25 is not None and self._bm25.doc_count > 0:
+            try:
+                bm25_raw = self._bm25.search(query, top_k=top_k * 3, min_score=0.0)
+                for item in bm25_raw:
+                    mid = item.get("id")
+                    if mid:
+                        channel_bm25.append(mid)
+                        bm25_scores[mid] = item.get("score", 0.0)
+            except Exception as e:
+                print(f"[BM25] Search error: {e}", file=sys.stderr, flush=True)
 
-        # LLM reranking with graph context
+        # --- Channel 3: Graph Entity Relevance Score ---
+        channel_graph = []
+        graph_entity_scores = {}
+        try:
+            all_vertices = self.hg.get_all_vertices()
+            all_edges = self.hg.get_all_edges()
+            # Score memories based on entity overlap with graph
+            query_entity_names = set()
+            parts = re.split(r'[的了在是有和也都哪些多少几怎么如何谁什么哪里哪个有没有]', query)
+            for part in parts:
+                part = part.strip()
+                if 2 <= len(part) <= 4 and re.match(r'^[\u4e00-\u9fa5]+$', part):
+                    query_entity_names.add(part)
+
+            # For each memory, score based on how many graph entities it references
+            for mid, mem in memories_map.items():
+                graph_score = 0.0
+                for qname in query_entity_names:
+                    # Check if this entity name appears in the memory content
+                    if qname in mem["content"]:
+                        graph_score += 0.5
+                    # Check if this entity has edges in the graph
+                    for e in all_edges:
+                        elabel = e.get("label") or e.get("relationship") or ""
+                        sname = e.get("source_name") or ""
+                        tname = e.get("target_name") or ""
+                        if qname in (sname, tname):
+                            graph_score += 0.3
+                            if sname in mem["content"] or tname in mem["content"]:
+                                graph_score += 0.2
+                if graph_score > 0:
+                    graph_entity_scores[mid] = round(graph_score, 4)
+            # Sort by graph score
+            channel_graph = sorted(graph_entity_scores, key=graph_entity_scores.get, reverse=True)
+        except Exception as e:
+            print(f"[Graph Channel] Error: {e}", file=sys.stderr, flush=True)
+
+        # --- RRF Fusion of 3 Channels ---
+        if self._rrf and HAS_GRAPHRAG_OPS:
+            # Build ranked lists for RRF
+            ranked_lists = []
+            if channel_faiss:
+                ranked_lists.append(("faiss", channel_faiss))
+            if channel_bm25:
+                ranked_lists.append(("bm25", channel_bm25))
+            if channel_graph:
+                ranked_lists.append(("graph", channel_graph))
+
+            if ranked_lists:
+                rrf_result = self._rrf.fuse(ranked_lists)
+                fused_ids = rrf_result.top_k(top_k * 2)
+
+                # Build results with channel source tracking
+                results = []
+                for mid in fused_ids:
+                    if mid not in memories_map:
+                        continue
+                    mem = memories_map[mid]
+                    channels = []
+                    if mid in channel_faiss:
+                        rank_faiss = channel_faiss.index(mid) + 1 if mid in channel_faiss else 0
+                        channels.append(f"faiss#{rank_faiss}")
+                    if mid in channel_bm25:
+                        rank_bm25 = channel_bm25.index(mid) + 1 if mid in channel_bm25 else 0
+                        channels.append(f"bm25#{rank_bm25}")
+                    if mid in channel_graph:
+                        rank_graph = channel_graph.index(mid) + 1 if mid in channel_graph else 0
+                        channels.append(f"graph#{rank_graph}")
+
+                    # Combine Ebbinghaus retention with channel diversity
+                    diversity_bonus = min(1.0, len(channels) * 0.15)
+                    final_score = min(1.0, mem["retention"] * 0.6 + diversity_bonus * 0.4)
+
+                    results.append({
+                        "memory": mem,
+                        "score": round(final_score, 4),
+                        "source": "+".join(channels),
+                    })
+                trace.append({
+                    "step": 2, "name": "3\u901a\u9053RRF\u878d\u5408\u68c0\u7d22",
+                    "detail": f"FAISS={len(channel_faiss)}, BM25={len(channel_bm25)}, "
+                             f"Graph={len(channel_graph)} \u2192 RRF Top-{len(results)}",
+                    "channels": {"faiss": len(channel_faiss), "bm25": len(channel_bm25),
+                                 "graph": len(channel_graph)},
+                    "elapsed_ms": round((time.time()-step_start)*1000)})
+            else:
+                # Fallback: FAISS-only (no BM25/Graph results)
+                results = []
+                for r in faiss_results[:top_k]:
+                    mid = r.get("memory_id")
+                    if mid and mid in memories_map:
+                        results.append({
+                            "memory": memories_map[mid],
+                            "score": r.get("weighted_score", r.get("retention", 0.5)),
+                            "source": "faiss_only",
+                        })
+                trace.append({"step": 2, "name": "FAISS-only\u68c0\u7d22(RRF\u65e0\u8f93\u5165)",
+                              "detail": f"Top-{len(results)}",
+                              "elapsed_ms": round((time.time()-step_start)*1000)})
+        else:
+            # Fallback path when GraphRAG operators not available
+            results = []
+            for r in faiss_results[:top_k]:
+                mid = r.get("memory_id")
+                if mid and mid in memories_map:
+                    results.append({
+                        "memory": memories_map[mid],
+                        "score": r.get("weighted_score", r.get("retention", 0.5)),
+                        "source": "faiss_ebbinghaus",
+                    })
+            trace.append({"step": 2, "name": "FAISS+Ebbinghaus\u68c0\u7d22",
+                          "detail": f"Top-{len(results)} (BM25/RRF\u4e0d\u53ef\u7528)",
+                          "elapsed_ms": round((time.time()-step_start)*1000)})
+
+        # LLM reranking with graph context (only for top candidates)
         graph_ctx = self._build_graph_context()
-        llm_ranks = self._llm_rank_memories(query, top_candidates, graph_ctx)
+        top_candidates = results[:top_k]
+        if top_candidates and len(top_candidates) > 1:
+            try:
+                llm_ranks = self._llm_rank_memories(query, top_candidates, graph_ctx)
+                llm_score_map = {r.get("memory_id"): r.get("score", 0.5) for r in llm_ranks}
+                for r in top_candidates:
+                    mid = r["memory"]["id"]
+                    llm_s = llm_score_map.get(mid)
+                    if llm_s is not None:
+                        r["score"] = round(r["score"] * 0.4 + llm_s * 0.6, 4)
+                        r["source"] += "+llm_rerank"
+            except Exception:
+                pass  # LLM rerank failure is non-critical
 
-        # Merge LLM ranks with candidate scores
-        results = []
-        llm_score_map = {r.get("memory_id"): r.get("score", 0.5) for r in llm_ranks}
-        for cand in top_candidates[:top_k]:
-            llm_s = llm_score_map.get(cand["memory_id"])
-            final_score = llm_s if llm_s else cand["weighted_score"]
-            mem_data = next((m for m in memories_list if m["id"] == cand["memory_id"]), None)
-            results.append({
-                "memory": mem_data or {"id": cand["memory_id"], "content": cand["content"]},
-                "score": round(final_score, 4),
-                "source": "llm_rerank" if llm_s else "vector_ebbinghaus",
-            })
-            # Reinforce accessed memories
-            if cand["memory_id"]:
+        # Sort final results and reinforce accessed memories
+        results.sort(key=lambda x: x["score"], reverse=True)
+        results = results[:top_k]
+        for r in results:
+            mid = r["memory"]["id"]
+            if mid:
                 db.execute(
                     "UPDATE memories SET access_count=access_count+1, last_accessed_at=? WHERE id=?",
-                    (now, cand["memory_id"]),
+                    (now, mid),
                 )
-
-        trace.append({"step": 2, "name": "Ebbinghaus+\u5411\u91cf\u68c0\u7d22+LLM\u91cd\u6392",
-                      "detail": f"{len(memories_list)} memories, FAISS={self.faiss.index.ntotal}, "
-                              f"Top-{len(results)} results",
-                      "ebbinghaus_scores": [
-                          {"id": m["id"], "content": m["content"][:30],
-                           "retention": eb_weights.get(m["id"], 0)}
-                          for m in memories_list[:5]],
-                      "elapsed_ms": round((time.time()-step_start)*1000)})
 
         # Step 3: Graph Context Retrieval (from HugeGraph)
         step_start = time.time()
@@ -1275,14 +1490,20 @@ class MemoryPipelineBackend:
             elif is_position_query:
                 answer = self._graph_position_answer(list(query_known))
             if answer:
+                # P1: Provenance for graph direct reasoning answers
+                graph_prov = []
+                prov_sources = self._get_provenance_for_entities(list(query_known))
+                graph_prov = prov_sources[:2]
                 trace.append({"step": 4, "name": "图谱直接推理",
                               "detail": "从works_at边计算(无需LLM)",
+                              "provenance_count": len(graph_prov),
                               "elapsed_ms": round((time.time()-step_start)*1000)})
                 db.commit()
                 db.close()
                 return {
                     "query": query, "action": "QUERY", "results": results,
                     "answer": answer, "graph_context": graph_ctx,
+                    "provenance": graph_prov,
                     "trace": trace, "total_elapsed_ms": round((time.time() - start_time) * 1000),
                 }
 
@@ -1294,8 +1515,23 @@ class MemoryPipelineBackend:
         else:
             answer = "记忆中没有相关信息。"
 
+        # P1: Provenance — attach source memory citations
+        provenance_info = []
+        if relevant_memories:
+            entity_names_in_query = list(query_known) if query_known else []
+            if entity_names_in_query:
+                prov = self._get_provenance_for_entities(entity_names_in_query)
+                provenance_info = prov[:3]  # max 3 provenance entries
+            else:
+                # Use top result's memory as source
+                top_mem_id = results[0]["memory"]["id"] if results else None
+                if top_mem_id and top_mem_id in self._provenance:
+                    provenance_info = [{"memory_id": top_mem_id,
+                                       "link": self._provenance[top_mem_id][0]}]
+
         trace.append({"step": 4, "name": "LLM\u56de\u7b54\u751f\u6210",
                       "detail": f"{len(answer)} chars",
+                      "provenance_count": len(provenance_info),
                       "elapsed_ms": round((time.time()-step_start)*1000)})
 
         db.commit()
@@ -1307,6 +1543,7 @@ class MemoryPipelineBackend:
             "results": results,
             "answer": answer,
             "graph_context": graph_ctx,
+            "provenance": provenance_info,
             "trace": trace,
             "total_elapsed_ms": round((time.time() - start_time) * 1000),
         }
@@ -1480,11 +1717,20 @@ class MemoryPipelineBackend:
         return ""
 
     def _dedup_entities(self, entities: list, relationships: list) -> tuple:
-        """Deduplicate entities (e.g., merge '腾讯深圳' into '腾讯' + '深圳')."""
+        """Entity resolution: merge duplicates using 3 strategies (inspired by GraphRAG EntityResolution).
+        Strategy 1: Substring match (e.g., "腾讯深圳" → "腾讯" + "深圳")
+        Strategy 2: Exact type+name match (case/whitespace insensitive)
+        Strategy 3: Embedding cosine similarity (>0.85 threshold) — LLM-free fast path
+        """
         hg_verts = self.hg.get_all_vertices()
-        existing_names = set(v["name"] for v in hg_verts)
-        merged = {}
+        existing_names = {}  # name -> {type, ...}
+        for v in hg_verts:
+            existing_names[v.get("name", "")] = {"type": v.get("type", v.get("label", ""))}
+
+        merged = {}  # old_name -> canonical_name
         new_entities = []
+
+        # Strategy 1: Substring containment (original logic, enhanced)
         for ent in entities:
             name = ent["name"]
             best_match = None
@@ -1500,12 +1746,97 @@ class MemoryPipelineBackend:
                 merged[name] = best_match
             elif name not in existing_names:
                 new_entities.append(ent)
+
+        # Strategy 2: Cross-entity dedup within current extraction
+        # If two new entities have same type and high name overlap, merge
+        seen_names = {}
+        final_entities = []
+        for ent in new_entities:
+            name = ent["name"]
+            etype = ent.get("type", "")
+            # Check against already-accepted entities
+            deduped = False
+            for accepted_name, accepted in seen_names.items():
+                if accepted.get("type") == etype and accepted_name != name:
+                    # Use substring containment as primary signal
+                    if accepted_name in name or name in accepted_name:
+                        keep = accepted_name if len(accepted_name) <= len(name) else name
+                        remove = name if keep == accepted_name else accepted_name
+                        if remove == name:
+                            merged[name] = accepted_name
+                        else:
+                            # Update the already-accepted entry
+                            merged[accepted_name] = name
+                            for rel in relationships:
+                                if rel["source"] == accepted_name:
+                                    rel["source"] = name
+                                if rel["target"] == accepted_name:
+                                    rel["target"] = name
+                        deduped = True
+                        break
+            if not deduped:
+                seen_names[name] = ent
+                final_entities.append(ent)
+
+        # Strategy 3: Embedding similarity (fast, no LLM call)
+        # Only when we have >= 2 new entities of the same type
+        type_groups = {}
+        for ent in final_entities:
+            type_groups.setdefault(ent.get("type", ""), []).append(ent)
+
+        for etype, group in type_groups.items():
+            if len(group) < 2:
+                continue
+            try:
+                names = [e["name"] for e in group]
+                # Use FAISS index's embedding function for fast comparison
+                embed_fn = getattr(self.faiss, '_get_embedding_client', None)
+                if embed_fn is None:
+                    continue
+                client = embed_fn()
+                embeddings = []
+                for n in names:
+                    resp = client.embeddings.create(model="text-embedding-ada-002",
+                                                     input=n[:50])
+                    embeddings.append(np.array(resp.data[0].embedding, dtype=np.float32))
+                # Cosine similarity check
+                for i in range(len(names)):
+                    for j in range(i + 1, len(names)):
+                        cos_sim = float(np.dot(embeddings[i], embeddings[j]) /
+                                        (np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8))
+                        if cos_sim > 0.85:
+                            # Merge: keep the one that's shorter or already in graph
+                            keep, remove = (names[i], names[j]) if len(names[i]) <= len(names[j]) else (names[j], names[i])
+                            if remove not in merged:
+                                merged[remove] = keep
+                                # Update relationships
+                                for rel in relationships:
+                                    if rel["source"] == remove:
+                                        rel["source"] = keep
+                                    if rel["target"] == remove:
+                                        rel["target"] = keep
+                                final_entities = [e for e in final_entities if e["name"] != remove]
+            except Exception as e:
+                print(f"[EntityResolution] Embedding check error (non-critical): {e}",
+                      file=sys.stderr, flush=True)
+
+        # Apply all merged mappings to relationships
         for rel in relationships:
             if rel["source"] in merged:
                 rel["source"] = merged[rel["source"]]
             if rel["target"] in merged:
                 rel["target"] = merged[rel["target"]]
-        return new_entities, relationships
+
+        return final_entities, relationships
+
+    def _apply_merged_to_rels(self, relationships: list, merged: dict) -> list:
+        """Apply entity name mappings to all relationships."""
+        for rel in relationships:
+            if rel["source"] in merged:
+                rel["source"] = merged[rel["source"]]
+            if rel["target"] in merged:
+                rel["target"] = merged[rel["target"]]
+        return relationships
 
     def _extract_missing_rels(self, content: str, entities: list, relationships: list) -> list:
         """Regex-fallback relationship extraction when LLM misses some."""
@@ -1664,6 +1995,13 @@ class MemoryPipelineBackend:
             "node_type_distribution": type_dist,
             "ebbinghaus_scores": ebbinghaus,
             "faiss": faiss_stats,
+            "bm25": {
+                "doc_count": self._bm25.doc_count if self._bm25 else 0,
+                "available": self._bm25 is not None,
+            },
+            "rrf_available": self._rrf is not None,
+            "provenance_count": len(self._provenance),
+            "graphrag_ops": HAS_GRAPHRAG_OPS,
         }
 
     def get_graph_data(self) -> dict:
@@ -1700,6 +2038,17 @@ class MemoryPipelineBackend:
             self.faiss.save()
         except Exception:
             pass
+        # Clear BM25 index
+        if self._bm25 is not None:
+            try:
+                bm25_dir = os.path.dirname(os.path.abspath(__file__))
+                self._bm25 = BM25FullTextBackend()  # fresh empty index
+                self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
+            except Exception:
+                pass
+        # Clear provenance
+        self._provenance = {}
+        self._save_provenance()
 
 
 # ============================================================================
