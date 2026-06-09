@@ -1,0 +1,245 @@
+{
+  "poc_name": "supply_chain_kg_duality",
+  "paper_reference": "arXiv:2510.01115 - Exploring Network-Knowledge Graph Duality",
+  "date": "2026-06-09",
+  "graph_stats": {
+    "nodes": 45,
+    "edges": 73,
+    "entity_types": 5,
+    "relation_types": 8
+  },
+  "scenarios": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0
+  },
+  "scenario_results": {
+    "scenario1_apple_chip_risk": {
+      "query": "Apple 芯片供应链集中度风险",
+      "seeds": [
+        "server_chip",
+        "apple",
+        "soc_chip"
+      ],
+      "subgraph_nodes": 9,
+      "subgraph_edges": 10,
+      "chip_related_paths": 13,
+      "top_path_shells": [
+        "Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 52%",
+        "Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 12%；MacBook 的生产成本中 30% 来自 IC 设计/流片",
+        "Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 12%"
+      ],
+      "prompt_preview": "## 供应链风险分析请求\n\n### 用户问题\nApple 的芯片供应链是否存在集中度风险？\n\n### 供应链知识图谱证据路径（路径壳）\n以下是从供应链图谱中提取的关联路径，每条路径附带经济权重：\n\n1. Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 52%\n2. Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 12%；MacBook 的生产成本中 30% 来自 IC 设计/流片\n3. Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 12%\n4. Apple Inc. 供应份额的 100% 来自 SoC 芯片；Apple Inc. 的 Apple Inc. 收入占比 8%\n5. Apple Inc. 的 Apple Inc. 收入占比 52%；iPhone 的生产成本中 25% 来自 SoC 芯片；当 SoC 芯片 断供时，服务器芯片 可替代 30% 的需求\n\n###...",
+      "gremlin_equivalents": [
+        "g.V('apple').repeat(out().simplePath()).emit().path().by('name').by('relation')",
+        "g.V().has('name', 'SoC 芯片').in('supplies').path()",
+        "g.V('apple').out('produces').out('has_input').has('category','半导体').path()"
+      ],
+      "risk_assessment": {
+        "tsmc_dependency": "90%",
+        "risk_level": "HIGH",
+        "verdict": "PASS"
+      },
+      "verdict": "PASS"
+    },
+    "scenario2_drc_tesla_risk": {
+      "query": "DRC 钴矿断供对 Tesla 的影响路径（双向追溯）",
+      "seeds": [
+        "tesla",
+        "model_s",
+        "lithium_cell"
+      ],
+      "subgraph_nodes": 23,
+      "subgraph_edges": 28,
+      "drc_risk_paths": 10,
+      "cobalt_risk_paths": 22,
+      "total_risk_paths": 44,
+      "top_path_shells": [
+        "Tesla Inc. 的 Tesla Inc. 收入占比 45%；Model 3/Y 的产能中 50% 位于 上海；宁德时代 位于 上海；宁德时代 供应份额的 35% 来自 锂离子电池电芯；锂离子电池电芯 供应份额的 20% 来自 锂矿石",
+        "Tesla Inc. 的 Tesla Inc. 收入占比 45%；Model 3/Y 的产能中 50% 位于 上海；宁德时代 位于 上海；宁德时代 供应份额的 35% 来自 锂离子电池电芯；锂离子电池电芯 供应份额的 15% 来自 钴矿石",
+        "Tesla Inc. 的 Tesla Inc. 收入占比 35%；Tesla Inc. 的 Tesla Inc. 收入占比 45%；Model 3/Y 的生产成本中 38% 来自 锂离子电池电芯；锂离子电池电芯 供应份额的 20% 来自 锂矿石"
+      ],
+      "gremlin_equivalents": [
+        "g.V('tesla').repeat(in().simplePath()).emit().path().by('name').by('relation')",
+        "g.V('tesla').out('produces').in('has_input').repeat(in('supplies').simplePath()).emit().path()"
+      ],
+      "risk_assessment": {
+        "max_propagation_depth": 2,
+        "drc_exposure": true,
+        "cobalt_exposure": true,
+        "risk_path_count": 44,
+        "risk_level": "HIGH",
+        "verdict": "PASS"
+      },
+      "verdict": "PASS"
+    },
+    "scenario3_adaptive_vs_fixed": {
+      "test_queries": [
+        {
+          "network_only": {
+            "nodes": 14,
+            "edges": 13,
+            "fixed_depth": 2,
+            "has_semantic_relations": false,
+            "has_path_shells": false
+          },
+          "network_kg_duality": {
+            "nodes": 6,
+            "edges": 5,
+            "adaptive_depth": "1-2 hops (centrality-driven)",
+            "has_semantic_relations": true,
+            "has_path_shells": true
+          },
+          "advantage": "Network-KG 方法通过自适应深度减少无关节点，通过语义关系提供可解释路径壳",
+          "query": "Apple"
+        },
+        {
+          "network_only": {
+            "nodes": 16,
+            "edges": 14,
+            "fixed_depth": 2,
+            "has_semantic_relations": false,
+            "has_path_shells": false
+          },
+          "network_kg_duality": {
+            "nodes": 10,
+            "edges": 13,
+            "adaptive_depth": "1-2 hops (centrality-driven)",
+            "has_semantic_relations": true,
+            "has_path_shells": true
+          },
+          "advantage": "Network-KG 方法通过自适应深度减少无关节点，通过语义关系提供可解释路径壳",
+          "query": "Tesla 电池"
+        },
+        {
+          "network_only": {
+            "nodes": 11,
+            "edges": 10,
+            "fixed_depth": 2,
+            "has_semantic_relations": false,
+            "has_path_shells": false
+          },
+          "network_kg_duality": {
+            "nodes": 6,
+            "edges": 6,
+            "adaptive_depth": "1-2 hops (centrality-driven)",
+            "has_semantic_relations": true,
+            "has_path_shells": true
+          },
+          "advantage": "Network-KG 方法通过自适应深度减少无关节点，通过语义关系提供可解释路径壳",
+          "query": "台积电"
+        },
+        {
+          "network_only": {
+            "nodes": 7,
+            "edges": 6,
+            "fixed_depth": 2,
+            "has_semantic_relations": false,
+            "has_path_shells": false
+          },
+          "network_kg_duality": {
+            "nodes": 4,
+            "edges": 4,
+            "adaptive_depth": "1-2 hops (centrality-driven)",
+            "has_semantic_relations": true,
+            "has_path_shells": true
+          },
+          "advantage": "Network-KG 方法通过自适应深度减少无关节点，通过语义关系提供可解释路径壳",
+          "query": "华为"
+        },
+        {
+          "network_only": {
+            "nodes": 9,
+            "edges": 7,
+            "fixed_depth": 2,
+            "has_semantic_relations": false,
+            "has_path_shells": false
+          },
+          "network_kg_duality": {
+            "nodes": 7,
+            "edges": 8,
+            "adaptive_depth": "1-2 hops (centrality-driven)",
+            "has_semantic_relations": true,
+            "has_path_shells": true
+          },
+          "advantage": "Network-KG 方法通过自适应深度减少无关节点，通过语义关系提供可解释路径壳",
+          "query": "比亚迪 海豹"
+        }
+      ],
+      "avg_network_nodes": 11.4,
+      "avg_kg_nodes": 6.6,
+      "node_reduction_pct": 42.1,
+      "verdict": "PASS",
+      "gremlin_equivalents": [
+        "// 固定2跳: g.V(seed).repeat(out()).emit().until(__.loops().is(eq(2))).dedup()",
+        "// 自适应: g.V(seed).choose(__.values('ss').is(gte(0.1)), __.out(), __.repeat(out()).emit().until(__.loops().is(eq(2))))"
+      ]
+    },
+    "scenario4_path_shell_quality": {
+      "total_shells": 15,
+      "shells_with_weight_data": 9,
+      "weight_coverage_pct": 60.0,
+      "avg_shell_length_chars": 28.8,
+      "unique_relation_types": 4,
+      "sample_shells": [
+        "华为技术有限公司 的 华为技术有限公司 收入占比 30%；Mate 60 的产能中 80% 位于 深圳",
+        "Apple Inc. 的 Apple Inc. 收入占比 52%；iPhone 的产能中 45% 位于 深圳",
+        "Apple Inc. 的 Apple Inc. 收入占比 52%",
+        "Tesla Inc. 的 Tesla Inc. 收入占比 45%",
+        "Tesla Inc. 的 Tesla Inc. 收入占比 35%"
+      ],
+      "verdict": "PASS"
+    },
+    "scenario5_hugegraph_olap": {
+      "current_graph": {
+        "nodes": 45,
+        "edges": 73,
+        "entity_types": 5,
+        "relation_types": 8
+      },
+      "scalability_analysis": {
+        "centrality_computation": {
+          "algorithm": "Brandes betweenness",
+          "complexity": "O(VE)",
+          "olap_acceleration": "HugeGraph OLAP traverser 可在 60 亿点边上并行计算中心性",
+          "gremlin_equivalent": "g.V().betweenness().with('OLAP')"
+        },
+        "adaptive_traversal": {
+          "description": "种子节点自适应深度扩展",
+          "olap_acceleration": "OLAP traverser 的 multi-hop traversal 天然支持",
+          "gremlin_equivalent": "g.V(seed).repeat(out().simplePath()).emit().until(__.loops().is(lt(max_hops)))"
+        },
+        "path_extraction": {
+          "description": "带权路径提取 + 路径壳转述",
+          "olap_acceleration": "路径提取可在遍历阶段完成，转述为后处理步骤",
+          "gremlin_equivalent": "g.V(seed).repeat(out()).emit().path().by('name').by('relation').by('weight')"
+        }
+      },
+      "hugegraph_advantages": [
+        "Vermeer OLAP 引擎支持 60 亿点边大规模中心性计算",
+        "Gremlin 查询统一入口，支持自适应深度遍历",
+        "原生图存储，边属性（权重、关系类型）直接存储",
+        "MCP 支持可暴露路径壳查询为 AI Agent 工具"
+      ],
+      "verdict": "PASS"
+    }
+  },
+  "overall_verdict": "PASS",
+  "next_steps": [
+    "1. 将中心性计算替换为 HugeGraph OLAP traverser API",
+    "2. 将种子匹配替换为 FAISS 向量检索（entity embeddings）",
+    "3. 实现端到端 LLM 集成：路径壳 → GPT-4o → 风险报告",
+    "4. 扩大图谱规模到 1000+ 节点验证 OLAP 性能",
+    "5. 对比 supply_chain_risk.py 的纯网络方法，量化 Network-KG 优势"
+  ],
+  "comparison_with_existing_poc": {
+    "existing_poc": "supply_chain_risk.py（纯网络视角：BFS + betweenness）",
+    "this_poc": "supply_chain_kg_duality.py（Network-KG 二重性：语义关系 + 自适应深度 + 路径壳）",
+    "key_differences": [
+      "实体类型: 5层线性 vs 5类KG语义类型",
+      "遍历策略: 固定BFS vs 中心性驱动自适应",
+      "输出格式: 节点/边列表 vs 路径壳自然语言",
+      "LLM集成: 无 vs Context Shell prompt组装"
+    ]
+  }
+}
