@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HugeGraph Memory - Interactive Demo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+  --border: #30363d; --text: #e6edf3; --text2: #8b949e;
+  --blue: #58a6ff; --green: #3fb950; --orange: #d29922;
+  --red: #f85149; --purple: #bc8cff; --cyan: #39d2c0;
+  --node-person: #58a6ff; --node-org: #f0883e;
+  --node-location: #3fb950; --node-skill: #bc8cff;
+  --node-concept: #39d2c0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+/* Header */
+.header { padding: 12px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; background: var(--bg2); flex-shrink: 0; }
+.header h1 { font-size: 16px; font-weight: 600; }
+.header h1 span { color: var(--blue); }
+.header .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--bg3); color: var(--text2); }
+.header .status { margin-left: auto; font-size: 12px; color: var(--text2); }
+.header .status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.header .status .dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.header .status .dot.offline { background: var(--red); }
+
+/* Main Layout */
+.main { display: grid; grid-template-columns: 320px 1fr 360px; height: calc(100vh - 49px); overflow: hidden; }
+
+/* Left Panel */
+.left-panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.panel-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); }
+.panel-tab { flex: 1; padding: 10px 8px; font-size: 12px; text-align: center; cursor: pointer; color: var(--text2); border-bottom: 2px solid transparent; transition: all 0.2s; }
+.panel-tab:hover { color: var(--text); }
+.panel-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+.panel-content { flex: 1; overflow-y: auto; padding: 12px; }
+.panel-content::-webkit-scrollbar { width: 6px; }
+.panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Memory Item */
+.memory-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+.memory-item:hover { border-color: var(--blue); }
+.memory-item .mem-content { font-size: 13px; line-height: 1.5; margin-bottom: 6px; }
+.memory-item .mem-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text2); }
+.memory-item .mem-meta .retention { font-weight: 600; }
+.retention-bar { height: 3px; background: var(--bg3); border-radius: 2px; margin-top: 6px; }
+.retention-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+
+/* Center: Chat */
+.center-panel { display: flex; flex-direction: column; overflow: hidden; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 20px; min-height: 0; }
+.chat-messages::-webkit-scrollbar { width: 6px; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.chat-msg { margin-bottom: 16px; display: flex; gap: 12px; max-width: 85%; }
+.chat-msg.user { margin-left: auto; flex-direction: row-reverse; }
+.chat-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.chat-msg.assistant .chat-avatar { background: var(--blue); }
+.chat-msg.user .chat-avatar { background: var(--bg3); }
+.chat-bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
+.chat-msg.user .chat-bubble { background: var(--blue); color: #fff; border-bottom-right-radius: 4px; }
+.chat-msg.assistant .chat-bubble { background: var(--bg2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.chat-evidence { margin-top: 8px; padding: 8px 10px; background: var(--bg); border-radius: 6px; font-size: 11px; color: var(--text2); border-left: 2px solid var(--blue); }
+.chat-evidence b { color: var(--blue); }
+.chat-pipeline { margin-top: 8px; }
+.pipeline-step { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 4px 0; color: var(--text2); }
+.pipeline-step .step-num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; background: var(--bg3); }
+.pipeline-step.active .step-num { background: var(--blue); color: #fff; animation: pulse 1s infinite; }
+.pipeline-step.done .step-num { background: var(--green); color: #fff; }
+.pipeline-step .step-detail { font-size: 11px; color: var(--text2); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.typing-indicator { display: flex; gap: 4px; padding: 10px; }
+.typing-indicator span { width: 8px; height: 8px; border-radius: 50%; background: var(--text2); animation: typing 1.2s infinite; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+/* Chat Input */
+.chat-input-area { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--bg2); }
+.chat-input-row { display: flex; gap: 10px; }
+.chat-input-row input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; outline: none; }
+.chat-input-row input:focus { border-color: var(--blue); }
+.chat-input-row button { padding: 10px 20px; border-radius: 8px; border: none; background: var(--blue); color: #fff; font-size: 14px; cursor: pointer; font-weight: 500; }
+.chat-input-row button:hover { opacity: 0.9; }
+.chat-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+.input-hints { margin-top: 6px; font-size: 11px; color: var(--text2); }
+.input-hints span { margin-right: 12px; }
+
+/* Right Panel */
+.right-panel { border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.right-header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg2); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.graph-container { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+.graph-container canvas { width: 100%; height: 100%; }
+
+/* Stats cards */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+.stat-card .stat-val { font-size: 22px; font-weight: 700; color: var(--blue); }
+.stat-card .stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+/* Entity badge */
+.entity-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 1px; font-weight: 500; }
+.entity-badge.person { background: rgba(88,166,255,0.2); color: var(--node-person); }
+.entity-badge.org { background: rgba(240,136,62,0.2); color: var(--node-org); }
+.entity-badge.location { background: rgba(63,185,80,0.2); color: var(--node-location); }
+.entity-badge.skill { background: rgba(188,140,255,0.2); color: var(--node-skill); }
+.entity-badge.concept { background: rgba(57,210,192,0.2); color: var(--node-concept); }
+
+/* Relation tag */
+.relation-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin: 1px; background: var(--bg3); color: var(--text2); }
+
+/* Ebbinghaus chart */
+.ebbinghaus-chart { height: 200px; margin: 8px 0; }
+
+/* Welcome */
+.welcome { text-align: center; padding: 60px 40px; }
+.welcome h2 { font-size: 20px; margin-bottom: 8px; color: var(--text); }
+.welcome p { color: var(--text2); font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+.example-queries { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.example-btn { padding: 6px 14px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.example-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* Clear button */
+.clear-btn { background: none; border: 1px solid var(--border); color: var(--red); padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+.clear-btn:hover { background: rgba(248,81,73,0.1); }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .main { grid-template-columns: 280px 1fr 300px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>HugeGraph</span> Memory Demo</h1>
+  <div class="badge">LLM-Powered</div>
+  <div class="badge">Ebbinghaus</div>
+  <div class="badge">Graph Store</div>
+  <div class="badge" style="color: var(--text2); border: 1px solid var(--border);">SQLite (无需 HugeGraph)</div>
+  <div class="status" id="serverStatus">
+    <span class="dot offline" id="statusDot"></span>
+    <span id="statusText">Connecting...</span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Left Panel: Memory Store -->
+  <div class="left-panel">
+    <div class="panel-tabs">
+      <div class="panel-tab active" onclick="switchTab(this, 'memories')">Memories</div>
+      <div class="panel-tab" onclick="switchTab(this, 'relations')">Relations</div>
+      <div class="panel-tab" onclick="switchTab(this, 'stats')">Stats</div>
+      <div class="panel-tab" onclick="switchTab(this, 'ebbinghaus')">Ebbinghaus</div>
+    </div>
+    <div class="panel-content" id="panelContent">
+      <div id="tab-memories"><p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">No memories yet. Start chatting!</p></div>
+      <div id="tab-relations" style="display:none"><p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">No relations yet.</p></div>
+      <div id="tab-stats" style="display:none"></div>
+      <div id="tab-ebbinghaus" style="display:none">
+        <p style="color:var(--text2);font-size:11px;margin-bottom:8px;">Retention = R(t) = e<sup>-0.821t</sup> + access_count x 0.3</p>
+        <canvas id="ebbinghausChart" class="ebbinghaus-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Chat -->
+  <div class="center-panel">
+    <div class="chat-messages" id="chatMessages">
+      <div class="welcome" id="welcomeScreen">
+        <h2>HugeGraph Memory</h2>
+        <p>Tell me about yourself, and I'll build a knowledge graph from our conversation.<br>Ask questions later to search your stored memories.</p>
+        <div class="example-queries">
+          <div class="example-btn" onclick="useExample(this)">我叫张三，在腾讯深圳工作</div>
+          <div class="example-btn" onclick="useExample(this)">我喜欢喝咖啡和打羽毛球</div>
+          <div class="example-btn" onclick="useExample(this)">我的同事李四也在腾讯</div>
+          <div class="example-btn" onclick="useExample(this)">我同事有哪些？</div>
+          <div class="example-btn" onclick="useExample(this)">我有什么爱好？</div>
+        </div>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()" />
+        <button id="sendBtn" onclick="sendMessage()">Send</button>
+      </div>
+      <div class="input-hints">
+        <span>Statements → extract & store</span>
+        <span>Questions → search & answer</span>
+        <button class="clear-btn" onclick="clearAll()" style="float:right;">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel: Graph Visualization -->
+  <div class="right-panel">
+    <div class="right-header">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="4" r="3"/><circle cx="3" cy="12" r="3"/><circle cx="13" cy="12" r="3"/><line x1="8" y1="7" x2="4" y2="9.5" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="7" x2="12" y2="9.5" stroke="currentColor" stroke-width="1.5"/><line x1="5" y1="12" x2="11" y2="12" stroke="currentColor" stroke-width="1.5"/></svg>
+      Knowledge Graph
+      <span id="nodeCount" style="margin-left:auto;color:var(--text2);font-size:11px;">0 nodes</span>
+    </div>
+    <div class="graph-container">
+      <canvas id="graphCanvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// API Client
+// ============================================================================
+const API = 'http://127.0.0.1:8765';
+
+async function apiPost(path, body) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+async function apiGet(path) {
+  const res = await fetch(`${API}${path}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+// ============================================================================
+// State
+// ============================================================================
+let isProcessing = false;
+let graphData = { nodes: [], edges: [] };
+let memories = [];
+let ebbinghausChart = null;
+
+// ============================================================================
+// Server Status
+// ============================================================================
+async function checkServer() {
+  try {
+    await apiGet('/api/stats');
+    document.getElementById('statusDot').className = 'dot online';
+    document.getElementById('statusText').textContent = 'Server Online';
+  } catch {
+    document.getElementById('statusDot').className = 'dot offline';
+    document.getElementById('statusText').textContent = 'Server Offline';
+  }
+}
+checkServer();
+setInterval(checkServer, 5000);
+
+// ============================================================================
+// Tab Switching
+// ============================================================================
+function switchTab(el, tabId) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['memories','relations','stats','ebbinghaus'].forEach(id => {
+    const el = document.getElementById('tab-' + id);
+    if (el) el.style.display = id === tabId ? 'block' : 'none';
+  });
+  if (tabId === 'stats') refreshStats();
+  if (tabId === 'ebbinghaus') refreshEbbinghaus();
+}
+
+// ============================================================================
+// Chat
+// ============================================================================
+function useExample(el) {
+  document.getElementById('chatInput').value = el.textContent;
+  document.getElementById('chatInput').focus();
+}
+
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || isProcessing) return;
+  input.value = '';
+  document.getElementById('welcomeScreen')?.remove();
+
+  addChatMsg('user', text);
+  processMessage(text);
+}
+
+function addChatMsg(role, text, evidence, pipeline) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+
+  const avatar = role === 'user' ? 'U' : 'AI';
+  let html = `<div class="chat-avatar">${avatar}</div><div class="chat-bubble">`;
+  html += escapeHtml(text);
+  if (pipeline) html += `<div class="chat-pipeline">${pipeline}</div>`;
+  if (evidence) html += `<div class="chat-evidence">${evidence}</div>`;
+  html += '</div>';
+  div.innerHTML = html;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg assistant';
+  div.id = 'typingIndicator';
+  div.innerHTML = `<div class="chat-avatar">AI</div><div class="typing-indicator"><span></span><span></span><span></span></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTyping() {
+  document.getElementById('typingIndicator')?.remove();
+}
+
+function pipelineHtml(steps) {
+  return steps.map((s, i) => `
+    <div class="pipeline-step ${s.status}">
+      <div class="step-num">${i + 1}</div>
+      <div>
+        <div>${s.name}</div>
+        <div class="step-detail">${s.detail}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================================
+// Process Message — LLM classify (primary), regex (fallback)
+// ============================================================================
+async function processMessage(text) {
+  if (isProcessing) return;
+  isProcessing = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  try {
+    // Strategy 1: LLM classification
+    let classifyResult;
+    try {
+      classifyResult = await apiPost('/api/classify', { text });
+    } catch (e) {
+      // Strategy 2: Regex fallback
+      classifyResult = regexClassify(text);
+    }
+
+    if (classifyResult.action === 'QUERY') {
+      await processQuery(text, classifyResult);
+    } else {
+      await processAdd(text, classifyResult);
+    }
+  } catch (e) {
+    removeTyping();
+    addChatMsg('assistant', '处理出错，请重试。', '', '');
+  } finally {
+    isProcessing = false;
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+
+/** Regex fallback — mirrors the server-side logic */
+function regexClassify(text) {
+  const hasQmark = /[？?]/.test(text);
+  const hasStmt = /也在|也喜欢|也认识|一起|都[是在]/.test(text);
+  const startsMy = /^(我|我的|咱|咱们)(的?|们?)(同事|朋友|认识|有哪些|谁|什么|了解|知道|记得|之前|上次)/.test(text);
+  const startsQ = /^(谁|什么|哪里|哪个|哪些|有多少|有哪些|你喜欢|我喜欢|我有什么|帮我查)/.test(text);
+  const isQuery = hasQmark || (startsMy && !hasStmt) || startsQ;
+  return { action: isQuery ? 'QUERY' : 'ADD', method: 'regex', reason: 'regex fallback' };
+}
+
+async function processAdd(text, classifyInfo) {
+  showTyping();
+  try {
+    const result = await apiPost('/api/memory/add', { content: text });
+
+    const classifyMethod = classifyInfo ? (classifyInfo.method || 'llm').toUpperCase() : 'REGEX';
+    const classifyReason = classifyInfo ? classifyInfo.reason : 'regex fallback';
+
+    const steps = [
+      { name: 'Intent Classification', status: 'done', detail: `ADD (via ${classifyMethod}: ${classifyReason})` },
+      { name: 'Self-Reference Resolution', status: 'done', detail: 'Resolved "I/me/my" to user context' },
+      { name: 'LLM Entity Extraction', status: 'done', detail: `Extracted ${result.entities.length} entities via LLM` },
+      { name: 'Relation Extraction', status: 'done', detail: `Found ${result.relationships.length} relationships` },
+      { name: `Decision: ${result.action}`, status: 'done', detail: result.reason },
+      { name: 'Graph Storage', status: 'done', detail: `Saved to SQLite graph store` },
+    ];
+
+    const entityBadges = result.entities.map(e =>
+      `<span class="entity-badge ${e.type}">${e.name} (${e.type})</span>`
+    ).join(' ');
+
+    const relTags = result.relationships.map(r =>
+      `<span class="relation-tag">${r.source} --[${r.relationship}]--> ${r.target}</span>`
+    ).join(' ');
+
+    let evidence = '';
+    if (result.entities.length) evidence += `<b>Entities:</b> ${entityBadges}<br>`;
+    if (result.relationships.length) evidence += `<b>Relations:</b> ${relTags}`;
+
+    let responseText;
+    if (result.action === 'ADD') {
+      const names = result.entities.map(e => e.name).join('、');
+      responseText = `记忆已存储。我了解到：${names || '这些信息'}。建立了 ${result.relationships.length} 条知识图谱关系。`;
+    } else if (result.action === 'UPDATE') {
+      responseText = `记忆已更新。${result.reason}`;
+    } else {
+      responseText = `这条信息似乎已经知道了。${result.reason}。没有新增记忆。`;
+    }
+
+    removeTyping();
+    addChatMsg('assistant', responseText, evidence, pipelineHtml(steps));
+
+    // Refresh data
+    await refreshAll();
+  } catch (err) {
+    removeTyping();
+    addChatMsg('assistant', `处理出错: ${err.message}`);
+  }
+
+  isProcessing = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+async function processQuery(text, classifyInfo) {
+  showTyping();
+  try {
+    const result = await apiSearch('/api/memory/search', { query: text });
+
+    const classifyMethod = classifyInfo ? (classifyInfo.method || 'llm').toUpperCase() : 'REGEX';
+    const classifyReason = classifyInfo ? classifyInfo.reason : 'regex fallback';
+
+    const steps = [
+      { name: 'Intent Classification', status: 'done', detail: `QUERY (via ${classifyMethod}: ${classifyReason})` },
+      { name: 'Memory Search (LLM)', status: 'done', detail: `Found ${result.results.length} relevant memories` },
+      { name: 'Ebbinghaus Reinforcement', status: 'done', detail: `${result.results.length} memories reinforced (+0.3)` },
+      { name: 'Graph Traversal', status: 'done', detail: result.graph_context ? 'Retrieved related entities' : 'No graph context' },
+      { name: 'Answer Generation (LLM)', status: 'done', detail: 'Generated answer with evidence' },
+    ];
+
+    let evidence = '';
+    if (result.results.length > 0) {
+      evidence = result.results.map(r =>
+        `<b>#${r.memory.id}</b> [score=${r.score}] ${r.memory.content.substring(0, 80)}...`
+      ).join('<br>');
+    }
+
+    removeTyping();
+    addChatMsg('assistant', result.answer || '未找到相关记忆。', evidence, pipelineHtml(steps));
+
+    await refreshAll();
+  } catch (err) {
+    removeTyping();
+    addChatMsg('assistant', `查询出错: ${err.message}`);
+  }
+
+  isProcessing = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// Quick fix for apiSearch alias
+async function apiSearch(path, body) {
+  return apiPost(path, body);
+}
+
+// ============================================================================
+// Refresh Data
+// ============================================================================
+async function refreshAll() {
+  await Promise.all([
+    refreshMemories(),
+    refreshGraph(),
+    refreshStats(),
+    refreshEbbinghaus(),
+  ]);
+}
+
+async function refreshMemories() {
+  try {
+    memories = await apiGet('/api/memory/list');
+    const container = document.getElementById('tab-memories');
+    if (memories.length === 0) {
+      container.innerHTML = '<p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">No memories yet.</p>';
+      return;
+    }
+    container.innerHTML = memories.map(m => {
+      const retColor = m.retention > 0.7 ? 'var(--green)' : m.retention > 0.3 ? 'var(--orange)' : 'var(--red)';
+      const timeStr = new Date(m.created_at * 1000).toLocaleTimeString();
+      return `
+        <div class="memory-item" onclick="clickMemory('${m.id}')">
+          <div class="mem-content">${escapeHtml(m.content)}</div>
+          <div class="mem-meta">
+            <span>#${m.id} | ${timeStr} | accessed ${m.access_count}x</span>
+            <span class="retention" style="color:${retColor}">R=${m.retention.toFixed(3)}</span>
+          </div>
+          <div class="retention-bar"><div class="retention-bar-fill" style="width:${m.retention*100}%;background:${retColor}"></div></div>
+        </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function refreshGraph() {
+  try {
+    graphData = await apiGet('/api/graph');
+    document.getElementById('nodeCount').textContent = `${graphData.nodes.length} nodes / ${graphData.edges.length} edges`;
+    drawGraph();
+
+    // Refresh relations tab
+    const relsContainer = document.getElementById('tab-relations');
+    if (graphData.edges.length === 0) {
+      relsContainer.innerHTML = '<p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">No relations yet.</p>';
+      return;
+    }
+    const nodeMap = {};
+    graphData.nodes.forEach(n => nodeMap[n.id] = n);
+    relsContainer.innerHTML = graphData.edges.map(e => {
+      const src = nodeMap[e.source] || { name: e.source, type: 'unknown' };
+      const tgt = nodeMap[e.target] || { name: e.target, type: 'unknown' };
+      return `
+        <div class="memory-item" style="padding:8px 12px;">
+          <span class="entity-badge ${src.type}">${src.name}</span>
+          <span style="color:var(--blue);font-size:12px;margin:0 6px;">—[${e.relationship}]→</span>
+          <span class="entity-badge ${tgt.type}">${tgt.name}</span>
+        </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function refreshStats() {
+  try {
+    const stats = await apiGet('/api/stats');
+    const container = document.getElementById('tab-stats');
+    container.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val">${stats.total_memories}</div><div class="stat-label">Memories</div></div>
+        <div class="stat-card"><div class="stat-val">${stats.total_nodes}</div><div class="stat-label">Nodes</div></div>
+        <div class="stat-card"><div class="stat-val">${stats.total_edges}</div><div class="stat-label">Edges</div></div>
+        <div class="stat-card"><div class="stat-val">${stats.node_type_distribution.person || 0}</div><div class="stat-label">Persons</div></div>
+      </div>
+      <div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:8px;">
+        <div style="font-size:12px;margin-bottom:8px;color:var(--text2)">Node Types</div>
+        ${Object.entries(stats.node_type_distribution).map(([k,v]) =>
+          `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span class="entity-badge ${k}" style="min-width:50px;text-align:center;">${k}</span>
+            <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;"><div style="height:100%;width:${stats.total_nodes?v/stats.total_nodes*100:0}%;background:var(--blue);border-radius:3px;"></div></div>
+            <span style="font-size:11px;color:var(--text2);min-width:20px;text-align:right;">${v}</span>
+          </div>`
+        ).join('')}
+      </div>`;
+  } catch {}
+}
+
+async function refreshEbbinghaus() {
+  try {
+    const stats = await apiGet('/api/stats');
+    const data = stats.ebbinghaus_scores;
+    const canvas = document.getElementById('ebbinghausChart');
+    const ctx = canvas.getContext('2d');
+
+    if (ebbinghausChart) ebbinghausChart.destroy();
+
+    ebbinghausChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => `#${d.id}`),
+        datasets: [{
+          label: 'Retention Score',
+          data: data.map(d => d.retention),
+          backgroundColor: data.map(d =>
+            d.retention > 0.7 ? 'rgba(63,185,80,0.6)' :
+            d.retention > 0.3 ? 'rgba(210,153,34,0.6)' : 'rgba(248,81,73,0.6)'
+          ),
+          borderColor: data.map(d =>
+            d.retention > 0.7 ? '#3fb950' :
+            d.retention > 0.3 ? '#d29922' : '#f85149'
+          ),
+          borderWidth: 1,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          y: { min: 0, max: 1, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+          x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+  } catch {}
+}
+
+// Click memory to reinforce
+async function clickMemory(id) {
+  try {
+    // Search using this memory's content to reinforce it
+    const mem = memories.find(m => m.id === id);
+    if (!mem) return;
+    const result = await apiPost('/api/memory/search', { query: mem.content });
+    await refreshAll();
+  } catch {}
+}
+
+// Clear all
+async function clearAll() {
+  if (!confirm('Clear all memories and graph data?')) return;
+  try {
+    await apiPost('/api/clear', {});
+    await refreshAll();
+    document.getElementById('chatMessages').innerHTML = `
+      <div class="welcome" id="welcomeScreen">
+        <h2>HugeGraph Memory</h2>
+        <p>All data cleared. Start a new conversation!</p>
+      </div>`;
+  } catch (err) {
+    alert('Clear failed: ' + err.message);
+  }
+}
+
+// ============================================================================
+// Graph Canvas Visualization
+// ============================================================================
+function drawGraph() {
+  const canvas = document.getElementById('graphCanvas');
+  const container = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = container.clientWidth * dpr;
+  canvas.height = container.clientHeight * dpr;
+  canvas.style.width = container.clientWidth + 'px';
+  canvas.style.height = container.clientHeight + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+
+  if (graphData.nodes.length === 0) {
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No graph data yet', W / 2, H / 2);
+    return;
+  }
+
+  // Force-directed layout (simple)
+  const nodeMap = {};
+  const nodes = graphData.nodes;
+  nodes.forEach((n, i) => {
+    const angle = (i / nodes.length) * Math.PI * 2;
+    const r = Math.min(W, H) * 0.3;
+    nodeMap[n.id] = {
+      ...n,
+      x: W / 2 + Math.cos(angle) * r + (Math.random() - 0.5) * 30,
+      y: H / 2 + Math.sin(angle) * r + (Math.random() - 0.5) * 30,
+    };
+  });
+
+  // Draw edges
+  graphData.edges.forEach(e => {
+    const src = nodeMap[e.source];
+    const tgt = nodeMap[e.target];
+    if (!src || !tgt) return;
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(tgt.x, tgt.y);
+    ctx.strokeStyle = 'rgba(88,166,255,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Edge label: source_name -- rel --> target_name
+    const mx = (src.x + tgt.x) / 2;
+    const my = (src.y + tgt.y) / 2;
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    const srcName = e.source_name || src.name || '?';
+    const tgtName = e.target_name || tgt.name || '?';
+    ctx.fillText(`${srcName} → ${e.relationship} → ${tgtName}`, mx, my - 4);
+  });
+
+  // Draw nodes
+  const colorMap = {
+    person: '#58a6ff', org: '#f0883e', location: '#3fb950',
+    skill: '#bc8cff', concept: '#39d2c0', unknown: '#8b949e'
+  };
+
+  nodes.forEach(n => {
+    const nd = nodeMap[n.id];
+    const color = colorMap[n.type] || '#8b949e';
+
+    // Glow
+    ctx.beginPath();
+    ctx.arc(nd.x, nd.y, 22, 0, Math.PI * 2);
+    const glow = ctx.createRadialGradient(nd.x, nd.y, 8, nd.x, nd.y, 22);
+    glow.addColorStop(0, color.replace(')', ',0.3)').replace('rgb', 'rgba'));
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(nd.x, nd.y, 14, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#e6edf3';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(nd.name, nd.x, nd.y + 26);
+  });
+}
+
+// Handle resize
+window.addEventListener('resize', drawGraph);
+
+// Auto-refresh Ebbinghaus every 10s
+setInterval(refreshEbbinghaus, 10000);
+
+// Initial load
+refreshAll();
+</script>
+</body>
+</html>
