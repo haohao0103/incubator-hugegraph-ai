@@ -42,3 +42,27 @@ class HugeGraphConfig(BaseConfig):
 
     # rerank config
     topk_return_results: int = 20
+
+    # Community detection config
+    community_detection_algorithm: str = "leiden"  # "leiden" or "louvain"
+    max_community_levels: int = 2  # Hierarchical levels (1=flat)
+    min_community_size: int = 3  # Minimum community size
+    community_resolution: float = 1.0  # Modularity resolution
+    max_community_reports: int = 100  # Max communities to generate reports for
+
+    # Provenance config
+    enable_provenance: bool = False  # Enable Document->Chunk->Entity provenance tracking
+
+    # Entity Resolution config (Sprint 1)
+    entity_resolution_threshold: float = 0.85  # Cosine similarity threshold
+    entity_resolution_batch_size: int = 50  # LLM verify batch size
+    entity_resolution_strategy: str = "hybrid"  # exact_match | embedding | llm_verify | hybrid
+
+    # HyDE config (Sprint 3)
+    enable_hyde: bool = False  # Enable HyDE query enhancement
+    hyde_mode: str = "prefix"  # off | prefix | full
+    hyde_max_query_length: int = 100  # Skip HyDE for queries longer than this
+
+    # DRIFT config (Sprint 4)
+    drift_max_depth: int = 2  # Max iteration depth for parallel local search (1-3)
+    drift_communities_top_k: int = 5  # Number of top communities to match

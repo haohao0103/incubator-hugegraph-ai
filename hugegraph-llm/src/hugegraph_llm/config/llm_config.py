@@ -29,6 +29,7 @@ class LLMConfig(BaseConfig):
     chat_llm_type: Literal["openai", "litellm", "ollama/local"] = "openai"
     extract_llm_type: Literal["openai", "litellm", "ollama/local"] = "openai"
     text2gql_llm_type: Literal["openai", "litellm", "ollama/local"] = "openai"
+    agent_llm_type: Literal["openai", "litellm", "ollama/local"] = "openai"
     embedding_type: Optional[Literal["openai", "litellm", "ollama/local"]] = "openai"
     reranker_type: Optional[Literal["cohere", "siliconflow"]] = None
     keyword_extract_type: Literal["llm", "textrank", "hybrid"] = "llm"
@@ -45,12 +46,16 @@ class LLMConfig(BaseConfig):
     openai_text2gql_api_base: Optional[str] = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
     openai_text2gql_api_key: Optional[str] = os.environ.get("OPENAI_API_KEY")
     openai_text2gql_language_model: Optional[str] = "gpt-4.1-mini"
+    openai_agent_api_base: Optional[str] = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    openai_agent_api_key: Optional[str] = os.environ.get("OPENAI_API_KEY")
+    openai_agent_language_model: Optional[str] = "gpt-4.1-mini"
     openai_embedding_api_base: Optional[str] = os.environ.get("OPENAI_EMBEDDING_BASE_URL", "https://api.openai.com/v1")
     openai_embedding_api_key: Optional[str] = os.environ.get("OPENAI_EMBEDDING_API_KEY")
     openai_embedding_model: Optional[str] = "text-embedding-3-small"
     openai_chat_tokens: int = 8192
     openai_extract_tokens: int = 256
     openai_text2gql_tokens: int = 4096
+    openai_agent_tokens: int = 8192
     # 2. Rerank settings
     cohere_base_url: Optional[str] = os.environ.get("CO_API_URL", "https://api.cohere.com/v1/rerank")
     reranker_api_key: Optional[str] = None
@@ -65,6 +70,9 @@ class LLMConfig(BaseConfig):
     ollama_text2gql_host: Optional[str] = "127.0.0.1"
     ollama_text2gql_port: Optional[int] = 11434
     ollama_text2gql_language_model: Optional[str] = None
+    ollama_agent_host: Optional[str] = "127.0.0.1"
+    ollama_agent_port: Optional[int] = 11434
+    ollama_agent_language_model: Optional[str] = None
     ollama_embedding_host: Optional[str] = "127.0.0.1"
     ollama_embedding_port: Optional[int] = 11434
     ollama_embedding_model: Optional[str] = None
@@ -81,6 +89,10 @@ class LLMConfig(BaseConfig):
     litellm_text2gql_api_base: Optional[str] = None
     litellm_text2gql_language_model: Optional[str] = "openai/gpt-4.1-mini"
     litellm_text2gql_tokens: int = 4096
+    litellm_agent_api_key: Optional[str] = None
+    litellm_agent_api_base: Optional[str] = None
+    litellm_agent_language_model: Optional[str] = "openai/gpt-4.1-mini"
+    litellm_agent_tokens: int = 8192
     litellm_embedding_api_key: Optional[str] = None
     litellm_embedding_api_base: Optional[str] = None
     litellm_embedding_model: Optional[str] = "openai/text-embedding-3-small"

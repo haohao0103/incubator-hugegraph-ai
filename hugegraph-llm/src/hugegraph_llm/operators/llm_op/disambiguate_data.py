@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 from hugegraph_llm.models.llms.base import BaseLLM
 from hugegraph_llm.operators.llm_op.info_extract import extract_triples_by_regex
+from hugegraph_llm.utils.log import log
 
 
 def generate_disambiguate_prompt(triples):
@@ -44,14 +45,19 @@ class DisambiguateData:
     def run(self, data: Dict) -> Dict[str, List[Any]]:
         # only disambiguate triples
         if "triples" in data:
-            # TODO: ensure the logic here
-            # log.debug(data)
             triples = data["triples"]
             prompt = generate_disambiguate_prompt(triples)
-            llm_output = self.llm.generate(prompt=prompt)
+            try:
+                llm_output = self.llm.generate(prompt=prompt)
+            except Exception as e:
+                log.error("DisambiguateData LLM call failed: %s", e)
+                return data
             data["triples"] = []
             extract_triples_by_regex(llm_output, data)
-            print(f"LLM {self.__class__.__name__} input:{prompt} \n output: {llm_output} \n data: {data}")
+            log.debug(
+                "DisambiguateData input: %s\n output: %s\n data: %s",
+                prompt[:200], llm_output[:200], data,
+            )
             data["call_count"] = data.get("call_count", 0) + 1
 
         return data

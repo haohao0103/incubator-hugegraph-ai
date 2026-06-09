@@ -40,7 +40,7 @@ class OllamaClient(BaseLLM):
         messages: Optional[List[Dict[str, Any]]] = None,
         prompt: Optional[str] = None,
     ) -> str:
-        """Comment"""
+        """Generate a response from Ollama. Retries up to 3 times on failure."""
         if messages is None:
             assert prompt is not None, "Messages or prompt must be provided."
             messages = [{"role": "user", "content": prompt}]
@@ -57,8 +57,8 @@ class OllamaClient(BaseLLM):
             log.info("Token usage: %s", json.dumps(usage))
             return response["message"]["content"]
         except Exception as e:
-            print(f"Retrying LLM call {e}")
-            raise e
+            log.warning("Ollama generate() failed, retrying: %s", e)
+            raise
 
     @retry(tries=3, delay=1)
     async def agenerate(
@@ -66,7 +66,7 @@ class OllamaClient(BaseLLM):
         messages: Optional[List[Dict[str, Any]]] = None,
         prompt: Optional[str] = None,
     ) -> str:
-        """Comment"""
+        """Async generate a response from Ollama. Retries up to 3 times on failure."""
         if messages is None:
             assert prompt is not None, "Messages or prompt must be provided."
             messages = [{"role": "user", "content": prompt}]
@@ -83,8 +83,8 @@ class OllamaClient(BaseLLM):
             log.info("Token usage: %s", json.dumps(usage))
             return response["message"]["content"]
         except Exception as e:
-            print(f"Retrying LLM call {e}")
-            raise e
+            log.warning("Ollama agenerate() failed, retrying: %s", e)
+            raise
 
     def generate_streaming(
         self,
@@ -92,7 +92,7 @@ class OllamaClient(BaseLLM):
         prompt: Optional[str] = None,
         on_token_callback: Optional[Callable] = None,
     ) -> Generator[str, None, None]:
-        """Comment"""
+        """Stream response tokens from Ollama."""
         if messages is None:
             assert prompt is not None, "Messages or prompt must be provided."
             messages = [{"role": "user", "content": prompt}]
@@ -112,7 +112,7 @@ class OllamaClient(BaseLLM):
         prompt: Optional[str] = None,
         on_token_callback: Optional[Callable] = None,
     ) -> AsyncGenerator[str, None]:
-        """Comment"""
+        """Async stream response tokens from Ollama."""
         if messages is None:
             assert prompt is not None, "Messages or prompt must be provided."
             messages = [{"role": "user", "content": prompt}]
@@ -125,8 +125,8 @@ class OllamaClient(BaseLLM):
                     on_token_callback(token)
                 yield token
         except Exception as e:
-            print(f"Retrying LLM call {e}")
-            raise e
+            log.warning("Ollama agenerate_streaming() failed: %s", e)
+            raise
 
     def num_tokens_from_string(
         self,

@@ -46,12 +46,18 @@ class Commit2Graph:
             raise ValueError("Both vertices and edges input are empty.")
 
         if not schema:
-            # TODO: ensure the function works correctly (update the logic later)
             self.schema_free_mode(data.get("triples", []))
             log.warning("Using schema_free mode, could try schema_define mode for better effect!")
         else:
             self.init_schema_if_need(schema)
             self.load_into_graph(vertices, edges, schema)
+
+        # Create provenance links if enabled and chunk metadata exists
+        if huge_settings.enable_provenance and data.get("chunk_metadata"):
+            link_count = self._create_provenance_links(data)
+            data["provenance_link_count"] = link_count
+            log.info("Created %d provenance links", link_count)
+
         return data
 
     def _set_default_property(self, key, input_properties, property_label_map):
@@ -298,6 +304,50 @@ class Commit2Graph:
             if not self._check_single_data_type(data_type, item):
                 return False
         return True
+
+    def _create_provenance_links(self, data: dict) -> int:
+        """Create Document→Chunk→Entity provenance links.
+
+        Called after load_into_graph when enable_provenance is True.
+        Creates Document/Chunk vertices and EXTRACTED_FROM edges.
+        """
+        chunk_metadata = data.get("chunk_metadata", [])
+        vertices = data.get("vertices", [])
+
+        if not chunk_metadata or not vertices:
+            return 0
+
+        try:
+            from hugegraph_llm.operators.hugegraph_op.provenance_manager import ProvenanceManager
+
+            pm = ProvenanceManager(client=self.client)
+            pm.init_schema()
+
+            doc_name = chunk_metadata[0].get("doc_name", "unknown")
+            doc_source = chunk_metadata[0].get("doc_source", "")
+            doc_id = pm.create_document(doc_name, doc_source)
+
+            link_count = 0
+            for i, meta in enumerate(chunk_metadata):
+                chunk_text = meta.get("text", "")
+                chunk_id = pm.create_chunk(doc_id, chunk_text, i)
+
+                # Link entities whose names appear in this chunk
+                chunk_lower = chunk_text.lower()
+                for vertex in vertices:
+                    vprops = vertex.get("properties", {})
+                    vnames = [v for k, v in vprops.items() if "name" in k.lower()]
+                    for name in vnames:
+                        if name and str(name).lower() in chunk_lower:
+                            vid = vertex.get("id", "")
+                            if vid and pm.link_entity_to_chunk(vid, chunk_id):
+                                link_count += 1
+                                break
+
+            return link_count
+        except Exception as e:
+            log.warning("Failed to create provenance links: %s", e)
+            return 0
 
     def _check_single_data_type(self, data_type: str, value) -> bool:
         if data_type == PropertyDataType.BOOLEAN.value:

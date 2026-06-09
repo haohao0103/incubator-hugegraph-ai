@@ -26,6 +26,8 @@ from hugegraph_llm.operators.common_op.merge_dedup_rerank import MergeDedupReran
 from hugegraph_llm.operators.common_op.print_result import PrintResult
 from hugegraph_llm.operators.document_op.chunk_split import ChunkSplit
 from hugegraph_llm.operators.document_op.word_extract import WordExtract
+from hugegraph_llm.operators.graph_op.community_detect import CommunityDetect
+from hugegraph_llm.operators.graph_op.entity_resolution import EntityResolution
 from hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph import Commit2Graph
 from hugegraph_llm.operators.hugegraph_op.fetch_graph_data import FetchGraphData
 from hugegraph_llm.operators.hugegraph_op.schema_manager import SchemaManager
@@ -127,6 +129,41 @@ class OperatorList:
 
     def disambiguate_word_sense(self):
         self.operators.append(DisambiguateData(self.llm))
+        return self
+
+    def entity_resolution(
+        self,
+        strategy: str = "hybrid",
+        threshold: float = 0.85,
+        batch_size: int = 50,
+        resolve_properties: Optional[List[str]] = None,
+        vertex_labels: Optional[List[str]] = None,
+    ):
+        """Add an entity resolution operator to the pipeline.
+
+        Merges duplicate vertices that refer to the same real-world entity.
+
+        :param strategy: exact_match | embedding | llm_verify | hybrid
+        :param threshold: Cosine similarity threshold for embedding strategy
+        :param batch_size: LLM verification batch size
+        :param resolve_properties: Properties to compare (defaults to ["name"])
+        :param vertex_labels: Limit resolution to specific vertex labels
+        :return: Self-instance for chaining.
+        """
+        if self.graph is None:
+            raise ValueError("graph client is required for entity_resolution operation")
+        self.operators.append(
+            EntityResolution(
+                client=self.graph,
+                llm=self.llm,
+                embedding=self.embedding,
+                strategy=strategy,
+                threshold=threshold,
+                batch_size=batch_size,
+                resolve_properties=resolve_properties,
+                vertex_labels=vertex_labels,
+            )
+        )
         return self
 
     def commit_to_hugegraph(self):

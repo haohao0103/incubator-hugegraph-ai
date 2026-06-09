@@ -164,7 +164,11 @@ class InfoExtract:
             context["triples"] = []
 
         for sentence in chunks:
-            proceeded_chunk = self.extract_triples_by_llm(schema, sentence)
+            try:
+                proceeded_chunk = self.extract_triples_by_llm(schema, sentence)
+            except Exception as e:
+                log.error("InfoExtract LLM call failed for chunk: %s, error: %s", sentence[:100], e)
+                continue
             log.debug(
                 "[Legacy] %s input: %s \n output:%s",
                 self.__class__.__name__,

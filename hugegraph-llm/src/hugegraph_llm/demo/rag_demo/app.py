@@ -28,6 +28,16 @@ from hugegraph_llm.api.graph_extract_api import graph_extract_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.config import admin_settings, huge_settings, prompt
 from hugegraph_llm.demo.rag_demo.admin_block import create_admin_block, log_stream
+from hugegraph_llm.demo.rag_demo.agent_block import create_agent_block
+from hugegraph_llm.demo.rag_demo.advanced_graphrag_block import (
+    create_advanced_graphrag_block,
+)
+from hugegraph_llm.demo.rag_demo.agent_handlers import (
+    agent_answer,
+    community_build,
+    global_search,
+    graph_rag_search,
+)
 from hugegraph_llm.demo.rag_demo.configs_block import (
     apply_embedding_config,
     apply_graph_config,
@@ -105,10 +115,14 @@ def init_rag_ui() -> gr.Interface:
             ) = create_rag_block()
         with gr.Tab(label="3. Text2gremlin ⚙️"):
             textbox_gremlin_inp, textbox_gremlin_schema, textbox_gremlin_prompt = create_text2gremlin_block()
-        with gr.Tab(label="4. Graph Tools 🚧"):
+        with gr.Tab(label="4. Agent & Global Search 🤖"):
+            create_agent_block()
+        with gr.Tab(label="5. Graph Tools 🚧"):
             create_other_block()
-        with gr.Tab(label="5. Admin Tools 🛠"):
+        with gr.Tab(label="6. Admin Tools 🛠"):
             create_admin_block()
+        with gr.Tab(label="7. Advanced GraphRAG 🚀"):
+            create_advanced_graphrag_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
@@ -177,6 +191,10 @@ def create_app():
         apply_embedding_config,
         apply_reranker_config,
         gremlin_generate_selective,
+        agent_answer_func=agent_answer,
+        community_build_func=community_build,
+        global_search_func=global_search,
+        graph_rag_search_func=graph_rag_search,
     )
     admin_http_api(api_auth, log_stream)
     graph_extract_http_api(api_auth)

@@ -71,6 +71,10 @@ class RAGRequest(BaseModel):
         prompt.gremlin_generate_prompt,
         description="Prompt for the Text2Gremlin query.",
     )
+    include_provenance: bool = Query(
+        False,
+        description="Include source citations in the answer.",
+    )
 
 
 # TODO: import the default value of prompt.* dynamically
@@ -167,3 +171,137 @@ class GremlinGenerateRequest(BaseModel):
             if missing:
                 raise ValueError(f"Prompt template is missing required placeholders: {', '.join(missing)}")
         return v
+
+
+class AgentRequest(BaseModel):
+    """Request model for the agent-based multi-step reasoning endpoint."""
+
+    query: str = Query(..., description="Natural language query to answer.")
+    max_steps: int = Query(10, description="Maximum number of ReAct reasoning steps.", ge=1, le=50)
+    tools_filter: Optional[List[str]] = Query(
+        None,
+        description="Optional list of tool names to enable. If None, all registered tools are available.",
+    )
+    stream: bool = Query(False, description="Enable streaming output of agent steps.")
+    verbose: bool = Query(False, description="Enable detailed logging of agent reasoning.")
+
+
+class GlobalSearchRequest(BaseModel):
+    """Request model for macro-level global search over community reports."""
+
+    query: str = Query(..., description="Broad thematic question about the entire knowledge graph.")
+
+
+class CommunityBuildRequest(BaseModel):
+    """Request model for triggering community detection and indexing."""
+
+    graph_name: Optional[str] = Query(None, description="Graph name (uses config default if not specified).")
+    algorithm: str = Query("leiden", description="Community detection algorithm: 'leiden' or 'louvain'.")
+    max_levels: int = Query(2, description="Maximum hierarchical levels.", ge=1, le=3)
+
+
+class IncrementalIndexRequest(BaseModel):
+    """Request model for incremental document indexing.
+
+    Indexes new documents without full graph reconstruction.
+    Only updates affected communities, vector indices, and entity
+    relationships.
+    """
+
+    texts: List[str] = Query(..., description="List of new document texts to index.")
+    graph_name: Optional[str] = Query(None, description="Graph name (uses config default if not specified).")
+    entity_resolution_strategy: str = Query(
+        "hybrid",
+        description="Entity resolution strategy: exact_match, embedding, llm_verify, hybrid.",
+    )
+    community_hop: int = Query(1, description="Hops to traverse for affected community detection.", ge=1, le=3)
+    client_config: Optional[GraphConfigRequest] = Query(
+        None, description="HugeGraph server config (uses default if not provided)."
+    )
+
+
+class GraphRAGSearchMode(str, Enum):
+    """Supported graph RAG search operation modes."""
+
+    GRAPH_TRAVERSE = "graph_traverse"
+    SEMANTIC_ID_LOOKUP = "semantic_id_lookup"
+    TEXT2GREMLIN = "text2gremlin"
+    SCHEMA_LOOKUP = "schema_lookup"
+
+
+class GraphRAGSearchRequest(BaseModel):
+    """Request model for direct graph RAG search operations.
+
+    Supports four graph-level operations that can also be used
+    independently of the agent loop:
+
+    - graph_traverse: k-hop subgraph traversal from vertex IDs.
+    - semantic_id_lookup: map keywords to graph vertex IDs.
+    - text2gremlin: natural language to Gremlin query execution.
+    - schema_lookup: retrieve graph vertex/edge schema.
+
+    Usage example:
+        POST /rag/graph/search
+        {
+            "mode": "graph_traverse",
+            "query": "Which entities connect X and Y?",
+            "vertex_ids": ["vertex-id-1", "vertex-id-2"],
+            "max_depth": 2,
+            "max_items": 10
+        }
+    """
+
+    mode: GraphRAGSearchMode = Query(..., description="Graph search operation to execute.")
+    query: Optional[str] = Query(None, description="Natural language query (for text2gremlin, keyword context).")
+    # graph_traverse parameters
+    vertex_ids: Optional[List[str]] = Query(
+        None, description="List of vertex IDs for graph_traverse."
+    )
+    max_depth: int = Query(2, description="Maximum traversal depth (hops).", ge=0, le=10)
+    max_items: int = Query(10, description="Maximum number of traversal paths to return.", ge=1, le=100)
+    # semantic_id_lookup parameters
+    keywords: Optional[List[str]] = Query(
+        None, description="List of keywords for semantic ID lookup."
+    )
+    # text2gremlin parameters
+    gremlin_example_num: int = Query(3, description="Number of Gremlin templates to use.", ge=0, le=10)
+    # common
+    client_config: Optional[GraphConfigRequest] = Query(
+        None, description="HugeGraph server config (uses default if not provided)."
+    )
+
+
+class DriftSearchRequest(BaseModel):
+    """Request model for DRIFT search.
+
+    DRIFT combines Global Search breadth with Local Search depth
+    through a 5-step pipeline (HyDE → Community Match → Primer →
+    Parallel Local Search → Reduce).
+    """
+
+    query: str = Query(..., description="The analytical question to answer.")
+    graph_name: Optional[str] = Query(None, description="Graph name (uses config default if not specified).")
+    max_depth: int = Query(2, description="Max iteration depth for local search (1-3).", ge=1, le=3)
+    communities_top_k: int = Query(5, description="Number of top communities to match.", ge=1, le=20)
+    language: str = Query("en", description="Language for prompts: 'en' or 'cn'.")
+
+
+class SchemaValidationRequest(BaseModel):
+    """Request model for schema validation of extracted entities.
+
+    Validates a batch of entities and relations against the schema,
+    returning violations and suggested fixes.
+    """
+
+    entities: List[dict] = Query(
+        default_factory=list,
+        description="List of entity dicts: [{label, properties}, ...]"
+    )
+    relations: List[dict] = Query(
+        default_factory=list,
+        description="List of relation dicts: [{relation_label, source_label, target_label, properties}, ...]"
+    )
+    strict_mode: bool = Query(
+        False,
+        description="If True, unknown properties cause errors instead of warnings."
+    )
