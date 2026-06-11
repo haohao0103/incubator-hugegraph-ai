@@ -23,7 +23,8 @@ Primary: Vermeer (Go in-memory engine) via PyVermeerClient task API.
 Fallback: HugeGraph-Computer (Java OLAP) via REST API.
   Supported algorithms: louvain, wcc, clustering_coefficient, etc.
 
-Last resort: networkx Louvain (requires fetching all vertices/edges into memory).
+Last resort: Python local — Leiden (preferred, via leidenalg) or Louvain
+  (via networkx). Requires fetching all vertices/edges into memory.
 
 The module auto-detects which engine is available and uses the best option.
 """
@@ -46,11 +47,19 @@ try:
 except ImportError:
     HAS_VERMEER = False
 
+# Check for leidenalg (Leiden algorithm — preferred over Louvain)
+try:
+    import leidenalg  # noqa: F401
+    HAS_LEIDEN = True
+except ImportError:
+    HAS_LEIDEN = False
+
 
 # ── Algorithm constants ──────────────────────────────────────
 
 # Algorithms supported by HugeGraph-Computer / Vermeer
 ALGORITHM_LOUVAIN = "louvain"
+ALGORITHM_LEIDEN = "leiden"  # Preferred when leidenalg is available locally
 ALGORITHM_WCC = "wcc"
 ALGORITHM_LABEL_PROPAGATION = "label_propagation"
 ALGORITHM_PAGERANK = "pagerank"
@@ -58,6 +67,7 @@ ALGORITHM_CLUSTERING = "clustering_coefficient"
 
 # For community detection, we prefer these algorithms in order
 COMMUNITY_ALGORITHMS = [
+    ALGORITHM_LEIDEN if HAS_LEIDEN else ALGORITHM_LOUVAIN,
     ALGORITHM_LOUVAIN,
     ALGORITHM_WCC,
     ALGORITHM_LABEL_PROPAGATION,
@@ -402,7 +412,158 @@ class CommunityDetect:
         return self._run_networkx(context)
 
     def _run_networkx(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Run community detection using local Python libraries.
+
+        Prefers Leiden (via leidenalg) over Louvain when available.
+        Falls back to networkx Louvain for small graphs if leidenalg missing.
+        """
+        # Use Leiden if available and requested
+        if HAS_LEIDEN and self._algorithm in (ALGORITHM_LEIDEN, ALGORITHM_LOUVAIN, "auto"):
+            return self._run_leiden(context)
+
+        # Fall back to Louvain
+        return self._run_louvain(context)
+
+    def _run_leiden(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Run Leiden community detection using leidenalg library.
+
+        Leiden (Traag et al., 2019) improves on Louvain by guaranteeing
+        connected communities and offering better partition quality.
+        Requires: pip install leidenalg python-igraph
+        """
+        import igraph as ig
+
+        from hugegraph_llm.config import huge_settings
+
+        vertices = context.get("vertices")
+        edges = context.get("edges")
+
+        if vertices is None or edges is None:
+            vertices, edges = self._fetch_graph_from_hugegraph()
+
+        if not vertices:
+            log.warning("No vertices found for Leiden community detection")
+            context["communities"] = []
+            context["community_count"] = 0
+            context["engine_used"] = "leiden"
+            return context
+
+        # Build igraph graph (required by leidenalg)
+        node_ids = []
+        node_map = {}  # id -> index
+
+        for v in vertices:
+            vid = v.get("id", "")
+            if vid:
+                node_map[vid] = len(node_ids)
+                node_ids.append(vid)
+
+        g = ig.Graph()
+        g.add_vertices(len(node_ids))
+
+        edge_list = []
+        edge_weights = []
+        for e in edges:
+            out_v = e.get("outV", "")
+            in_v = e.get("inV", "")
+            if out_v in node_map and in_v in node_map:
+                src_idx = node_map[out_v]
+                dst_idx = node_map[in_v]
+                edge_list.append((src_idx, dst_idx))
+                edge_weights.append(e.get("weight", 1))
+
+        if edge_list:
+            g.add_edges(edge_list)
+            g.es["weight"] = edge_weights
+
+        log.info(
+            "Built igraph for Leiden: %d nodes, %d edges",
+            g.vcount(), g.ecount(),
+        )
+
+        # Run Leiden algorithm
+        partition = None
+        try:
+            partition = leidenalg.find_partition(
+                g, leidenalg.ModularityVertexPartition,
+                seed=42,
+            )
+        except TypeError:
+            # Some leidenalg versions don't support all params on ModularityVertexPartition
+            try:
+                partition = leidenalg.find_partition(
+                    g, leidenalg.CPMVertexPartition, seed=42
+                )
+            except Exception:
+                pass
+
+        if partition is None:
+            log.warning("Leiden algorithm failed, falling back to Louvain")
+            return self._run_louvain(context)
+
+        communities = {}
+        for idx, comm_id in enumerate(partition.membership):
+            vid = node_ids[idx]
+            communities.setdefault(comm_id, []).append(vid)
+
+        result = []
+        for cid, vids in sorted(communities.items()):
+            if len(vids) >= self._min_community_size:
+                result.append({
+                    "id": f"LD_C{cid}",
+                    "level": 0,
+                    "vertices": vids,
+                    "size": len(vids),
+                })
+
+        # Enrich with vertex/edge details
+        vertex_map = {v["id"]: v for v in vertices if "id" in v}
+        G_nx = nx.Graph()
+        for v in vertices:
+            vid = v.get("id", "")
+            if vid:
+                G_nx.add_node(vid, label=v.get("label", ""), props=v.get("props", {}))
+        for e in edges:
+            out_v = e.get("outV", "")
+            in_v = e.get("inV", "")
+            if out_v and in_v:
+                G_nx.add_edge(out_v, in_v, weight=e.get("weight", 1), label=e.get("label", ""))
+
+        for comm in result:
+            vset = set(comm["vertices"])
+            comm["vertex_details"] = [
+                {
+                    "id": vid,
+                    "label": vertex_map[vid].get("label", "unknown") if vid in vertex_map else "unknown",
+                    "props": vertex_map[vid].get("props", {}) if vid in vertex_map else {},
+                }
+                for vid in comm["vertices"][:50]
+            ]
+            comm["edge_details"] = [
+                {"label": G_nx[u][v].get("label", ""), "outV": u, "inV": v}
+                for u, v in G_nx.edges() if u in vset and v in vset
+            ][:50]
+            n = len(comm["vertices"])
+            comm["density"] = (
+                len(comm["edge_details"]) / (n * (n - 1) / 2) if n > 1 else 0.0
+            )
+            comm["modularity_class"] = "leiden"
+
+        context["communities"] = result
+        context["community_count"] = len(result)
+        context["engine_used"] = "leiden"
+        log.info(
+            "Leiden: %d communities from %d vertices (quality > Louvain)",
+            len(result), len(vertices),
+        )
+        return context
+
+    def _run_louvain(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Run Louvain community detection using networkx locally.
+
+        Fetches all vertices/edges from HugeGraph, builds a networkx Graph,
+        and runs Louvain. Only suitable for graphs < ~10K vertices.
+        Fallback when leidenalg is not available.
 
         Fetches all vertices/edges from HugeGraph, builds a networkx Graph,
         and runs Louvain. Only suitable for graphs < ~10K vertices.
