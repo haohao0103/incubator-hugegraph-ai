@@ -1,0 +1,106 @@
+{
+  "total_tests": 20,
+  "passed": 20,
+  "failed": 0,
+  "skipped": 0,
+  "pass_rate": 100.0,
+  "phases": [
+    {
+      "name": "Phase 1: 模块导入验证 (Import Verification)",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 5403.8
+    },
+    {
+      "name": "Phase 2: Claim提取算子 (Claim Extraction)",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 3.0
+    },
+    {
+      "name": "Phase 3: 共指消解算子 (Coref Resolution)",
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 5.3
+    },
+    {
+      "name": "Phase 4: 社区检测算法 (Leiden/Louvain)",
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 10.0
+    },
+    {
+      "name": "Phase 5: 实体消解 (Entity Resolution)",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 6.4
+    },
+    {
+      "name": "Phase 6: RRF多路融合 (Reciprocal Rank Fusion)",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 0.0
+    },
+    {
+      "name": "Phase 7: Build管道集成 (Chunk→Extract→Coref→Claim→Community)",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 11.1
+    },
+    {
+      "name": "Phase 8: Query管道集成 (HyDE→Retrieve→RRF)",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 1.2
+    },
+    {
+      "name": "Phase 9: 跨阶段数据一致性验证",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 4.3
+    },
+    {
+      "name": "Phase 10: E2E编排器生命周期 (Build/Query/Assess)",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "pass_rate": 100.0,
+      "duration_ms": 0.1
+    }
+  ],
+  "total_duration_ms": 5445.4,
+  "timestamp": "2026-06-11 15:52:26",
+  "environment": {
+    "python_version": "3.11.15",
+    "branch": "feature/graphrag-sprint1-sprint2",
+    "commit": "12dda9a"
+  }
+}

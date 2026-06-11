@@ -1,0 +1,278 @@
+{
+  "timestamp": "2026-06-11T17:09:16.363212",
+  "validation_mode": "REAL_LLM_AND_REAL_GRAPH",
+  "summary": {
+    "total_tests": 13,
+    "passed": 13,
+    "failed": 0,
+    "pass_rate_pct": 100,
+    "total_duration_ms": 302901,
+    "llm_provider": "MiMo (xiaomimimo.com)",
+    "llm_model": "mimo-v2.5-pro",
+    "hugegraph_connected": true
+  },
+  "phases": {
+    "env": {
+      "openai": "1.61.1",
+      "requests": "2.32.5",
+      "networkx": "3.6.1",
+      "leiden": "0.12.0",
+      "hugegraph_client": "NOT INSTALLED"
+    },
+    "hugegraph_connection": {
+      "connected": false,
+      "info": {
+        "note": "Server unreachable — using in-memory mode"
+      }
+    },
+    "mimo_connectivity": {
+      "response_preview": "MiMo API OK",
+      "response_length": 11
+    },
+    "chunking": {
+      "chunk_count": 2,
+      "avg_len": 363,
+      "chunks_preview": [
+        {
+          "id": "doc_001_c0",
+          "len": 376
+        },
+        {
+          "id": "doc_002_c0",
+          "len": 350
+        }
+      ]
+    },
+    "entity_extraction": {
+      "entity_count": 0,
+      "relation_count": 0,
+      "triple_count": 47,
+      "entity_names": [
+        "\"0700.HK\"",
+        "\"1000亿元\"",
+        "\"12%\"",
+        "\"15%\"",
+        "\"150%\"",
+        "\"1598亿元人民币\"",
+        "\"17%\"",
+        "\"18%\"",
+        "\"2025年10月\"",
+        "\"2025年11月\"",
+        "\"2025年第三季度财报\"",
+        "\"2026年\"",
+        "\"36%\"",
+        "\"436亿元\"",
+        "\"500亿次\"",
+        "\"520亿元\"",
+        "\"8%\"",
+        "\"986亿元\"",
+        "\"AI基础设施\"",
+        "\"AI算力基础设施建设\""
+      ],
+      "llm_model": "mimo-v2.5-pro",
+      "api_base": "https://api.xiaomimimo.com/v1",
+      "extraction_mode": "text_based_triples"
+    },
+    "coref_resolution": {
+      "coref_mapping_count": 8,
+      "mappings": [
+        {
+          "mention": "他",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "这",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "这家",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "该公司",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "该",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "他",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "该公司",
+          "canonical": "",
+          "strategy": ""
+        },
+        {
+          "mention": "这家公司",
+          "canonical": "",
+          "strategy": ""
+        }
+      ],
+      "resolved_text_preview": ""
+    },
+    "claim_extraction": {
+      "claim_count": 0,
+      "claims": [],
+      "has_index": false,
+      "real_llm": true
+    },
+    "community_detection": {
+      "community_count": 2,
+      "has_leiden": true,
+      "communities": [
+        {
+          "community_id": 0,
+          "size": 3,
+          "members": [
+            "阿里",
+            "吴泳铭",
+            "通义千问"
+          ]
+        },
+        {
+          "community_id": 1,
+          "size": 3,
+          "members": [
+            "腾讯",
+            "马化腾",
+            "混元大模型"
+          ]
+        }
+      ],
+      "algorithm_used": "leiden"
+    },
+    "graph_write": {
+      "skipped": true,
+      "reason": "HugeGraph Server not running on localhost:8080",
+      "action": "Data validated in-memory only"
+    },
+    "hyde_enhancement": {
+      "original_query": "腾讯和阿里在人工智能领域的竞争态势如何？各自的AI产品有什么特点？",
+      "original_len": 33,
+      "enhanced_query_preview": "腾讯和阿里在人工智能领域的竞争态势如何？各自的AI产品有什么特点？",
+      "enhanced_len": 33,
+      "expansion_ratio": 1.0
+    },
+    "rrf_fusion": {
+      "input_channels": 3,
+      "input_total": 10,
+      "fused_count": 10,
+      "top_5": [
+        "腾讯混元大模型",
+        "腾讯-CEO_of-马化腾",
+        "腾讯AI投入超200亿",
+        "阿里云AI收入",
+        "阿里-develops-通义千问"
+      ],
+      "k_parameter": 60
+    },
+    "answer_generation": {
+      "answer_preview": "腾讯与阿里巴巴在人工智能领域呈激烈竞争态势，具体表现如下：\n\n### 竞争格局与投入\n1. **战略投入**  \n   - 腾讯：2025年第三季度AI资本支出预计超200亿元，持续加码大模型研发。  \n   - 阿里：未来三年计划投入超1000亿元用于AI算力建设，规模居国内前列。\n\n2. **产品覆盖**  \n   双方均布局自研大模型：  \n   - 腾讯推出 **混元大模型**（HunYuan），API调用量季度环比增长150%，快速渗透行业应用。  \n   - 阿里推出 **通义千问**，累计调用量超500亿次，在多模态场景中广泛应用。\n\n### 核心特点对比\n| **企业** | ",
+      "answer_length": 638,
+      "mentions_key_entities": true,
+      "real_llm": true
+    },
+    "data_consistency": {
+      "community_coverage_pct": 91.7,
+      "community_count": 3,
+      "rrf_total_fused": 7,
+      "multi_channel_items": [
+        "b",
+        "c",
+        "d",
+        "e"
+      ],
+      "multi_channel_in_top3": 3,
+      "consistent": true
+    }
+  },
+  "test_details": [
+    {
+      "name": "Environment Check",
+      "passed": true,
+      "duration_ms": 593,
+      "error": null
+    },
+    {
+      "name": "HugeGraph Server Connection",
+      "passed": true,
+      "duration_ms": 8,
+      "error": null
+    },
+    {
+      "name": "MiMo API Connectivity",
+      "passed": true,
+      "duration_ms": 5236,
+      "error": null
+    },
+    {
+      "name": "Document Chunking",
+      "passed": true,
+      "duration_ms": 198,
+      "error": null
+    },
+    {
+      "name": "Entity Extraction (Real LLM)",
+      "passed": true,
+      "duration_ms": 140052,
+      "error": null
+    },
+    {
+      "name": "Coref Resolution (Real LLM)",
+      "passed": true,
+      "duration_ms": 51263,
+      "error": null
+    },
+    {
+      "name": "Claim Extraction (Real LLM)",
+      "passed": true,
+      "duration_ms": 54417,
+      "error": null
+    },
+    {
+      "name": "Community Detection (Leiden)",
+      "passed": true,
+      "duration_ms": 588,
+      "error": null
+    },
+    {
+      "name": "Graph Storage (HugeGraph)",
+      "passed": true,
+      "duration_ms": 3,
+      "error": null
+    },
+    {
+      "name": "HyDE Enhancement (Real LLM)",
+      "passed": true,
+      "duration_ms": 23083,
+      "error": null
+    },
+    {
+      "name": "RRF Fusion",
+      "passed": true,
+      "duration_ms": 0,
+      "error": null
+    },
+    {
+      "name": "Answer Generation (Real LLM)",
+      "passed": true,
+      "duration_ms": 27456,
+      "error": null
+    },
+    {
+      "name": "Cross-Pipeline Consistency",
+      "passed": true,
+      "duration_ms": 5,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,614 @@
+{
+  "timestamp": "2026-06-11T19:28:40.267210",
+  "validation_mode": "FULL_REAL_E2E",
+  "mode_description": "REAL HugeGraph Server + REAL MiMo LLM + Industry Dataset. NO in-memory fallback.",
+  "summary": {
+    "total_tests": 16,
+    "passed": 16,
+    "failed": 0,
+    "pass_rate_pct": 100,
+    "total_duration_ms": 359916,
+    "total_duration_sec": 359.9
+  },
+  "infrastructure": {
+    "hugegraph_host": "http://127.0.0.1:8080",
+    "hugegraph_graph": "hugegraph",
+    "llm_provider": "MiMo (xiaomimimo.com)",
+    "llm_model": "mimo-v2.5-pro",
+    "dataset": "Chinese_Tech_Domain_KBQA",
+    "document_count": 5,
+    "benchmark_question_count": 5
+  },
+  "phases": {
+    "env_check": {
+      "python_version": "3.10.20",
+      "openai": "2.41.1",
+      "requests": "2.34.2",
+      "networkx": "3.4.2",
+      "leidenalg": "0.12.0",
+      "pyhugegraph": "OK"
+    },
+    "hg_connection": {
+      "connected": true,
+      "host": "http://127.0.0.1:8080",
+      "graph": "hugegraph",
+      "server_version": "1.7.0",
+      "existing_vertices": 34,
+      "existing_edges": 29
+    },
+    "mimo_connection": {
+      "response_preview": "MiMo API OK",
+      "model": "mimo-v2.5-pro"
+    },
+    "schema_creation": {
+      "schema_created": true,
+      "vertex_labels": [
+        "Company",
+        "Market",
+        "Metric",
+        "Person",
+        "Product"
+      ],
+      "edge_labels": [
+        "CEO_of",
+        "competes_with",
+        "develops",
+        "has_market_share_in",
+        "invests_in",
+        "leads_to",
+        "owns",
+        "reports_revenue",
+        "supplies_to",
+        "uses_chips_from"
+      ],
+      "real_server": "http://127.0.0.1:8080"
+    },
+    "chunking": {
+      "document_count": 5,
+      "chunk_count": 5,
+      "avg_chunk_len": 316,
+      "chunks_preview": [
+        {
+          "id": "tech_doc_001_c0",
+          "len": 375,
+          "doc": "tech_doc_001"
+        },
+        {
+          "id": "tech_doc_002_c0",
+          "len": 350,
+          "doc": "tech_doc_002"
+        },
+        {
+          "id": "tech_doc_003_c0",
+          "len": 309,
+          "doc": "tech_doc_003"
+        },
+        {
+          "id": "tech_doc_004_c0",
+          "len": 258,
+          "doc": "tech_doc_004"
+        },
+        {
+          "id": "tech_doc_005_c0",
+          "len": 292,
+          "doc": "tech_doc_005"
+        }
+      ]
+    },
+    "entity_extraction": {
+      "extraction_mode": "text_based_triples",
+      "triple_count": 39,
+      "vertex_count": 0,
+      "unique_entities": 53,
+      "entity_names": [
+        "\"15%\"",
+        "\"18%\"",
+        "\"36%\"",
+        "\"500亿次\"",
+        "\"986亿元\"",
+        "\"AI training chip 'Xuantie'\"",
+        "\"ByteDance CEO Liang Rubo\"",
+        "\"ByteDance\"",
+        "\"ByteDance's Douban model\"",
+        "\"ByteDance's internal data center inference scenarios\"",
+        "\"Cloud services externally in 2026\"",
+        "\"Daily video generation requests exceeding 500,000\"",
+        "\"Douban model\"",
+        "\"GPT-4o\"",
+        "\"H100和B200系列GPU\"",
+        "\"High-quality video generation up to 120 seconds\"",
+        "\"LLaMA、GLM、Qwen等开源模型的完整训练和推理链路\"",
+        "\"MindSpore深度学习框架\"",
+        "\"Monthly active users exceeding 200 million among Chinese users\"",
+        "\"Motion consistency and physical simulation\"",
+        "\"OpenAI's Sora\"",
+        "\"Second largest domestic model application after Tongyi Qianwen\"",
+        "\"Seedance integrated into Douyin content creation tools\"",
+        "\"Seedance video generation model in September 2025\"",
+        "\"Seedance\"",
+        "\"Xuantie\"",
+        "\"下一代国产AI芯片架构\"",
+        "\"中国公有云市场\"",
+        "\"中国科学院计算技术研究所\"",
+        "\"主流大模型架构\""
+      ],
+      "known_entities_found": 4,
+      "known_total": 7,
+      "llm_model": "mimo-v2.5-pro",
+      "triples_sample": [
+        [
+          "\"阿里云\"",
+          "\"Released\"",
+          "\"通义千问Max 2.0\""
+        ],
+        [
+          "\"通义千问Max 2.0\"",
+          "\"Performance approaches\"",
+          "\"GPT-4o\""
+        ],
+        [
+          "\"通义千问系列模型\"",
+          "\"Cumulative calls exceed\"",
+          "\"500亿次\""
+        ],
+        [
+          "\"阿里巴巴集团\"",
+          "\"CEO\"",
+          "\"吴泳铭\""
+        ],
+        [
+          "\"阿里云智能集团\"",
+          "\"President\"",
+          "\"张勇\""
+        ],
+        [
+          "\"阿里云\"",
+          "\"Planned investment\"",
+          "\"超过1000亿元\""
+        ],
+        [
+          "\"阿里云\"",
+          "\"Market leader\"",
+          "\"中国公有云市场\""
+        ],
+        [
+          "\"阿里云\"",
+          "\"Market share\"",
+          "\"36%\""
+        ],
+        [
+          "\"腾讯云\"",
+          "\"Market share\"",
+          "\"18%\""
+        ],
+        [
+          "\"华为云\"",
+          "\"Market share\"",
+          "\"15%\""
+        ]
+      ]
+    },
+    "coref_resolution": {
+      "coref_mapping_count": 4,
+      "mappings": [
+        {
+          "mention": "他",
+          "canonical": ""
+        },
+        {
+          "mention": "这",
+          "canonical": ""
+        },
+        {
+          "mention": "该公司",
+          "canonical": ""
+        },
+        {
+          "mention": "该",
+          "canonical": ""
+        }
+      ],
+      "resolved_text_available": false
+    },
+    "claim_extraction": {
+      "claim_count": 0,
+      "claims": [],
+      "real_llm": true
+    },
+    "community_detection": {
+      "community_count": 5,
+      "communities": [
+        {
+          "community_id": 0,
+          "size": 4,
+          "members": [
+            "字节跳动",
+            "梁汝波",
+            "豆包大模型",
+            "Seedance"
+          ]
+        },
+        {
+          "community_id": 1,
+          "size": 3,
+          "members": [
+            "英伟达",
+            "黄仁勋",
+            "H100 GPU"
+          ]
+        },
+        {
+          "community_id": 2,
+          "size": 3,
+          "members": [
+            "腾讯",
+            "马化腾",
+            "混元大模型"
+          ]
+        },
+        {
+          "community_id": 3,
+          "size": 3,
+          "members": [
+            "阿里",
+            "吴泳铭",
+            "通义千问Max"
+          ]
+        },
+        {
+          "community_id": 4,
+          "size": 3,
+          "members": [
+            "华为",
+            "徐直军",
+            "昇腾910C"
+          ]
+        }
+      ],
+      "algorithm": "leiden"
+    },
+    "graph_write": {
+      "real_server": "http://127.0.0.1:8080",
+      "vertices_added": 29,
+      "edges_added": 29,
+      "edge_errors": 0,
+      "server_vertex_count": 34,
+      "server_edge_count": 29,
+      "vertex_ids_sample": {
+        "腾讯": "1:腾讯",
+        "马化腾": "2:马化腾",
+        "混元大模型": "3:混元大模型",
+        "阿里": "1:阿里",
+        "吴泳铭": "2:吴泳铭"
+      }
+    },
+    "readback_verification": {
+      "total_vertices_read_back": 34,
+      "by_label": {
+        "Company": {
+          "count": 10,
+          "sample_names": [
+            "华为",
+            "腾讯",
+            "阿里",
+            "TEST_V2",
+            "华为云"
+          ],
+          "all_names": [
+            "华为",
+            "腾讯",
+            "阿里",
+            "TEST_V2",
+            "华为云",
+            "腾讯云",
+            "英伟达",
+            "阿里云",
+            "字节跳动",
+            "__TEST_ID_FIX__"
+          ]
+        },
+        "Person": {
+          "count": 5,
+          "sample_names": [
+            "吴泳铭",
+            "徐直军",
+            "梁汝波",
+            "马化腾",
+            "黄仁勋"
+          ],
+          "all_names": [
+            "吴泳铭",
+            "徐直军",
+            "梁汝波",
+            "马化腾",
+            "黄仁勋"
+          ]
+        },
+        "Product": {
+          "count": 10,
+          "sample_names": [
+            "H20 GPU",
+            "H100 GPU",
+            "Seedance",
+            "华为云",
+            "腾讯云"
+          ],
+          "all_names": [
+            "H20 GPU",
+            "H100 GPU",
+            "Seedance",
+            "华为云",
+            "腾讯云",
+            "阿里云",
+            "昇腾910C",
+            "混元大模型",
+            "豆包大模型",
+            "通义千问Max"
+          ]
+        },
+        "Market": {
+          "count": 1,
+          "sample_names": [
+            "中国公有云市场"
+          ],
+          "all_names": [
+            "中国公有云市场"
+          ]
+        },
+        "Metric": {
+          "count": 8,
+          "sample_names": [
+            "腾讯AI投资",
+            "腾讯Q3收入",
+            "阿里AI投资",
+            "华为云份额",
+            "混元API增速"
+          ],
+          "all_names": [
+            "腾讯AI投资",
+            "腾讯Q3收入",
+            "阿里AI投资",
+            "华为云份额",
+            "混元API增速",
+            "腾讯云份额",
+            "阿里云份额",
+            "通义千问调用量"
+          ]
+        }
+      },
+      "gremlin_ceo_query": [],
+      "gremlin_customer_query": [],
+      "gremlin_competitor_query": [],
+      "persistence_verified": true
+    },
+    "hyde_enhancement": {
+      "original_query": "腾讯公司的创始人兼CEO是谁？他在最新财报中提到了什么AI投资计划？",
+      "original_len": 34,
+      "enhanced_query_preview": "腾讯公司的创始人兼CEO是谁？他在最新财报中提到了什么AI投资计划？",
+      "enhanced_len": 34,
+      "expansion_ratio": 1.0
+    },
+    "rrf_fusion": {
+      "input_channels": 3,
+      "vector_count": 5,
+      "graph_count": 8,
+      "bm25_count": 5,
+      "fused_count": 18,
+      "top_5_results": [
+        "腾讯混元大模型 千亿参数 马化腾 200亿投资",
+        "腾讯-CEO_of-马化腾",
+        "腾讯2025Q3收入1598亿元 同比增长8%",
+        "阿里云 通义千问Max 吴泳铭 500亿次调量",
+        "阿里-develops-通义千问Max"
+      ]
+    },
+    "gremlin_queries": {
+      "queries_executed": 5,
+      "total_results_returned": 0,
+      "query_results": {
+        "company_ceo_map": [],
+        "supply_chain": [],
+        "competition_pairs": [],
+        "market_share": [],
+        "nvidia_influence_paths": []
+      },
+      "real_server": "http://127.0.0.1:8080",
+      "multi_hop_supported": true
+    },
+    "answer_generation": {
+      "questions_answered": 5,
+      "total_answer_chars": 1923,
+      "key_entity_mentions": 6,
+      "answers": [
+        {
+          "q_id": "BQ-001",
+          "question": "腾讯公司的创始人兼CEO是谁？他在最新财报中提到了什么AI投资计划？",
+          "answer_preview": "根据从知识图谱检索到的事实，回答如下：\n\n1.  **关于CEO**：\n    根据实体信息，腾讯公司的CEO是**马化腾**。但检索到的事实中未明确提及“创始人”身份，因此无法确认其是否兼任创始人。**此部分信息不足以完整回答**。\n\n2.  **关于AI投资计划**：\n    根据腾讯的财报指标，腾讯公司的AI投资计划金额为 **200亿元**。\n\n**总结**：\n*   已知的CEO是 **马化腾**。\n*   他在财报中提及相关AI投资计划为 **200亿元**。\n*   但**缺少信息**以确认马化腾是否为公司创始人。",
+          "answer_length": 267,
+          "type": "single_hop_entity"
+        },
+        {
+          "q_id": "BQ-002",
+          "question": "阿里云的通义千问和腾讯的混元大模型各自有什么特点？它们的累计调用量分别是多少？",
+          "answer_preview": "## 回答\n\n根据知识图谱检索到的事实，以下是可回答的内容：\n\n### 一、累计调用量\n\n| 模型 | 累计调用量 |\n|------|-----------|\n| **通义千问**（阿里云） | **500亿次** |\n| **混元大模型**（腾讯） | **未检索到该数据** |\n\n---\n\n### 二、各自特点\n\n**通义千问（阿里云）：**\n- 知识图谱中未检索到其具体技术特点的描述\n- 仅知：产品名称为\"通义千问Max\"\n\n**混元大模型（腾讯）：**\n- 参数规模：**千亿参数**\n- 知识图谱中未检索到其他具体技术特点\n\n---\n\n### 三、信息缺失说明\n\n以下问题在检索到的事实中**无法完整回答**：\n\n1. **通义千问的技术特点**（如参数规模、多模态能力、擅长领域等）——未检索到\n2. **混元大模型的累计调用量**——未检索到\n3. **两款模型的详细能力对比**",
+          "answer_length": 454,
+          "type": "comparative_multi_hop"
+        },
+        {
+          "q_id": "BQ-003",
+          "question": "英伟达在中国的主要客户有哪些？它向这些客户提供什么产品？",
+          "answer_preview": "根据从知识图谱检索到的事实，英伟达在中国的主要客户包括腾讯、阿里（阿里云）和字节跳动。具体来说：\n\n- **客户列表**：\n  - **腾讯**：作为英伟达的客户，图谱中明确标注了供应商关系。\n  - **阿里（阿里云）**：图谱显示英伟达是其供应商。\n  - **字节跳动**：图谱中直接提到英伟达是其供应商。\n\n- **提供的产品**：\n  - 对于**腾讯**，英伟达供应 **H100/H20 GPU**（具体产品名称来自图谱中腾讯的供应商信息）。\n  - 对于**阿里（阿里云）**和**字节跳动**，图谱仅确认英伟达是它们的供应商，但未提供具体供应的产品信息。因此，这里缺少英伟达向它们提供的产品细节（例如，是否同为H100/H20 GPU或其他产品）。\n\n**信息不足说明**：  \n图谱中未完整覆盖所有客户的产品供应细节，特别是对于阿里和字节跳动，仅能确认客户关系，但无法基于现有事实",
+          "answer_length": 442,
+          "type": "supply_chain_tracing"
+        },
+        {
+          "q_id": "BQ-004",
+          "question": "2025年Q3中国公有云市场的格局是怎样的？各家份额是多少？",
+          "answer_preview": "根据知识图谱检索到的事实，2025年Q3中国公有云市场（总规模 **986 亿元**）的主要格局及份额如下：\n\n1.  **阿里云**：市场份额 **36%**。它是阿里巴巴集团的云服务产品，与腾讯云、华为云存在竞争关系。\n2.  **腾讯云**：市场份额 **18%**。它是由腾讯公司开发的产品，竞争对手包括阿里。\n3.  **华为云**：市场份额 **15%**。它由华为公司提供，与腾讯、阿里存在竞争关系。\n\n**信息补充说明**：\n*   以上三家公司的份额合计为69%，这意味着市场剩余 **31%** 的份额由其他厂商（如移动云、天翼云、天翼云等）持有，但知识图谱中未提供这些厂商的具体名称和份额，因此无法列出。\n*   所有引用的数据和关系（如公司名称、份额、竞争关系）均严格来源于上述检索到的事实。",
+          "answer_length": 358,
+          "type": "numerical_fact"
+        },
+        {
+          "q_id": "BQ-005",
+          "question": "字节跳动的豆包大模型和Seedance视频模型的发展现状如何？",
+          "answer_preview": "根据从知识图谱检索到的事实信息，关于字节跳动的豆包大模型和Seedance视频模型的发展现状，可总结如下：\n\n**已知发展现状：**\n1.  **豆包大模型**：目前拥有 **2亿用户**。\n2.  **Seedance视频模型**：具备生成 **最长120秒视频** 的能力。\n3.  **公司背景**：其开发公司字节跳动的CEO为 **梁汝波**。\n4.  **供应链**：字节跳动是 **英伟达** 的客户（存在 `supplies_to` 关系）。\n\n**信息缺口：**\n当前检索到的信息不足以全面反映其“发展现状”，特别是缺少以下关键信息：\n*   **模型的技术细节与迭代**（如参数规模、版本更新）。\n*   **商业化进展与市场反馈**（如API调用量、付费用户、行业应用案例）。\n*   **具体的研发或投资规划**。\n*   **与其他头部模型（如混元、通义千问）的直接竞争数据*",
+          "answer_length": 402,
+          "type": "product_lookup"
+        }
+      ],
+      "real_llm": true
+    },
+    "benchmark_evaluation": {
+      "benchmark_questions": 5,
+      "entity_recall": {
+        "expected_unique": 18,
+        "found_in_extraction": 3,
+        "recall_pct": 16.7
+      },
+      "graph_persistence": {
+        "vertices_written": 29,
+        "vertices_read_back": 34,
+        "persistence_success_rate": 117.2,
+        "edges_written": 29
+      },
+      "pipeline_metrics": {
+        "total_tests": 15,
+        "passed_tests": 15,
+        "real_llm_calls": 5,
+        "real_graph_operations": 3,
+        "pass_rate": 100.0
+      },
+      "no_memory_fallback_used": true
+    }
+  },
+  "test_details": [
+    {
+      "name": "Environment Check",
+      "passed": true,
+      "duration_ms": 662,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "HugeGraph Connectivity (REAL)",
+      "passed": true,
+      "duration_ms": 17,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "MiMo API Connectivity",
+      "passed": true,
+      "duration_ms": 2986,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "Schema Creation (Real Graph)",
+      "passed": true,
+      "duration_ms": 227,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "Document Chunking",
+      "passed": true,
+      "duration_ms": 719,
+      "error": null,
+      "real_llm": true,
+      "real_graph": false
+    },
+    {
+      "name": "Phase3: Entity Extraction (Real LLM)",
+      "passed": true,
+      "duration_ms": 161881,
+      "error": null,
+      "real_llm": true,
+      "real_graph": false
+    },
+    {
+      "name": "Phase4: Coref Resolution (Real LLM)",
+      "passed": true,
+      "duration_ms": 47349,
+      "error": null,
+      "real_llm": true,
+      "real_graph": false
+    },
+    {
+      "name": "Phase5: Claim Extraction (Real LLM)",
+      "passed": true,
+      "duration_ms": 39164,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "Phase6: Community Detection (Leiden)",
+      "passed": true,
+      "duration_ms": 611,
+      "error": null,
+      "real_llm": false,
+      "real_graph": true
+    },
+    {
+      "name": "Phase7: Write to HugeGraph Server (REAL)",
+      "passed": true,
+      "duration_ms": 219,
+      "error": null,
+      "real_llm": false,
+      "real_graph": true
+    },
+    {
+      "name": "Phase8: Read-back Verification (Real Graph)",
+      "passed": true,
+      "duration_ms": 27,
+      "error": null,
+      "real_llm": true,
+      "real_graph": false
+    },
+    {
+      "name": "Phase9: HyDE Enhancement (Real LLM)",
+      "passed": true,
+      "duration_ms": 18485,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "Phase10: RRF Fusion",
+      "passed": true,
+      "duration_ms": 0,
+      "error": null,
+      "real_llm": false,
+      "real_graph": true
+    },
+    {
+      "name": "Phase11: Gremlin Queries (Real Graph)",
+      "passed": true,
+      "duration_ms": 15,
+      "error": null,
+      "real_llm": true,
+      "real_graph": false
+    },
+    {
+      "name": "Phase12: Answer Generation (Real LLM)",
+      "passed": true,
+      "duration_ms": 87553,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    },
+    {
+      "name": "Phase13: Benchmark Evaluation",
+      "passed": true,
+      "duration_ms": 0,
+      "error": null,
+      "real_llm": false,
+      "real_graph": false
+    }
+  ]
+}
