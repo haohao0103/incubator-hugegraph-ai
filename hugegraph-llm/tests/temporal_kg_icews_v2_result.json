@@ -1,0 +1,113 @@
+{
+  "status": "PASS",
+  "benchmark": {
+    "name": "ICEWS14-Agent-Memory-v2",
+    "source": "ICEWS14 (HuggingFace: linxy/ICEWS14)",
+    "dataset_type": "temporal_knowledge_graph",
+    "facts_loaded": 500
+  },
+  "metrics": {
+    "PointQuery": {
+      "Recall@5": 0.55,
+      "MRR": 0.35,
+      "Hit@1": 0.2,
+      "AvgLatency_ms": 111.77,
+      "P95Latency_ms": 743.97
+    },
+    "RangeQuery": {
+      "TemporalAccuracy": 0.6,
+      "AvgLatency_ms": 47.84
+    },
+    "ConflictDetection": {
+      "ConflictAccuracy": 0.2,
+      "AvgLatency_ms": 38.26
+    },
+    "CommunityDetection": {
+      "CommunityCoverage": 1.0,
+      "TotalFacts": 2000,
+      "FactsWithCommunity": 2000
+    },
+    "EdgeInvalidation": {
+      "SupersedesEdges": 58,
+      "InvalidatedFacts": 0,
+      "InvalidationRate": 0.0
+    }
+  },
+  "summary": {
+    "total_phases": 11,
+    "passed": 11,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "duration_s": 16.4
+  },
+  "timing": {
+    "total_duration_s": 16.4,
+    "phases": [
+      {
+        "n": "P0: Environment Check",
+        "ok": true,
+        "ms": 2.0
+      },
+      {
+        "n": "P1: Schema Creation (REST)",
+        "ok": true,
+        "ms": 38.0
+      },
+      {
+        "n": "P2: Load Benchmark",
+        "ok": true,
+        "ms": 0.0
+      },
+      {
+        "n": "P7: Write to HugeGraph (REST)",
+        "ok": true,
+        "ms": 10806.0
+      },
+      {
+        "n": "P8: Read-back Verify",
+        "ok": true,
+        "ms": 77.0
+      },
+      {
+        "n": "P10: Point Query Evaluation",
+        "ok": true,
+        "ms": 2236.0
+      },
+      {
+        "n": "P11: Range Query Evaluation",
+        "ok": true,
+        "ms": 479.0
+      },
+      {
+        "n": "P12: Conflict Detection Evaluation",
+        "ok": true,
+        "ms": 383.0
+      },
+      {
+        "n": "P14: Community Detection Evaluation",
+        "ok": true,
+        "ms": 37.0
+      },
+      {
+        "n": "P16: Run Edge Invalidation",
+        "ok": true,
+        "ms": 2215.0
+      },
+      {
+        "n": "P15: Edge Invalidation Evaluation",
+        "ok": true,
+        "ms": 114.0
+      }
+    ]
+  },
+  "infra": {
+    "host": "http://127.0.0.1:8080",
+    "ver": "1.7.0",
+    "llm": "mimo-v2.5-pro",
+    "embedding": "sentence-transformers-all-MiniLM-L6-v2"
+  },
+  "llm": {
+    "n": 0,
+    "tk": 0
+  }
+}
