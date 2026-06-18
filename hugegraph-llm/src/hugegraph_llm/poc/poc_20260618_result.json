@@ -1,0 +1,111 @@
+{
+  "date": "2026-06-18",
+  "poc_topic": "GraphRAG-Bench Adaptation for HugeGraph",
+  "status": "partial",
+  "research_report": "docs/daily_research/2026-06-18.md",
+  "poc_file": "hugegraph-llm/src/hugegraph_llm/poc/poc_20260618.py",
+  "result_file": "hugegraph-llm/src/hugegraph_llm/poc/poc_20260618_result.json",
+  "git_branch": "poc/0618-graphrag-bench-adaptation",
+  "gate1_report": true,
+  "gate2_code_compiles": true,
+  "gate3_result_json_exists": true,
+  "gate4_git_committed": false,
+  "pass_rate": 0.6,
+  "total_questions": 5,
+  "passed_questions": 3,
+  "avg_latency_ms": 3.9888381958007812,
+  "results": [
+    {
+      "question_id": "Q1",
+      "passed": true,
+      "answer": "Multi-hop evidence: supplier: 供应商A0. entity_type=supplier country=中国 tier=Tier-1 reliability=0.95 risk_score=0.12; supplier: 供应商V0. entity_type=supplier country=泰国 tier=Tier-1 reliability=0.86 risk_score=0.29",
+      "latency_ms": 6.531000137329102,
+      "match_score": 0.7,
+      "reasoning_type": "multi_hop",
+      "retrieval_sources": [
+        "faiss",
+        "faiss",
+        "faiss",
+        "bm25",
+        "bm25",
+        "bm25",
+        "hugegraph"
+      ]
+    },
+    {
+      "question_id": "Q2",
+      "passed": false,
+      "answer": "No neighbor data found.\npart: 零件Q0-16. entity_type=part category=紧固件 unit_cost=242.9 is_critical=False\nsupplier: 供应商A0. entity_type=supplier country=中国 tier=Tier-1 reliability=0.95 risk_score=0.12",
+      "latency_ms": 4.143238067626953,
+      "match_score": 0.3,
+      "reasoning_type": "single_hop",
+      "retrieval_sources": [
+        "faiss",
+        "faiss",
+        "faiss",
+        "bm25",
+        "bm25",
+        "bm25",
+        "hugegraph"
+      ]
+    },
+    {
+      "question_id": "Q3",
+      "passed": false,
+      "answer": "No neighbor data found.\npart: 零件A0. entity_type=part category=电子元件 unit_cost=120.5 is_critical=True\nsupplier: 供应商V0. entity_type=supplier country=泰国 tier=Tier-1 reliability=0.86 risk_score=0.29",
+      "latency_ms": 1.9080638885498047,
+      "match_score": 0.3,
+      "reasoning_type": "multi_hop",
+      "retrieval_sources": [
+        "faiss",
+        "faiss",
+        "faiss",
+        "bm25",
+        "bm25",
+        "bm25",
+        "hugegraph"
+      ]
+    },
+    {
+      "question_id": "Q4",
+      "passed": true,
+      "answer": "Average risk score: 0.27 (from 175 suppliers, range: 0.00-0.70)",
+      "latency_ms": 3.947019577026367,
+      "match_score": 1.0,
+      "reasoning_type": "math",
+      "retrieval_sources": [
+        "faiss",
+        "faiss",
+        "faiss",
+        "bm25",
+        "bm25",
+        "bm25",
+        "hugegraph"
+      ]
+    },
+    {
+      "question_id": "Q5",
+      "passed": true,
+      "answer": "Regional capacity comparison: 华北: avg=5000",
+      "latency_ms": 3.4148693084716797,
+      "match_score": 0.7,
+      "reasoning_type": "comparison",
+      "retrieval_sources": [
+        "faiss",
+        "faiss",
+        "faiss",
+        "bm25",
+        "bm25",
+        "bm25",
+        "hugegraph"
+      ]
+    }
+  ],
+  "redline_compliance": {
+    "real_hugegraph_api": true,
+    "real_faiss_index": true,
+    "real_bm25_search": true,
+    "no_simulation": true,
+    "no_memory_dict_graph": true
+  }
+}
