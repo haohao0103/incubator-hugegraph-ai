@@ -47,17 +47,8 @@ class HugeGraphClient:
         return f"{self.base_url}{self.path_fmt}/{resource}"
 
     def _get(self, url: str) -> dict:
-        import urllib.request
-        import gzip
-        try:
-            req = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                raw = resp.read()
-                if resp.headers.get("Content-Encoding") == "gzip":
-                    raw = gzip.decompress(raw)
-                return json.loads(raw.decode())
-        except Exception as e:
-            return {"error": str(e)}
+        from hugegraph_llm.utils.hg_http import hg_get
+        return hg_get(url, auth=("admin", "admin"), timeout=10)
 
     def get_schema(self) -> dict:
         if self._schema_cache:
