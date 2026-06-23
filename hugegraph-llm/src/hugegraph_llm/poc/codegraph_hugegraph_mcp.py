@@ -61,7 +61,7 @@ RESULT_FILE = os.path.join(POC_DIR, "codegraph_hugegraph_mcp_result.json")
 # HugeGraph config
 HG_HOST = os.environ.get("HG_HOST", "127.0.0.1")
 HG_PORT = os.environ.get("HG_PORT", "8080")
-HG_GRAPH = os.environ.get("HG_GRAPH", "poc_codegraph_mcp")
+HG_GRAPH = os.environ.get("HG_GRAPH", "poc_code_graph")  # reuse existing code graph
 HG_REST = f"http://{HG_HOST}:{HG_PORT}"
 
 # SQLite config (CodeGraph-style)

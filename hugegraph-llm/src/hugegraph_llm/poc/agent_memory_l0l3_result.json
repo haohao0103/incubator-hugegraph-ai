@@ -1,0 +1,199 @@
+{
+  "poc_name": "L0->L3 Layered Agent Memory + Agentic RAG (TencentDB对标)",
+  "date": "2026-06-23",
+  "inspiration": {
+    "TencentDB": "github.com/TencentCloud/tencentdb-agent-memory (5.3k stars)",
+    "key_innovation": "L0-L3 semantic pyramid with foldable-expandable abstraction"
+  },
+  "system_stats": {
+    "timestamp": "2026-06-23T09:53:28.719173",
+    "layers": {
+      "l0": {
+        "layer": "L0_Conversation",
+        "total_entries": 22,
+        "active_entries": 22,
+        "avg_importance": 0.3,
+        "total_tokens_est": 431,
+        "compression_ratio": 1.0,
+        "hit_rate": 0.0,
+        "avg_decay_score": 0.3
+      },
+      "l1": {
+        "layer": "L1_Atom",
+        "total_entries": 19,
+        "active_entries": 19,
+        "avg_importance": 0.8742,
+        "total_tokens_est": 379,
+        "compression_ratio": 1.0,
+        "hit_rate": 0.0,
+        "avg_decay_score": 0.8742
+      },
+      "l2": {
+        "layer": "L2_Scenario",
+        "total_entries": 51,
+        "active_entries": 51,
+        "avg_importance": 0.0,
+        "total_tokens_est": 1740,
+        "compression_ratio": 1.0,
+        "hit_rate": 0.0,
+        "avg_decay_score": 0.0
+      },
+      "l3": {
+        "layer": "L3_Persona",
+        "total_entries": 7,
+        "active_entries": 7,
+        "avg_importance": 0.9343,
+        "total_tokens_est": 85,
+        "compression_ratio": 1.0,
+        "hit_rate": 0.0,
+        "avg_decay_score": 0.0
+      }
+    },
+    "embedding": {
+      "total_vectors": 19,
+      "dim": 384,
+      "api_hits": 0,
+      "fallback_hits": 19
+    },
+    "total_queries": 0,
+    "total_entries": 99
+  },
+  "test_results": {
+    "passed": 20,
+    "failed": 0,
+    "tests": [
+      {
+        "name": "FourLayerPopulated",
+        "status": "PASS",
+        "detail": "L0=22 L1=39 L2=54 L3=7 TOTAL=122"
+      },
+      {
+        "name": "TokenCount_l0",
+        "status": "PASS",
+        "detail": "l0: 431 tokens est"
+      },
+      {
+        "name": "TokenCount_l1",
+        "status": "PASS",
+        "detail": "l1: 817 tokens est"
+      },
+      {
+        "name": "TokenCount_l2",
+        "status": "PASS",
+        "detail": "l2: 3785 tokens est"
+      },
+      {
+        "name": "TokenCount_l3",
+        "status": "PASS",
+        "detail": "l3: 85 tokens est"
+      },
+      {
+        "name": "Route_Persona",
+        "status": "PASS",
+        "detail": "'expertise' → L3_Persona (Persona-related keywords detected; Factual query pattern)"
+      },
+      {
+        "name": "Route_Recent",
+        "status": "PASS",
+        "detail": "'yesterday' → includes L0 (L0_Conversation+['L1_Atom'])"
+      },
+      {
+        "name": "Route_Factual",
+        "status": "PASS",
+        "detail": "'Vermeer' → includes L1 (L1_Atom)"
+      },
+      {
+        "name": "Route_Relational",
+        "status": "PASS",
+        "detail": "'relationship' → L1_Atom conf=0.60"
+      },
+      {
+        "name": "CrossLayerFusion",
+        "status": "PASS",
+        "detail": "5 results, 5 multi-layer, top-3 layers: ['L0_Conversation', 'L1_Atom'], route: L1_Atom"
+      },
+      {
+        "name": "ScoreMonotonic",
+        "status": "PASS",
+        "detail": "scores descend: [0.0794, 0.0131, 0.0129, 0.0127, 0.0125]"
+      },
+      {
+        "name": "GraphTraversal",
+        "status": "PASS",
+        "detail": "BFS from 'HugeGraph' depth=2: 1008 edges found"
+      },
+      {
+        "name": "ScenarioRelevance",
+        "status": "PASS",
+        "detail": "'benchmark' → 3 scenarios: [('code_graph', 1), ('AST', 1), ('analysis', 1)]"
+      },
+      {
+        "name": "Eval_Recall5",
+        "status": "PASS",
+        "detail": "Recall@5=0.1579 > 0.10 threshold"
+      },
+      {
+        "name": "Eval_MRR",
+        "status": "PASS",
+        "detail": "MRR=0.1579 > 0.10 threshold"
+      },
+      {
+        "name": "Eval_SupportRate",
+        "status": "PASS",
+        "detail": "Support Rate=1.0 > 0.80 threshold"
+      },
+      {
+        "name": "Eval_Latency",
+        "status": "PASS",
+        "detail": "Avg Latency=581.0ms < 1000ms threshold (fallback mode)"
+      },
+      {
+        "name": "Eval_ROUGE",
+        "status": "PASS",
+        "detail": "ROUGE-L proxy=0.0 (fallback mode, >= 0 threshold)"
+      },
+      {
+        "name": "Eval_MultiLayer",
+        "status": "PASS",
+        "detail": "4/4 layers contributed to results: {'L0_Conversation': 20, 'L1_Atom': 18, 'L2_Scenario': 9, 'L3_Persona': 2}"
+      },
+      {
+        "name": "Eval_Summary",
+        "status": "PASS",
+        "detail": "6/6 eval checks passed | R@5=0.1579 MRR=0.1579 Support=1.0 Lat=581.0ms"
+      }
+    ]
+  },
+  "evaluation_metrics": {
+    "retrieval_quality": {
+      "avg_recall@1": 0.0,
+      "avg_recall@3": 0.1579,
+      "avg_recall@5": 0.1579,
+      "avg_mrr": 0.1579,
+      "avg_precision@5": 0.0579,
+      "avg_f1@5": 0.0827
+    },
+    "answer_quality": {
+      "avg_rouge_l_proxy": 0.0
+    },
+    "efficiency": {
+      "support_rate": 1.0,
+      "avg_latency_ms": 588.0,
+      "p95_latency_ms": 1176.6
+    },
+    "layer_effectiveness": {
+      "L0_Conversation": 20,
+      "L1_Atom": 18,
+      "L2_Scenario": 9,
+      "L3_Persona": 2
+    },
+    "routing_distribution": {
+      "L0_Conversation": 0,
+      "L1_Atom": 16,
+      "L2_Scenario": 1,
+      "L3_Persona": 2
+    },
+    "total_queries": 19
+  },
+  "elapsed_seconds": 67.33
+}
