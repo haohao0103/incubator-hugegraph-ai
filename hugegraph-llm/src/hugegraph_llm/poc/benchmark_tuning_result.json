@@ -1,0 +1,27 @@
+{
+  "date": "2026-06-23",
+  "dataset": "GraphRAG-Bench medical",
+  "sample_size": 100,
+  "baseline_a0": {
+    "recall@5": 0.1111
+  },
+  "best_config": {
+    "k": 10,
+    "weights": {
+      "vec": 1.0,
+      "bm25": 1.0,
+      "graph": 0.3
+    },
+    "desc": "图低权",
+    "recall@5": 0.7599
+  },
+  "k_search": {
+    "1": 0,
+    "5": 0,
+    "10": 0.7582,
+    "20": 0,
+    "40": 0,
+    "60": 0,
+    "100": 0
+  }
+}
