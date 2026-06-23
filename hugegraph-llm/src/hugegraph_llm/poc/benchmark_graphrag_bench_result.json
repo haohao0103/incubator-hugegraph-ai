@@ -1,0 +1,146 @@
+{
+  "date": "2026-06-23",
+  "dataset": "GraphRAG-Bench (medical, arXiv:2506.05690)",
+  "sample_size": 100,
+  "top_k": 5,
+  "embedding_model": "all-MiniLM-L6-v2 (384dim)",
+  "ablation_results": {
+    "A0_纯向量": {
+      "recall@5": 0.7497,
+      "mrr": 0.9567,
+      "precision@5": 0.486,
+      "avg_latency_ms": 88.9,
+      "p99_latency_ms": 343.94,
+      "by_qtype": {
+        "Fact Retrieval": {
+          "recall@5": 0.9762,
+          "mrr": 0.975
+        },
+        "Complex Reasoning": {
+          "recall@5": 0.862,
+          "mrr": 0.96
+        },
+        "Contextual Summarize": {
+          "recall@5": 0.615,
+          "mrr": 0.9083
+        },
+        "Creative Generation": {
+          "recall@5": 0.1381,
+          "mrr": 0.9667
+        }
+      }
+    },
+    "A1_纯BM25": {
+      "recall@5": 0.6915,
+      "mrr": 0.8762,
+      "precision@5": 0.446,
+      "avg_latency_ms": 2.62,
+      "p99_latency_ms": 5.4,
+      "by_qtype": {
+        "Fact Retrieval": {
+          "recall@5": 0.9229,
+          "mrr": 0.9238
+        },
+        "Complex Reasoning": {
+          "recall@5": 0.83,
+          "mrr": 0.9333
+        },
+        "Contextual Summarize": {
+          "recall@5": 0.458,
+          "mrr": 0.7
+        },
+        "Creative Generation": {
+          "recall@5": 0.1547,
+          "mrr": 0.8889
+        }
+      }
+    },
+    "A2_纯图遍历": {
+      "recall@5": 0.7497,
+      "mrr": 0.8352,
+      "precision@5": 0.486,
+      "avg_latency_ms": 36.57,
+      "p99_latency_ms": 100.92,
+      "by_qtype": {
+        "Fact Retrieval": {
+          "recall@5": 0.9762,
+          "mrr": 0.7212
+        },
+        "Complex Reasoning": {
+          "recall@5": 0.862,
+          "mrr": 0.89
+        },
+        "Contextual Summarize": {
+          "recall@5": 0.615,
+          "mrr": 0.8958
+        },
+        "Creative Generation": {
+          "recall@5": 0.1381,
+          "mrr": 0.9667
+        }
+      }
+    },
+    "A3_向量+BM25": {
+      "recall@5": 0.7479,
+      "mrr": 0.937,
+      "precision@5": 0.49,
+      "avg_latency_ms": 30.93,
+      "p99_latency_ms": 56.41,
+      "by_qtype": {
+        "Fact Retrieval": {
+          "recall@5": 0.9583,
+          "mrr": 0.9583
+        },
+        "Complex Reasoning": {
+          "recall@5": 0.9,
+          "mrr": 0.9333
+        },
+        "Contextual Summarize": {
+          "recall@5": 0.5746,
+          "mrr": 0.8767
+        },
+        "Creative Generation": {
+          "recall@5": 0.1641,
+          "mrr": 0.9667
+        }
+      }
+    },
+    "A5_三通道融合": {
+      "recall@5": 0.7496,
+      "mrr": 0.9253,
+      "precision@5": 0.5,
+      "avg_latency_ms": 59.44,
+      "p99_latency_ms": 72.37,
+      "by_qtype": {
+        "Fact Retrieval": {
+          "recall@5": 0.9521,
+          "mrr": 0.9292
+        },
+        "Complex Reasoning": {
+          "recall@5": 0.88,
+          "mrr": 0.9333
+        },
+        "Contextual Summarize": {
+          "recall@5": 0.6125,
+          "mrr": 0.8767
+        },
+        "Creative Generation": {
+          "recall@5": 0.1755,
+          "mrr": 0.9667
+        }
+      }
+    }
+  },
+  "key_findings": {
+    "三通道vs纯向量": "0.750 vs 0.750 (+-0%)",
+    "三通道vs双通道": "0.750 vs 0.748 (+0%)",
+    "MRR": "0.925",
+    "P99": "72.4ms"
+  },
+  "baseline_comparison": {
+    "note": "对标GraphRAG-Bench论文中的LightRAG/HippoRAG2/fast-graphrag",
+    "our_embedding": "all-MiniLM-L6-v2 (384dim)",
+    "baseline_embedding": "bge-large-en-v1.5 (1024dim) / contriever (768dim)",
+    "caveat": "embedding模型不同, 绝对值不完全可比, 但趋势可比"
+  }
+}
