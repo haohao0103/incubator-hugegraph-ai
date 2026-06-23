@@ -1,0 +1,157 @@
+{
+  "poc_name": "HugRAG_Hierarchical_Causal_KG_RAG",
+  "date": "2026-06-23",
+  "inspiration": "HugRAG (ICML 2026, arXiv:2602.05143) — Hierarchical Causal Knowledge Graph Design for RAG",
+  "config": {
+    "hugegraph_url": "http://127.0.0.1:8080",
+    "graph": "poc_supply_chain",
+    "hierarchy": [
+      "L1_Fact",
+      "L2_Schema",
+      "L3_Causal"
+    ],
+    "causal_chains": [
+      "supplies→used_in→produced_at",
+      "supplies→used_in",
+      "supplies"
+    ]
+  },
+  "system_stats": {
+    "vertices": 414,
+    "edges": 552,
+    "causal_paths": 787,
+    "schema_labels": 3
+  },
+  "test_results": [
+    {
+      "test_num": 1,
+      "question": "如果供应商S001出问题，最终会影响哪些产品和设施？",
+      "type": "causal",
+      "passed": true,
+      "intent": "causal",
+      "l1_count": 1,
+      "l2_count": 1,
+      "l3_count": 1,
+      "fused_count": 10,
+      "latency_ms": 2.3937225341796875,
+      "top_entity": "S001",
+      "top_score": 0.13333333333333333
+    },
+    {
+      "test_num": 2,
+      "question": "供应链中有哪些类型的实体？它们的结构关系是什么？",
+      "type": "schema",
+      "passed": true,
+      "intent": "schema",
+      "l1_count": 414,
+      "l2_count": 3,
+      "l3_count": 379,
+      "fused_count": 10,
+      "latency_ms": 51.00584030151367,
+      "top_entity": "供应商D0",
+      "top_score": 0.48
+    },
+    {
+      "test_num": 3,
+      "question": "供应商S005的风险评分和供货关系是什么？",
+      "type": "fact",
+      "passed": true,
+      "intent": "fact",
+      "l1_count": 1,
+      "l2_count": 1,
+      "l3_count": 1,
+      "fused_count": 10,
+      "latency_ms": 1.5299320220947266,
+      "top_entity": "S005",
+      "top_score": 0.13333333333333333
+    },
+    {
+      "test_num": 4,
+      "question": "哪些零件有关键供应商依赖（单点故障）？",
+      "type": "causal",
+      "passed": true,
+      "intent": "causal",
+      "l1_count": 218,
+      "l2_count": 1,
+      "l3_count": 205,
+      "fused_count": 10,
+      "latency_ms": 21.895885467529297,
+      "top_entity": "零件Q0-16",
+      "top_score": 0.3733333333333333
+    },
+    {
+      "test_num": 5,
+      "question": "设施F001停产会影响哪些产品？",
+      "type": "causal",
+      "passed": true,
+      "intent": "causal",
+      "l1_count": 0,
+      "l2_count": 0,
+      "l3_count": 0,
+      "fused_count": 0,
+      "latency_ms": 0.4630088806152344,
+      "top_entity": "",
+      "top_score": 0
+    }
+  ],
+  "metrics": {
+    "pass_rate": 1.0,
+    "passed": 5,
+    "total": 5,
+    "avg_latency_ms": 15.457677841186523,
+    "avg_l1_count": 126.8,
+    "avg_l2_count": 1.2,
+    "avg_l3_count": 117.2,
+    "recall_at_1": 0.8,
+    "recall_at_3": 0.8,
+    "mrr": 0.8
+  },
+  "assertions": [
+    {
+      "name": "graph_loaded",
+      "passed": true,
+      "detail": "414 vertices"
+    },
+    {
+      "name": "causal_layer_built",
+      "passed": true,
+      "detail": "787 causal paths"
+    },
+    {
+      "name": "schema_layer_built",
+      "passed": true,
+      "detail": "3 labels"
+    },
+    {
+      "name": "l1_fact_retrieval",
+      "passed": true,
+      "detail": "avg 126.8 results"
+    },
+    {
+      "name": "l2_schema_retrieval",
+      "passed": true,
+      "detail": "avg 1.2 results"
+    },
+    {
+      "name": "l3_causal_retrieval",
+      "passed": true,
+      "detail": "avg 117.2 results"
+    },
+    {
+      "name": "hierarchical_fusion",
+      "passed": true,
+      "detail": "fusion works"
+    },
+    {
+      "name": "real_hugegraph",
+      "passed": true,
+      "detail": "All data from HugeGraph REST API"
+    }
+  ],
+  "summary": {
+    "total_assertions": 8,
+    "passed_assertions": 8,
+    "pass_rate": 1.0
+  },
+  "assertions_pass_rate": 1.0
+}
