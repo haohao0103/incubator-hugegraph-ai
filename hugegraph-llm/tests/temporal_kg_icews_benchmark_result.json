@@ -1,0 +1,87 @@
+{
+  "status": "PASS",
+  "benchmark": {
+    "name": "ICEWS14-Agent-Memory-v1",
+    "source": "ICEWS14 (HuggingFace: linxy/ICEWS14)",
+    "dataset_type": "temporal_knowledge_graph",
+    "facts_loaded": 500
+  },
+  "metrics": {
+    "PointQuery": {
+      "Recall@5": 0.25,
+      "MRR": 0.1725,
+      "Hit@1": 0.15,
+      "AvgLatency_ms": 248.72,
+      "P95Latency_ms": 413.26
+    },
+    "RangeQuery": {
+      "TemporalAccuracy": 0.5,
+      "AvgLatency_ms": 12.31
+    },
+    "ConflictDetection": {
+      "ConflictAccuracy": 1.0,
+      "AvgLatency_ms": 12.6
+    }
+  },
+  "summary": {
+    "total_phases": 8,
+    "passed": 8,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "duration_s": 8.2
+  },
+  "timing": {
+    "total_duration_s": 8.2,
+    "phases": [
+      {
+        "n": "P0: Environment Check",
+        "ok": true,
+        "ms": 2.0
+      },
+      {
+        "n": "P1: Schema Creation (REST)",
+        "ok": true,
+        "ms": 46.0
+      },
+      {
+        "n": "P2: Load Benchmark",
+        "ok": true,
+        "ms": 0.0
+      },
+      {
+        "n": "P7: Write to HugeGraph (REST)",
+        "ok": true,
+        "ms": 2946.0
+      },
+      {
+        "n": "P8: Read-back Verify",
+        "ok": true,
+        "ms": 25.0
+      },
+      {
+        "n": "P10: Point Query Evaluation",
+        "ok": true,
+        "ms": 4975.0
+      },
+      {
+        "n": "P11: Range Query Evaluation",
+        "ok": true,
+        "ms": 123.0
+      },
+      {
+        "n": "P12: Conflict Detection Evaluation",
+        "ok": true,
+        "ms": 126.0
+      }
+    ]
+  },
+  "infra": {
+    "host": "http://127.0.0.1:8080",
+    "ver": "1.7.0",
+    "llm": "mimo-v2.5-pro"
+  },
+  "llm": {
+    "n": 0,
+    "tk": 0
+  }
+}

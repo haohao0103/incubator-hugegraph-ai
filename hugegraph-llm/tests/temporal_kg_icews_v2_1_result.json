@@ -1,0 +1,149 @@
+{
+  "status": "PASS",
+  "benchmark": {
+    "name": "ICEWS14-Agent-Memory-v2.1",
+    "source": "ICEWS14 (HuggingFace: linxy/ICEWS14)",
+    "dataset_type": "temporal_knowledge_graph",
+    "facts_loaded": 500
+  },
+  "metrics": {
+    "PointQuery": {
+      "Recall@5": 0.55,
+      "MRR": 0.35,
+      "Hit@1": 0.2,
+      "AvgLatency_ms": 78.47,
+      "P95Latency_ms": 191.32
+    },
+    "RangeQuery": {
+      "TemporalAccuracy": 0.6,
+      "AvgLatency_ms": 45.9
+    },
+    "ConflictDetection": {
+      "ConflictAccuracy": 0.2,
+      "AvgLatency_ms": 32.23
+    },
+    "CommunityDetection": {
+      "CommunityCoverage": 1.0,
+      "TotalFacts": 2000,
+      "FactsWithCommunity": 2000
+    },
+    "EdgeInvalidation": {
+      "SupersedesEdges": 58,
+      "InvalidatedFacts": 0,
+      "InvalidationRate": 0.0
+    },
+    "AgentScenario": {
+      "query": "What did China do in March 2014?",
+      "target_month": "2014-03",
+      "vector_hits": 5,
+      "temporal_hits": 316,
+      "sample_facts": [
+        {
+          "subject": "Iran",
+          "predicate": "Consult",
+          "object": "Japan",
+          "timestamp": "2014-03-01",
+          "confidence": 0.95
+        },
+        {
+          "subject": "Iran",
+          "predicate": "Consult",
+          "object": "Japan",
+          "timestamp": "2014-03-04",
+          "confidence": 0.95
+        },
+        {
+          "subject": "Iran",
+          "predicate": "Consult",
+          "object": "Japan",
+          "timestamp": "2014-03-05",
+          "confidence": 0.95
+        }
+      ],
+      "latency_ms": 189.34,
+      "scenario_pass": true
+    }
+  },
+  "summary": {
+    "total_phases": 12,
+    "passed": 12,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "duration_s": 17.7
+  },
+  "timing": {
+    "total_duration_s": 17.7,
+    "phases": [
+      {
+        "n": "P0: Environment Check",
+        "ok": true,
+        "ms": 2.0
+      },
+      {
+        "n": "P1: Schema Creation (REST)",
+        "ok": true,
+        "ms": 69.0
+      },
+      {
+        "n": "P2: Load Benchmark",
+        "ok": true,
+        "ms": 0.0
+      },
+      {
+        "n": "P7: Write to HugeGraph (REST)",
+        "ok": true,
+        "ms": 11080.0
+      },
+      {
+        "n": "P8: Read-back Verify",
+        "ok": true,
+        "ms": 65.0
+      },
+      {
+        "n": "P10: Point Query Evaluation",
+        "ok": true,
+        "ms": 1571.0
+      },
+      {
+        "n": "P11: Range Query Evaluation",
+        "ok": true,
+        "ms": 460.0
+      },
+      {
+        "n": "P12: Conflict Detection Evaluation",
+        "ok": true,
+        "ms": 323.0
+      },
+      {
+        "n": "P14: Community Detection Evaluation",
+        "ok": true,
+        "ms": 31.0
+      },
+      {
+        "n": "P16: Run Edge Invalidation",
+        "ok": true,
+        "ms": 3812.0
+      },
+      {
+        "n": "P15: Edge Invalidation Evaluation",
+        "ok": true,
+        "ms": 106.0
+      },
+      {
+        "n": "P17: Agent Memory Scenario",
+        "ok": true,
+        "ms": 190.0
+      }
+    ]
+  },
+  "infra": {
+    "host": "http://127.0.0.1:8080",
+    "ver": "1.7.0",
+    "llm": "mimo-v2.5-pro",
+    "embedding": "sentence-transformers-all-MiniLM-L6-v2"
+  },
+  "llm": {
+    "n": 0,
+    "tk": 0
+  }
+}

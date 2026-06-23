@@ -1,0 +1,110 @@
+{
+  "poc_name": "Temporal Knowledge Graph Agent Memory",
+  "date": "2026-06-12",
+  "inspiration": {
+    "ATOM": "EACL 2026 Findings - Few-shot dynamic TKG construction",
+    "Graphiti": "Zep - Real-time temporal context graph for AI agents",
+    "AgentMemorySurvey": "arXiv:2602.05665 - Graph-based Agent Memory Taxonomy"
+  },
+  "system_stats": {
+    "total_facts": 10,
+    "episodic": 4,
+    "semantic": 6,
+    "valid_now": 9,
+    "vector_count": 10,
+    "bm25_count": 10,
+    "conflicts": 0,
+    "embed_method": "deterministic"
+  },
+  "test_results": {
+    "passed": 12,
+    "failed": 0,
+    "tests": [
+      {
+        "name": "TemporalInsertion",
+        "status": "PASS",
+        "detail": "10facts vec=10 bm25=10 epi=4 sem=6"
+      },
+      {
+        "name": "TimeDecayVariance",
+        "status": "PASS",
+        "detail": "range [0.2231, 1.0000]"
+      },
+      {
+        "name": "MemoryTypeSeparation",
+        "status": "PASS",
+        "detail": "epi=4 sem=6"
+      },
+      {
+        "name": "TimeDecayRanking",
+        "status": "PASS",
+        "detail": "top='alan' rrf=0.048147 decay=0.2231 ch=['vector', 'bm25', 'temporal']"
+      },
+      {
+        "name": "DecayCorrelation",
+        "status": "PASS",
+        "detail": "top3=0.4738 < bot2=0.7362"
+      },
+      {
+        "name": "ConflictDetection",
+        "status": "PASS",
+        "detail": "1 found: {'mutually_exclusive'} (ME=1)"
+      },
+      {
+        "name": "RRFFusion",
+        "status": "PASS",
+        "detail": "3/3 channels: {'vector': 0.016393, 'bm25': 0.016129, 'temporal': 0.016129} rrf=0.048652"
+      },
+      {
+        "name": "RRFMonotonic",
+        "status": "PASS",
+        "detail": "[0.0487, 0.0472, 0.0472, 0.0308, 0.0308]"
+      },
+      {
+        "name": "MultiChannelActive",
+        "status": "PASS",
+        "detail": "Neo4j query activated: ['bm25', 'temporal', 'vector']"
+      },
+      {
+        "name": "PastQuery_T20d",
+        "status": "PASS",
+        "detail": "LightRAG='Not yet integrated' ✓ (3r)"
+      },
+      {
+        "name": "ExpiredFiltering",
+        "status": "PASS",
+        "detail": "STILL APPEARS ✗"
+      },
+      {
+        "name": "EndToEndQA",
+        "status": "PASS",
+        "detail": "3/4 sub-tests passed"
+      }
+    ]
+  },
+  "conflicts": [
+    {
+      "conflict_type": "mutually_exclusive",
+      "fact_a_id": "fct_b984fb",
+      "fact_b_id": "fct_1ce402c",
+      "description": "'Mem0 graph_backend_support Neo4j, Memgraph, Neptune' vs 'Mem0 graph_backend_support Added HugeGraph adapter (PoC)'",
+      "resolution": "",
+      "resolved_at": ""
+    }
+  ],
+  "traversal": [
+    {
+      "from": "HugeGraph",
+      "rel": "deployed_version",
+      "to": "1.7.0",
+      "fid": "fct_130f684"
+    },
+    {
+      "from": "HugeGraph",
+      "rel": "supports_olap_engine",
+      "to": "Vermeer (60 billion edges traversed)",
+      "fid": "fct_1cdde0"
+    }
+  ],
+  "elapsed_sec": 1.13
+}

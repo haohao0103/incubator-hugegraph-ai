@@ -1,0 +1,83 @@
+{
+  "date": "2026-06-23",
+  "graph": "poc_supply_chain",
+  "data_scale": {
+    "vertices": 414,
+    "edges": 665
+  },
+  "questions": 20,
+  "ablation_results": {
+    "A0_纯向量": {
+      "recall@5": 0.36,
+      "mrr": 0.7833,
+      "precision@5": 0.6583,
+      "avg_latency_ms": 135.09,
+      "p99_latency_ms": 954.89,
+      "easy_recall@5": 0.34,
+      "medium_recall@5": 0.2667,
+      "hard_recall@5": 0.55
+    },
+    "A1_纯BM25": {
+      "recall@5": 0.2,
+      "mrr": 0.3667,
+      "precision@5": 0.2275,
+      "avg_latency_ms": 0.9,
+      "p99_latency_ms": 1.25,
+      "easy_recall@5": 0.18,
+      "medium_recall@5": 0.3667,
+      "hard_recall@5": 0.0
+    },
+    "A2_纯图遍历": {
+      "recall@5": 0.03,
+      "mrr": 0.1,
+      "precision@5": 0.0833,
+      "avg_latency_ms": 0.51,
+      "p99_latency_ms": 1.15,
+      "easy_recall@5": 0.04,
+      "medium_recall@5": 0.0333,
+      "hard_recall@5": 0.0
+    },
+    "A3_向量+BM25": {
+      "recall@5": 0.4,
+      "mrr": 0.8333,
+      "precision@5": 0.645,
+      "avg_latency_ms": 25.04,
+      "p99_latency_ms": 27.36,
+      "easy_recall@5": 0.38,
+      "medium_recall@5": 0.3333,
+      "hard_recall@5": 0.55
+    },
+    "A4_向量+图": {
+      "recall@5": 0.36,
+      "mrr": 0.7833,
+      "precision@5": 0.6292,
+      "avg_latency_ms": 26.02,
+      "p99_latency_ms": 30.18,
+      "easy_recall@5": 0.34,
+      "medium_recall@5": 0.2667,
+      "hard_recall@5": 0.55
+    },
+    "A5_三通道融合": {
+      "recall@5": 0.41,
+      "mrr": 0.8333,
+      "precision@5": 0.6542,
+      "avg_latency_ms": 27.67,
+      "p99_latency_ms": 31.68,
+      "easy_recall@5": 0.4,
+      "medium_recall@5": 0.3333,
+      "hard_recall@5": 0.55
+    }
+  },
+  "key_findings": {
+    "三通道vs纯向量": "0.410 vs 0.360 (提升14%)",
+    "三通道vs双通道": "0.410 vs 0.400 (提升2%)",
+    "图通道增益判定": "✅ 有增益",
+    "P99延迟": "31.7ms"
+  },
+  "go_nogo_check": {
+    "Recall@5>0.7": false,
+    "MRR>0.6": true,
+    "P99<500ms": true,
+    "A5>A3(图通道增益)": true
+  }
+}

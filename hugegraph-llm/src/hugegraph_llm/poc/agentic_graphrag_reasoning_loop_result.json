@@ -1,0 +1,215 @@
+{
+  "poc_name": "agentic_graphrag_reasoning_loop",
+  "timestamp": "2026-06-16T11:49:13.516743",
+  "total_tests": 5,
+  "passed": 4,
+  "failed": 1,
+  "accuracy": 0.8,
+  "avg_rounds": 2.0,
+  "avg_latency_ms": 9.54,
+  "test_details": [
+    {
+      "test_num": 1,
+      "question": "If supplier S001 fails, which parts would be affected?",
+      "query_type": "cascade_analysis",
+      "difficulty": "medium",
+      "passed": true,
+      "latency_ms": 16.23,
+      "rounds": 2,
+      "steps": [
+        {
+          "round_num": 1,
+          "action": "refine",
+          "query_or_plan": "1. Find affected entity 2. K-neighbor traversal to find connected parts/suppliers 3. Trace dependency chains",
+          "retrieved_context": "Vertex: supplier:1131553393601413120 | Props: {\"entity_name\": \"S001\", \"entity_type\": \"Tier_2\", \"country\": \"USA\", \"tier\": \"tier_2\", \"reliability\": 0.76, \"risk_score\": 0.25}\nVertex: supplier:1131553393601413120 | Props: {\"entity_name\": \"S001\", \"entity_type\": \"Tier_2\", \"country\": \"USA\", \"tier\": \"tier_2\", \"reliability\": 0.76, \"risk_score\": 0.25}\nSupplier S012 type Tier_1 country China Taiwan risk_score 0.4\nPart P011 category Camera Module unit_cost 3.8USD is_critical False\nSupplier S001 type Tier_2 country USA risk_score 0.25\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P009 category Display unit_cost 3.2USD is_critical False",
+          "confidence": 0.4,
+          "thinking": "Need more specific information from the graph",
+          "graph_queries": [
+            "S001",
+            "S001"
+          ],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 2
+        },
+        {
+          "round_num": 2,
+          "action": "answer",
+          "query_or_plan": "",
+          "retrieved_context": "Supplier S018 type Tier_1 country South Korea risk_score 0.55\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P004 category PCB unit_cost 1.7USD is_critical True\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nSupplier S019 type Tier_2 country China Taiwan risk_score 0.7",
+          "confidence": 0.8,
+          "thinking": "Sufficient evidence gathered through multi-hop graph traversal",
+          "graph_queries": [],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 0
+        }
+      ]
+    },
+    {
+      "test_num": 2,
+      "question": "Does part P001 have a single point of failure risk? Is there only one supplier?",
+      "query_type": "single_point",
+      "difficulty": "easy",
+      "passed": true,
+      "latency_ms": 8.06,
+      "rounds": 2,
+      "steps": [
+        {
+          "round_num": 1,
+          "action": "refine",
+          "query_or_plan": "1. Find affected entity 2. K-neighbor traversal to find connected parts/suppliers 3. Trace dependency chains",
+          "retrieved_context": "Vertex: part:1131553394008260608 | Props: {\"entity_name\": \"P001\", \"entity_type\": \"Display\", \"category\": \"Display\", \"unit_cost\": 0.8, \"is_critical\": false}\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P001 category Display unit_cost 0.8USD is_critical False\nPart P011 category Camera Module unit_cost 3.8USD is_critical False\nSupplier S016 type Tier_2 country Germany risk_score 0.25\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1",
+          "confidence": 0.4,
+          "thinking": "Need more specific information from the graph",
+          "graph_queries": [
+            "P001"
+          ],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 1
+        },
+        {
+          "round_num": 2,
+          "action": "answer",
+          "query_or_plan": "",
+          "retrieved_context": "Supplier S018 type Tier_1 country South Korea risk_score 0.55\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P004 category PCB unit_cost 1.7USD is_critical True\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nSupplier S019 type Tier_2 country China Taiwan risk_score 0.7",
+          "confidence": 0.8,
+          "thinking": "Sufficient evidence gathered through multi-hop graph traversal",
+          "graph_queries": [],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 0
+        }
+      ]
+    },
+    {
+      "test_num": 3,
+      "question": "If facility F001 shuts down, which parts production would be impacted?",
+      "query_type": "cascade_analysis",
+      "difficulty": "medium",
+      "passed": false,
+      "latency_ms": 2.86,
+      "rounds": 2,
+      "steps": [
+        {
+          "round_num": 1,
+          "action": "refine",
+          "query_or_plan": "1. Find affected entity 2. K-neighbor traversal to find connected parts/suppliers 3. Trace dependency chains",
+          "retrieved_context": "Facility F003 type Assembly region Stuttgart\nFacility F001 type Assembly region Shanghai\nPart P010 category Battery unit_cost 3.5USD is_critical False\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P015 category Connector unit_cost 5.0USD is_critical False",
+          "confidence": 0.4,
+          "thinking": "Need more specific information from the graph",
+          "graph_queries": [
+            "F001"
+          ],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 0
+        },
+        {
+          "round_num": 2,
+          "action": "answer",
+          "query_or_plan": "",
+          "retrieved_context": "Supplier S018 type Tier_1 country South Korea risk_score 0.55\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P004 category PCB unit_cost 1.7USD is_critical True\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nSupplier S019 type Tier_2 country China Taiwan risk_score 0.7",
+          "confidence": 0.8,
+          "thinking": "Sufficient evidence gathered through multi-hop graph traversal",
+          "graph_queries": [],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 0
+        }
+      ]
+    },
+    {
+      "test_num": 4,
+      "question": "How many parts in the supply chain have single point of failure risk?",
+      "query_type": "general",
+      "difficulty": "hard",
+      "passed": true,
+      "latency_ms": 7.64,
+      "rounds": 2,
+      "steps": [
+        {
+          "round_num": 1,
+          "action": "refine",
+          "query_or_plan": "1. Find affected entity 2. K-neighbor traversal to find connected parts/suppliers 3. Trace dependency chains",
+          "retrieved_context": "Vertex: supplier:1131553393601413120 | Props: {\"entity_name\": \"S001\", \"entity_type\": \"Tier_2\", \"country\": \"USA\", \"tier\": \"tier_2\", \"reliability\": 0.76, \"risk_score\": 0.25}\nSupplier S018 type Tier_1 country South Korea risk_score 0.55\nPart P001 category Display unit_cost 0.8USD is_critical False\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nSupplier S020 type Tier_3 country Vietnam risk_score 0.1",
+          "confidence": 0.4,
+          "thinking": "Need more specific information from the graph",
+          "graph_queries": [
+            "S001"
+          ],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 1
+        },
+        {
+          "round_num": 2,
+          "action": "answer",
+          "query_or_plan": "",
+          "retrieved_context": "Supplier S018 type Tier_1 country South Korea risk_score 0.55\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P004 category PCB unit_cost 1.7USD is_critical True\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nSupplier S019 type Tier_2 country China Taiwan risk_score 0.7",
+          "confidence": 0.8,
+          "thinking": "Sufficient evidence gathered through multi-hop graph traversal",
+          "graph_queries": [],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 0
+        }
+      ]
+    },
+    {
+      "test_num": 5,
+      "question": "What is the risk score of supplier S005 and which parts does it supply?",
+      "query_type": "multi_hop",
+      "difficulty": "easy",
+      "passed": true,
+      "latency_ms": 12.92,
+      "rounds": 2,
+      "steps": [
+        {
+          "round_num": 1,
+          "action": "refine",
+          "query_or_plan": "1. Find affected entity 2. K-neighbor traversal to find connected parts/suppliers 3. Trace dependency chains",
+          "retrieved_context": "Vertex: supplier:1131553393676910592 | Props: {\"entity_name\": \"S005\", \"entity_type\": \"Tier_3\", \"country\": \"China Taiwan\", \"tier\": \"tier_3\", \"reliability\": 0.7, \"risk_score\": 0.1}\nVertex: supplier:1131553393676910592 | Props: {\"entity_name\": \"S005\", \"entity_type\": \"Tier_3\", \"country\": \"China Taiwan\", \"tier\": \"tier_3\", \"reliability\": 0.7, \"risk_score\": 0.1}\nSupplier S016 type Tier_2 country Germany risk_score 0.25\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nFacility F003 type Assembly region Stuttgart\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nSupplier S019 type Tier_2 country China Taiwan risk_score 0.7",
+          "confidence": 0.4,
+          "thinking": "Need more specific information from the graph",
+          "graph_queries": [
+            "S005",
+            "S005"
+          ],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 2
+        },
+        {
+          "round_num": 2,
+          "action": "answer",
+          "query_or_plan": "",
+          "retrieved_context": "Supplier S018 type Tier_1 country South Korea risk_score 0.55\nSupplier S004 type Tier_2 country South Korea risk_score 0.7\nPart P004 category PCB unit_cost 1.7USD is_critical True\nSupplier S005 type Tier_3 country China Taiwan risk_score 0.1\nSupplier S019 type Tier_2 country China Taiwan risk_score 0.7",
+          "confidence": 0.8,
+          "thinking": "Sufficient evidence gathered through multi-hop graph traversal",
+          "graph_queries": [],
+          "vector_hits": 5,
+          "bm25_hits": 5,
+          "graph_hits": 0
+        }
+      ]
+    }
+  ],
+  "graph_stats": {
+    "vertices": 0,
+    "edges": 0,
+    "suppliers": 20,
+    "parts": 15,
+    "facilities": 3,
+    "vector_docs": 38,
+    "bm25_docs": 38
+  },
+  "backend_stats": {
+    "vector_backend": "faiss",
+    "fulltext_backend": "bm25",
+    "graph_storage": "HugeGraph REST API (http://127.0.0.1:8080)",
+    "llm": "rule-based fallback",
+    "graph_space": "poc_supply_chain"
+  }
+}

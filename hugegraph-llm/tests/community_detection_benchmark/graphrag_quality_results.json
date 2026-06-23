@@ -1,0 +1,572 @@
+[
+  {
+    "dataset": "lfr_small_easy",
+    "algorithm": "louvain",
+    "num_nodes": 1000,
+    "num_edges": 2717,
+    "num_communities": 44,
+    "modularity": 0.8716122225023298,
+    "l2_structure": {
+      "avg_community_size": 22.727272727272727,
+      "size_cv": 0.2975903224232938,
+      "size_gini": 0.1070909090909091,
+      "avg_internal_density": 0.2392535009920353,
+      "avg_external_density": 0.000577465281927878,
+      "density_ratio": 414.3166844477356,
+      "avg_conductance": 0.10371020897874832,
+      "avg_cut_ratio": 0.000577465281927878,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 22.727272727272727,
+      "relationship_density": 0.23815944290772573,
+      "cross_community_ratio": 0.10379094589620906,
+      "community_richness": 0.8042363636363636,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.23815944290772573,
+      "semantic_coherence": 0.8962090541037909
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.7924181082075819,
+      "information_coverage": 0.322,
+      "granularity_score": 0.4545454545454546,
+      "query_answerability": 0.70757997791682
+    },
+    "overall_score": 0.8072113100048343,
+    "grade": "A"
+  },
+  {
+    "dataset": "lfr_small_easy",
+    "algorithm": "leiden",
+    "num_nodes": 1000,
+    "num_edges": 2717,
+    "num_communities": 46,
+    "modularity": 0.8754809783517917,
+    "l2_structure": {
+      "avg_community_size": 21.73913043478261,
+      "size_cv": 0.2558358848949849,
+      "size_gini": 0.073,
+      "avg_internal_density": 0.05340713824695518,
+      "avg_external_density": 0.004480432761955447,
+      "density_ratio": 11.920084751734136,
+      "avg_conductance": 0.8040526328885688,
+      "avg_cut_ratio": 0.004480432761955447,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 21.73913043478261,
+      "relationship_density": 0.07675293305728088,
+      "cross_community_ratio": 0.8030916451969083,
+      "community_richness": 0.8085347826086957,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.07675293305728088,
+      "semantic_coherence": 0.19690835480309166
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.28,
+      "granularity_score": 0.4347826086956522,
+      "query_answerability": 0.48947826086956525
+    },
+    "overall_score": 0.6484450523228998,
+    "grade": "C"
+  },
+  {
+    "dataset": "lfr_small_medium",
+    "algorithm": "louvain",
+    "num_nodes": 1000,
+    "num_edges": 2816,
+    "num_communities": 25,
+    "modularity": 0.6507397486158638,
+    "l2_structure": {
+      "avg_community_size": 40.0,
+      "size_cv": 0.30757112998459396,
+      "size_gini": 0.17168,
+      "avg_internal_density": 0.1122397962015162,
+      "avg_external_density": 0.001787318207362773,
+      "density_ratio": 62.79788105953918,
+      "avg_conductance": 0.30540418994365104,
+      "avg_cut_ratio": 0.001787318207362773,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 40.0,
+      "relationship_density": 0.1631674583021288,
+      "cross_community_ratio": 0.3053977272727273,
+      "community_richness": 0.888496,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1631674583021288,
+      "semantic_coherence": 0.6946022727272727
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.3892045454545454,
+      "information_coverage": 0.514,
+      "granularity_score": 0.8,
+      "query_answerability": 0.6595613636363638
+    },
+    "overall_score": 0.7505563746431465,
+    "grade": "A"
+  },
+  {
+    "dataset": "lfr_small_medium",
+    "algorithm": "leiden",
+    "num_nodes": 1000,
+    "num_edges": 2816,
+    "num_communities": 28,
+    "modularity": 0.6653022450849042,
+    "l2_structure": {
+      "avg_community_size": 35.714285714285715,
+      "size_cv": 0.2951745246460134,
+      "size_gini": 0.15892857142857142,
+      "avg_internal_density": 0.012460825257584013,
+      "avg_external_density": 0.005380758936288089,
+      "density_ratio": 2.315811840881335,
+      "avg_conductance": 0.925325863410988,
+      "avg_cut_ratio": 0.005380758936288089,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 35.714285714285715,
+      "relationship_density": 0.014117456269711908,
+      "cross_community_ratio": 0.9197443181818182,
+      "community_richness": 0.8666071428571429,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.014117456269711908,
+      "semantic_coherence": 0.08025568181818177
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.453,
+      "granularity_score": 0.7142857142857143,
+      "query_answerability": 0.5520285714285714
+    },
+    "overall_score": 0.6128207066511492,
+    "grade": "C"
+  },
+  {
+    "dataset": "lfr_small_hard",
+    "algorithm": "louvain",
+    "num_nodes": 1000,
+    "num_edges": 2917,
+    "num_communities": 19,
+    "modularity": 0.4653841999819249,
+    "l2_structure": {
+      "avg_community_size": 52.63157894736842,
+      "size_cv": 0.32579441370287493,
+      "size_gini": 0.18221052631578946,
+      "avg_internal_density": 0.06383566139647992,
+      "avg_external_density": 0.0029545179754681553,
+      "density_ratio": 21.60611711504815,
+      "avg_conductance": 0.4827602109810105,
+      "avg_cut_ratio": 0.0029545179754681553,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 52.63157894736842,
+      "relationship_density": 0.07763792071313172,
+      "cross_community_ratio": 0.4758313335618786,
+      "community_richness": 0.9453368421052633,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.07763792071313172,
+      "semantic_coherence": 0.5241686664381213
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.655,
+      "granularity_score": 0.95,
+      "query_answerability": 0.616
+    },
+    "overall_score": 0.6989638967014415,
+    "grade": "B"
+  },
+  {
+    "dataset": "lfr_small_hard",
+    "algorithm": "leiden",
+    "num_nodes": 1000,
+    "num_edges": 2917,
+    "num_communities": 18,
+    "modularity": 0.4989695481983605,
+    "l2_structure": {
+      "avg_community_size": 55.55555555555556,
+      "size_cv": 0.1284367548640186,
+      "size_gini": 0.07055555555555555,
+      "avg_internal_density": 0.007300374369109265,
+      "avg_external_density": 0.005737116788453504,
+      "density_ratio": 1.272481394104085,
+      "avg_conductance": 0.9311184353351325,
+      "avg_cut_ratio": 0.005737116788453504,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 55.55555555555556,
+      "relationship_density": 0.005544198599754155,
+      "cross_community_ratio": 0.9290366815221117,
+      "community_richness": 0.9788333333333334,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.005544198599754155,
+      "semantic_coherence": 0.07096331847788828
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.603,
+      "granularity_score": 0.9,
+      "query_answerability": 0.6006
+    },
+    "overall_score": 0.619426778403558,
+    "grade": "C"
+  },
+  {
+    "dataset": "lfr_medium_easy",
+    "algorithm": "louvain",
+    "num_nodes": 10000,
+    "num_edges": 26916,
+    "num_communities": 120,
+    "modularity": 0.8986181588736929,
+    "l2_structure": {
+      "avg_community_size": 83.33333333333333,
+      "size_cv": 0.3339556856829959,
+      "size_gini": 0.18476666666666666,
+      "avg_internal_density": 0.0669885390829844,
+      "avg_external_density": 4.949978439740104e-05,
+      "density_ratio": 1353.30971434497,
+      "avg_conductance": 0.09104694885467392,
+      "avg_cut_ratio": 4.949978439740104e-05,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 83.33333333333333,
+      "relationship_density": 0.21270110231041575,
+      "cross_community_ratio": 0.09213850497845148,
+      "community_richness": 0.9445700000000001,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.21270110231041575,
+      "semantic_coherence": 0.9078614950215486
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.815722990043097,
+      "information_coverage": 0.1344,
+      "granularity_score": 0.6,
+      "query_answerability": 0.6915968970129291
+    },
+    "overall_score": 0.8194284088328566,
+    "grade": "A"
+  },
+  {
+    "dataset": "lfr_medium_easy",
+    "algorithm": "leiden",
+    "num_nodes": 10000,
+    "num_edges": 26916,
+    "num_communities": 117,
+    "modularity": 0.89900438548369,
+    "l2_structure": {
+      "avg_community_size": 85.47008547008546,
+      "size_cv": 0.3154963074268856,
+      "size_gini": 0.1693008547008547,
+      "avg_internal_density": 0.012856790907460693,
+      "avg_external_density": 0.0004439965283435396,
+      "density_ratio": 28.956962693890322,
+      "avg_conductance": 0.8180624377051058,
+      "avg_cut_ratio": 0.0004439965283435396,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 85.47008547008546,
+      "relationship_density": 0.06834973730746224,
+      "cross_community_ratio": 0.8198097785703671,
+      "community_richness": 0.9492097435897435,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.06834973730746224,
+      "semantic_coherence": 0.18019022142963292
+    },
+    "l4_rag": {
+      "simulated_recall": 0.9,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.1441,
+      "granularity_score": 0.585,
+      "query_answerability": 0.47732
+    },
+    "overall_score": 0.6582012462239001,
+    "grade": "B"
+  },
+  {
+    "dataset": "lfr_medium_medium",
+    "algorithm": "louvain",
+    "num_nodes": 10000,
+    "num_edges": 28144,
+    "num_communities": 71,
+    "modularity": 0.6869747670532058,
+    "l2_structure": {
+      "avg_community_size": 140.8450704225352,
+      "size_cv": 0.27520545052741957,
+      "size_gini": 0.15247605633802816,
+      "avg_internal_density": 0.031255779108711725,
+      "avg_external_density": 0.00016979904171974573,
+      "density_ratio": 184.07512075539015,
+      "avg_conductance": 0.2975630684081274,
+      "avg_cut_ratio": 0.00016979904171974573,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 140.8450704225352,
+      "relationship_density": 0.1577329762966914,
+      "cross_community_ratio": 0.29786100056850484,
+      "community_richness": 0.9542571830985915,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1577329762966914,
+      "semantic_coherence": 0.7021389994314952
+    },
+    "l4_rag": {
+      "simulated_recall": 0.75,
+      "simulated_precision": 0.4042779988629903,
+      "information_coverage": 0.2025,
+      "granularity_score": 0.355,
+      "query_answerability": 0.4972833996588971
+    },
+    "overall_score": 0.7027818074335254,
+    "grade": "B"
+  },
+  {
+    "dataset": "lfr_medium_medium",
+    "algorithm": "leiden",
+    "num_nodes": 10000,
+    "num_edges": 28144,
+    "num_communities": 69,
+    "modularity": 0.6979836813822908,
+    "l2_structure": {
+      "avg_community_size": 144.92753623188406,
+      "size_cv": 0.2919002911954698,
+      "size_gini": 0.1656840579710145,
+      "avg_internal_density": 0.0019877718710558634,
+      "avg_external_density": 0.0005431501074858006,
+      "density_ratio": 3.6597099837779727,
+      "avg_conductance": 0.9526215990584367,
+      "avg_cut_ratio": 0.0005431501074858006,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 144.92753623188406,
+      "relationship_density": 0.008841608243977913,
+      "cross_community_ratio": 0.9512862421830586,
+      "community_richness": 0.9502947826086956,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.008841608243977913,
+      "semantic_coherence": 0.04871375781694143
+    },
+    "l4_rag": {
+      "simulated_recall": 0.75,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.2132,
+      "granularity_score": 0.345,
+      "query_answerability": 0.40714000000000006
+    },
+    "overall_score": 0.5816544316884517,
+    "grade": "C"
+  },
+  {
+    "dataset": "amazon",
+    "algorithm": "louvain",
+    "num_nodes": 334863,
+    "num_edges": 925872,
+    "num_communities": 229,
+    "modularity": 0.9257887032864177,
+    "l2_structure": {
+      "avg_community_size": 1462.2838427947597,
+      "size_cv": 0.0,
+      "size_gini": 0.0,
+      "avg_internal_density": 0.9407207475763388,
+      "avg_external_density": 0.05927925242366115,
+      "density_ratio": 1.8814414951526777,
+      "avg_conductance": 0.05927925242366115,
+      "avg_cut_ratio": 0.05927925242366115,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 1462.2838427947597,
+      "relationship_density": 0.1,
+      "cross_community_ratio": 0.05927925242366115,
+      "community_richness": 1.0,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1,
+      "semantic_coherence": 0.9407207475763388
+    },
+    "l4_rag": {
+      "simulated_recall": 0.5,
+      "simulated_precision": 0.8814414951526777,
+      "information_coverage": 0.27159465214132344,
+      "granularity_score": 0.03419441540988499,
+      "query_answerability": 0.5221708205150565
+    },
+    "overall_score": 0.7400075039563834,
+    "grade": "B"
+  },
+  {
+    "dataset": "amazon",
+    "algorithm": "leiden",
+    "num_nodes": 334863,
+    "num_edges": 925872,
+    "num_communities": 304,
+    "modularity": 0.9300629922908016,
+    "l2_structure": {
+      "avg_community_size": 1101.5230263157894,
+      "size_cv": 0.0,
+      "size_gini": 0.0,
+      "avg_internal_density": 0.2255354951872397,
+      "avg_external_density": 0.7744645048127603,
+      "density_ratio": 0.4510709903744794,
+      "avg_conductance": 0.7744645048127603,
+      "avg_cut_ratio": 0.7744645048127603,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 1101.5230263157894,
+      "relationship_density": 0.1,
+      "cross_community_ratio": 0.7744645048127603,
+      "community_richness": 1.0,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1,
+      "semantic_coherence": 0.2255354951872397
+    },
+    "l4_rag": {
+      "simulated_recall": 0.5,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.25832952580607593,
+      "granularity_score": 0.04539345975810061,
+      "query_answerability": 0.2862052511370253
+    },
+    "overall_score": 0.5645669704866091,
+    "grade": "C"
+  },
+  {
+    "dataset": "dblp",
+    "algorithm": "louvain",
+    "num_nodes": 317080,
+    "num_edges": 1049866,
+    "num_communities": 202,
+    "modularity": 0.8208056169244592,
+    "l2_structure": {
+      "avg_community_size": 1569.7029702970297,
+      "size_cv": 0.0,
+      "size_gini": 0.0,
+      "avg_internal_density": 0.8420331737574128,
+      "avg_external_density": 0.15796682624258715,
+      "density_ratio": 1.6840663475148256,
+      "avg_conductance": 0.15796682624258715,
+      "avg_cut_ratio": 0.15796682624258715,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 1569.7029702970297,
+      "relationship_density": 0.1,
+      "cross_community_ratio": 0.15796682624258715,
+      "community_richness": 1.0,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1,
+      "semantic_coherence": 0.8420331737574128
+    },
+    "l4_rag": {
+      "simulated_recall": 0.5,
+      "simulated_precision": 0.6840663475148256,
+      "information_coverage": 0.3351488583322821,
+      "granularity_score": 0.03185617410503072,
+      "query_answerability": 0.47543529333140716
+    },
+    "overall_score": 0.6986531935832542,
+    "grade": "B"
+  },
+  {
+    "dataset": "dblp",
+    "algorithm": "leiden",
+    "num_nodes": 317080,
+    "num_edges": 1049866,
+    "num_communities": 225,
+    "modularity": 0.8256540167604284,
+    "l2_structure": {
+      "avg_community_size": 1409.2444444444445,
+      "size_cv": 0.0,
+      "size_gini": 0.0,
+      "avg_internal_density": 0.19454482762562075,
+      "avg_external_density": 0.8054551723743792,
+      "density_ratio": 0.3890896552512415,
+      "avg_conductance": 0.8054551723743792,
+      "avg_cut_ratio": 0.8054551723743792,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 1409.2444444444445,
+      "relationship_density": 0.1,
+      "cross_community_ratio": 0.8054551723743792,
+      "community_richness": 1.0,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1,
+      "semantic_coherence": 0.19454482762562075
+    },
+    "l4_rag": {
+      "simulated_recall": 0.5,
+      "simulated_precision": 0.1,
+      "information_coverage": 0.3129210293932131,
+      "granularity_score": 0.03548336224570259,
+      "query_answerability": 0.2961325421032129
+    },
+    "overall_score": 0.5531376276782239,
+    "grade": "C"
+  },
+  {
+    "dataset": "youtube",
+    "algorithm": "louvain",
+    "num_nodes": 1134890,
+    "num_edges": 2987624,
+    "num_communities": 5835,
+    "modularity": 0.7223995307492467,
+    "l2_structure": {
+      "avg_community_size": 194.49700085689804,
+      "size_cv": 0.0,
+      "size_gini": 0.0,
+      "avg_internal_density": 0.8320206960447499,
+      "avg_external_density": 0.16797930395525007,
+      "density_ratio": 1.6640413920894999,
+      "avg_conductance": 0.16797930395525007,
+      "avg_cut_ratio": 0.16797930395525007,
+      "fragmentation_score": 0.0
+    },
+    "l3_content": {
+      "entity_coverage": 1.0,
+      "avg_entities_per_comm": 194.49700085689804,
+      "relationship_density": 0.1,
+      "cross_community_ratio": 0.16797930395525007,
+      "community_richness": 1.0,
+      "isolated_node_ratio": 0.0,
+      "avg_clustering_coeff": 0.1,
+      "semantic_coherence": 0.8320206960447499
+    },
+    "l4_rag": {
+      "simulated_recall": 0.75,
+      "simulated_precision": 0.6640413920894999,
+      "information_coverage": 0.6714307113464741,
+      "granularity_score": 0.25708243380182405,
+      "query_answerability": 0.6592068032763272
+    },
+    "overall_score": 0.7478725732304758,
+    "grade": "B"
+  }
+]

@@ -1,0 +1,107 @@
+{
+  "status": "PASS",
+  "version": "v2.2",
+  "benchmark": {
+    "name": "ICEWS14-Agent-Memory-v2.2",
+    "source": "ICEWS14 (HuggingFace: linxy/ICEWS14)",
+    "dataset_type": "temporal_knowledge_graph",
+    "facts_loaded": 2000
+  },
+  "metrics": {
+    "PointQuery_RRF": {},
+    "RangeQuery": {},
+    "ConflictDetection": {},
+    "CommunityDetection": {},
+    "EdgeInvalidation": {
+      "SupersedesEdges": 58,
+      "InvalidatedFacts": 0,
+      "FactsWithValidUntil": 0,
+      "InvalidationRate": 0.0,
+      "TotalFacts": 2019
+    },
+    "AgentScenario": {}
+  },
+  "summary": {
+    "total_phases": 12,
+    "passed": 12,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "duration_s": 26.8
+  },
+  "timing": {
+    "total_duration_s": 26.8,
+    "phases": [
+      {
+        "n": "P0: Environment Check",
+        "ok": true,
+        "ms": 3.0
+      },
+      {
+        "n": "P1: Schema Creation (REST)",
+        "ok": true,
+        "ms": 85.0
+      },
+      {
+        "n": "P2: Load Benchmark",
+        "ok": true,
+        "ms": 0.0
+      },
+      {
+        "n": "P7: Write to HugeGraph (REST)",
+        "ok": true,
+        "ms": 13251.0
+      },
+      {
+        "n": "P8: Read-back Verify",
+        "ok": true,
+        "ms": 77.0
+      },
+      {
+        "n": "P10: Point Query Eval (RRF 3-ch)",
+        "ok": true,
+        "ms": 1547.0
+      },
+      {
+        "n": "P11: Range Query Eval (decay)",
+        "ok": true,
+        "ms": 421.0
+      },
+      {
+        "n": "P12: Conflict Detection Eval",
+        "ok": true,
+        "ms": 398.0
+      },
+      {
+        "n": "P14: Community Detection Eval",
+        "ok": true,
+        "ms": 40.0
+      },
+      {
+        "n": "P16: Run Edge Invalidation (+Synthetic)",
+        "ok": true,
+        "ms": 10593.0
+      },
+      {
+        "n": "P15: Edge Invalidation Evaluation",
+        "ok": true,
+        "ms": 75.0
+      },
+      {
+        "n": "P17: Agent Memory Scenario (multi-turn)",
+        "ok": true,
+        "ms": 341.0
+      }
+    ]
+  },
+  "infra": {
+    "host": "http://127.0.0.1:8080",
+    "ver": "1.7.0",
+    "llm": "mimo-v2.5-pro",
+    "embedding": "sentence-transformers-all-MiniLM-L6-v2",
+    "fusion": "RRF-3ch(Vector+BM25+Graph)"
+  },
+  "llm": {
+    "n": 0,
+    "tk": 0
+  }
+}
