@@ -1,0 +1,243 @@
+{
+  "poc_name": "TechRAG_Evidence_Gated_Agentic_RAG",
+  "date": "2026-06-23",
+  "inspiration": "TechRAG (arXiv:2606.01613) — Evidence-Gated Multimodal Agentic RAG for Technical Literature Reasoning",
+  "config": {
+    "hugegraph_url": "http://127.0.0.1:8080",
+    "graph": "poc_supply_chain",
+    "pipeline_stages": 11,
+    "rubric_dimensions": 5,
+    "rubric_total": 100
+  },
+  "rubric": {
+    "retrieval_confidence": {
+      "weight": 40,
+      "description": "基于交叉编码器重排序分数"
+    },
+    "answer_specificity": {
+      "weight": 25,
+      "description": "是否包含具体数据/方法/结果"
+    },
+    "source_diversity": {
+      "weight": 15,
+      "description": "多少独立来源贡献证据"
+    },
+    "metadata_completeness": {
+      "weight": 10,
+      "description": "是否包含标签/属性"
+    },
+    "recency_intent_fit": {
+      "weight": 10,
+      "description": "是否符合查询意图"
+    },
+    "damping": "max(min(retrieval_score/25, 1.0), 0.2)",
+    "thresholds": {
+      "STRONG": "80-100",
+      "MODERATE": "50-79",
+      "WEAK": "0-49"
+    }
+  },
+  "test_results": [
+    {
+      "test_num": 1,
+      "question": "供应商A0的风险评分和供货关系是什么？",
+      "passed": true,
+      "intent": "content",
+      "intent_confidence": 1.0,
+      "evidence_score": {
+        "total": 19.5,
+        "level": "WEAK",
+        "retrieval_confidence": 7.5,
+        "answer_specificity": 4.5,
+        "source_diversity": 1.5,
+        "metadata_completeness": 3.0,
+        "recency_intent_fit": 3.0,
+        "damping_factor": 0.3
+      },
+      "retrieval_count": 5,
+      "graph_evidence_count": 1,
+      "retry_count": 2,
+      "quality": {
+        "answered": true,
+        "has_citations": true,
+        "no_hallucination": true,
+        "issues": [],
+        "passed": true
+      },
+      "elapsed_ms": 175.2
+    },
+    {
+      "test_num": 2,
+      "question": "供应链中有多少供应商来自中国？",
+      "passed": true,
+      "intent": "bibliometric",
+      "intent_confidence": 0.5,
+      "evidence_score": {
+        "total": 38.7,
+        "level": "WEAK",
+        "retrieval_confidence": 16.7,
+        "answer_specificity": 10.0,
+        "source_diversity": 3.3,
+        "metadata_completeness": 6.7,
+        "recency_intent_fit": 2.0,
+        "damping_factor": 0.67
+      },
+      "retrieval_count": 5,
+      "graph_evidence_count": 20,
+      "retry_count": 2,
+      "quality": {
+        "answered": true,
+        "has_citations": true,
+        "no_hallucination": true,
+        "issues": [],
+        "passed": true
+      },
+      "elapsed_ms": 31.4
+    },
+    {
+      "test_num": 3,
+      "question": "风险评分最高的供应商是哪个？在哪个国家？",
+      "passed": true,
+      "intent": "trend",
+      "intent_confidence": 0.5,
+      "evidence_score": {
+        "total": 21.7,
+        "level": "WEAK",
+        "retrieval_confidence": 8.9,
+        "answer_specificity": 5.3,
+        "source_diversity": 1.8,
+        "metadata_completeness": 3.6,
+        "recency_intent_fit": 2.1,
+        "damping_factor": 0.36
+      },
+      "retrieval_count": 5,
+      "graph_evidence_count": 1,
+      "retry_count": 2,
+      "quality": {
+        "answered": true,
+        "has_citations": true,
+        "no_hallucination": true,
+        "issues": [],
+        "passed": true
+      },
+      "elapsed_ms": 27.1
+    },
+    {
+      "test_num": 4,
+      "question": "哪些零件是关键零件？",
+      "passed": true,
+      "intent": "bibliometric",
+      "intent_confidence": 0.5,
+      "evidence_score": {
+        "total": 21.2,
+        "level": "WEAK",
+        "retrieval_confidence": 10.0,
+        "answer_specificity": 6.0,
+        "source_diversity": 2.0,
+        "metadata_completeness": 2.0,
+        "recency_intent_fit": 1.2,
+        "damping_factor": 0.4
+      },
+      "retrieval_count": 5,
+      "graph_evidence_count": 20,
+      "retry_count": 2,
+      "quality": {
+        "answered": true,
+        "has_citations": true,
+        "no_hallucination": true,
+        "issues": [],
+        "passed": true
+      },
+      "elapsed_ms": 27.0
+    },
+    {
+      "test_num": 5,
+      "question": "供应商B1的供货关系和风险评分",
+      "passed": true,
+      "intent": "content",
+      "intent_confidence": 1.0,
+      "evidence_score": {
+        "total": 24.0,
+        "level": "WEAK",
+        "retrieval_confidence": 9.2,
+        "answer_specificity": 5.5,
+        "source_diversity": 1.8,
+        "metadata_completeness": 3.7,
+        "recency_intent_fit": 3.7,
+        "damping_factor": 0.37
+      },
+      "retrieval_count": 5,
+      "graph_evidence_count": 1,
+      "retry_count": 2,
+      "quality": {
+        "answered": true,
+        "has_citations": true,
+        "no_hallucination": true,
+        "issues": [],
+        "passed": true
+      },
+      "elapsed_ms": 28.0
+    }
+  ],
+  "metrics": {
+    "pass_rate": 1.0,
+    "passed": 5,
+    "total": 5,
+    "avg_evidence_score": 25.0,
+    "score_distribution": {
+      "STRONG": 0,
+      "MODERATE": 0,
+      "WEAK": 5
+    },
+    "intent_accuracy": 1.0,
+    "retry_rate": 1.0,
+    "avg_latency_ms": 57.7
+  },
+  "assertions": [
+    {
+      "name": "pipeline_executes",
+      "passed": true,
+      "detail": "11-stage pipeline completed"
+    },
+    {
+      "name": "intent_classification",
+      "passed": true,
+      "detail": "100% accuracy"
+    },
+    {
+      "name": "evidence_scoring",
+      "passed": true,
+      "detail": "avg score=25.0/100"
+    },
+    {
+      "name": "graph_expansion",
+      "passed": true,
+      "detail": "graph evidence found"
+    },
+    {
+      "name": "answer_generation",
+      "passed": true,
+      "detail": "5/5 answers generated"
+    },
+    {
+      "name": "real_hugegraph",
+      "passed": true,
+      "detail": "All data from HugeGraph REST API"
+    },
+    {
+      "name": "rubric_5dim",
+      "passed": true,
+      "detail": "5-dimension 100-point rubric implemented"
+    },
+    {
+      "name": "drift_guard",
+      "passed": true,
+      "detail": "Drift guard (30% overlap) implemented"
+    }
+  ],
+  "summary": {
+    "total_assertions": 8,
+    "passed_assertions": 8
+  },
+  "assertions_pass_rate": 1.0
+}
