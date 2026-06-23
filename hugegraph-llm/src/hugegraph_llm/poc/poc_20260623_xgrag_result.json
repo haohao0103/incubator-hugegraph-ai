@@ -1,0 +1,406 @@
+{
+  "poc_name": "XGRAG_Graph_Native_Explainability",
+  "date": "2026-06-23",
+  "inspiration": "XGRAG (arXiv:2604.24623) — Graph-Native Framework for Explaining KG-based RAG",
+  "config": {
+    "hugegraph_url": "http://127.0.0.1:8080",
+    "graph": "poc_supply_chain",
+    "perturbation_strategies": [
+      "node_removal",
+      "edge_removal",
+      "synonym_injection"
+    ],
+    "importance_formula": "Imp(p) = 1 - sim(a_0, a_p)",
+    "normalization": "Imp_norm(p) = Imp(p) / max(Imp(p'))"
+  },
+  "benchmark_comparison": {
+    "RAG-Ex_sentence": {
+      "F1": 0.34,
+      "MRR": 0.61
+    },
+    "XGRAG_node": {
+      "F1": 0.62,
+      "MRR": 0.72
+    },
+    "XGRAG_edge": {
+      "F1": 0.52,
+      "MRR": 0.65
+    },
+    "improvement": "F1 +82% vs RAG-Ex sentence"
+  },
+  "test_results": [
+    {
+      "test_num": 1,
+      "question": "供应商A0的风险评分和供货关系",
+      "passed": true,
+      "subgraph_vertices": 126,
+      "subgraph_edges": 169,
+      "components_analyzed": 20,
+      "top_component": "零件T0-19",
+      "top_importance": 1.0,
+      "has_importance_scores": true,
+      "centrality_correlation": {
+        "degree_pearson": -0.398,
+        "pagerank_pearson": -0.3163,
+        "degree_strong": false,
+        "pagerank_strong": false,
+        "sample_count": 10
+      },
+      "strategy_breakdown": {
+        "node_removal": 10,
+        "edge_removal": 10,
+        "synonym_injection": 5
+      },
+      "synonym_count": 5,
+      "elapsed_ms": 175.1,
+      "top_5_components": [
+        {
+          "rank": 1,
+          "type": "node",
+          "name": "零件T0-19",
+          "importance": 0.2308,
+          "normalized": 1.0
+        },
+        {
+          "rank": 2,
+          "type": "node",
+          "name": "供应商A0",
+          "importance": 0.2264,
+          "normalized": 0.9809
+        },
+        {
+          "rank": 3,
+          "type": "node",
+          "name": "供应商A0",
+          "importance": 0.2222,
+          "normalized": 0.9627
+        },
+        {
+          "rank": 4,
+          "type": "node",
+          "name": "供应商A0",
+          "importance": 0.2222,
+          "normalized": 0.9627
+        },
+        {
+          "rank": 5,
+          "type": "node",
+          "name": "零件A0-0",
+          "importance": 0.1923,
+          "normalized": 0.8332
+        }
+      ]
+    },
+    {
+      "test_num": 2,
+      "question": "哪些零件有关键供应商依赖",
+      "passed": true,
+      "subgraph_vertices": 289,
+      "subgraph_edges": 901,
+      "components_analyzed": 20,
+      "top_component": "零件C0-2",
+      "top_importance": 1.0,
+      "has_importance_scores": true,
+      "centrality_correlation": {
+        "degree_pearson": 0.4142,
+        "pagerank_pearson": 0.1875,
+        "degree_strong": false,
+        "pagerank_strong": false,
+        "sample_count": 10
+      },
+      "strategy_breakdown": {
+        "node_removal": 10,
+        "edge_removal": 10,
+        "synonym_injection": 5
+      },
+      "synonym_count": 5,
+      "elapsed_ms": 196.1,
+      "top_5_components": [
+        {
+          "rank": 1,
+          "type": "node",
+          "name": "零件C0-2",
+          "importance": 0.1579,
+          "normalized": 1.0
+        },
+        {
+          "rank": 2,
+          "type": "node",
+          "name": "零件A0-0",
+          "importance": 0.125,
+          "normalized": 0.7916
+        },
+        {
+          "rank": 3,
+          "type": "node",
+          "name": "零件B0-1",
+          "importance": 0.125,
+          "normalized": 0.7916
+        },
+        {
+          "rank": 4,
+          "type": "node",
+          "name": "零件G0-6",
+          "importance": 0.125,
+          "normalized": 0.7916
+        },
+        {
+          "rank": 5,
+          "type": "node",
+          "name": "零件H0-7",
+          "importance": 0.125,
+          "normalized": 0.7916
+        }
+      ]
+    },
+    {
+      "test_num": 3,
+      "question": "供应商B1的供应链关系",
+      "passed": true,
+      "subgraph_vertices": 81,
+      "subgraph_edges": 93,
+      "components_analyzed": 20,
+      "top_component": "零件T0-19",
+      "top_importance": 1.0,
+      "has_importance_scores": true,
+      "centrality_correlation": {
+        "degree_pearson": 0.5264,
+        "pagerank_pearson": 0.5271,
+        "degree_strong": false,
+        "pagerank_strong": false,
+        "sample_count": 10
+      },
+      "strategy_breakdown": {
+        "node_removal": 10,
+        "edge_removal": 10,
+        "synonym_injection": 5
+      },
+      "synonym_count": 5,
+      "elapsed_ms": 8.6,
+      "top_5_components": [
+        {
+          "rank": 1,
+          "type": "node",
+          "name": "零件T0-19",
+          "importance": 0.2308,
+          "normalized": 1.0
+        },
+        {
+          "rank": 2,
+          "type": "node",
+          "name": "零件G1-32",
+          "importance": 0.2308,
+          "normalized": 1.0
+        },
+        {
+          "rank": 3,
+          "type": "node",
+          "name": "供应商B1",
+          "importance": 0.2075,
+          "normalized": 0.899
+        },
+        {
+          "rank": 4,
+          "type": "node",
+          "name": "供应商B1",
+          "importance": 0.1961,
+          "normalized": 0.8497
+        },
+        {
+          "rank": 5,
+          "type": "node",
+          "name": "零件B1-27",
+          "importance": 0.1923,
+          "normalized": 0.8332
+        }
+      ]
+    },
+    {
+      "test_num": 4,
+      "question": "设施和零件的供应链关系",
+      "passed": true,
+      "subgraph_vertices": 233,
+      "subgraph_edges": 503,
+      "components_analyzed": 20,
+      "top_component": "设施A0",
+      "top_importance": 1.0,
+      "has_importance_scores": true,
+      "centrality_correlation": {
+        "degree_pearson": -0.1279,
+        "pagerank_pearson": -0.0591,
+        "degree_strong": false,
+        "pagerank_strong": false,
+        "sample_count": 10
+      },
+      "strategy_breakdown": {
+        "node_removal": 10,
+        "edge_removal": 10,
+        "synonym_injection": 5
+      },
+      "synonym_count": 5,
+      "elapsed_ms": 73.3,
+      "top_5_components": [
+        {
+          "rank": 1,
+          "type": "node",
+          "name": "设施A0",
+          "importance": 0.127,
+          "normalized": 1.0
+        },
+        {
+          "rank": 2,
+          "type": "node",
+          "name": "设施B0",
+          "importance": 0.127,
+          "normalized": 1.0
+        },
+        {
+          "rank": 3,
+          "type": "node",
+          "name": "设施C0",
+          "importance": 0.127,
+          "normalized": 1.0
+        },
+        {
+          "rank": 4,
+          "type": "node",
+          "name": "设施D0",
+          "importance": 0.127,
+          "normalized": 1.0
+        },
+        {
+          "rank": 5,
+          "type": "node",
+          "name": "设施华北A",
+          "importance": 0.1129,
+          "normalized": 0.889
+        }
+      ]
+    },
+    {
+      "test_num": 5,
+      "question": "供应商和零件的供货关系分析",
+      "passed": true,
+      "subgraph_vertices": 340,
+      "subgraph_edges": 928,
+      "components_analyzed": 20,
+      "top_component": "供应商A0",
+      "top_importance": 1.0,
+      "has_importance_scores": true,
+      "centrality_correlation": {
+        "degree_pearson": 0.4766,
+        "pagerank_pearson": 0,
+        "degree_strong": false,
+        "pagerank_strong": false,
+        "sample_count": 10
+      },
+      "strategy_breakdown": {
+        "node_removal": 10,
+        "edge_removal": 10,
+        "synonym_injection": 5
+      },
+      "synonym_count": 5,
+      "elapsed_ms": 214.1,
+      "top_5_components": [
+        {
+          "rank": 1,
+          "type": "node",
+          "name": "供应商A0",
+          "importance": 0.1562,
+          "normalized": 1.0
+        },
+        {
+          "rank": 2,
+          "type": "node",
+          "name": "供应商B1",
+          "importance": 0.1429,
+          "normalized": 0.9149
+        },
+        {
+          "rank": 3,
+          "type": "node",
+          "name": "供应商C2",
+          "importance": 0.1429,
+          "normalized": 0.9149
+        },
+        {
+          "rank": 4,
+          "type": "node",
+          "name": "供应商A0",
+          "importance": 0.127,
+          "normalized": 0.8131
+        },
+        {
+          "rank": 5,
+          "type": "node",
+          "name": "供应商B0",
+          "importance": 0.127,
+          "normalized": 0.8131
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "pass_rate": 1.0,
+    "passed": 5,
+    "total": 5,
+    "avg_components": 20.0,
+    "avg_top_importance": 1.0,
+    "degree_strong_corr": 0,
+    "pagerank_strong_corr": 0,
+    "total_with_corr": 5,
+    "avg_latency_ms": 133.4
+  },
+  "assertions": [
+    {
+      "name": "graph_loaded",
+      "passed": true,
+      "detail": "414 vertices from HugeGraph"
+    },
+    {
+      "name": "subgraph_retrieval",
+      "passed": true,
+      "detail": "subgraphs retrieved"
+    },
+    {
+      "name": "perturbation_executes",
+      "passed": true,
+      "detail": "perturbation strategies executed"
+    },
+    {
+      "name": "importance_scores",
+      "passed": true,
+      "detail": "importance scores computed"
+    },
+    {
+      "name": "node_removal_strategy",
+      "passed": true,
+      "detail": "node removal works"
+    },
+    {
+      "name": "edge_removal_strategy",
+      "passed": true,
+      "detail": "edge removal works"
+    },
+    {
+      "name": "synonym_strategy",
+      "passed": true,
+      "detail": "synonym injection works"
+    },
+    {
+      "name": "centrality_correlation",
+      "passed": true,
+      "detail": "degree_strong=0, pr_strong=0"
+    },
+    {
+      "name": "real_hugegraph",
+      "passed": true,
+      "detail": "All data from HugeGraph REST API"
+    }
+  ],
+  "summary": {
+    "total_assertions": 9,
+    "passed_assertions": 9
+  },
+  "assertions_pass_rate": 1.0
+}
