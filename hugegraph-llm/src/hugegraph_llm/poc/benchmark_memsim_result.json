@@ -1,0 +1,46 @@
+{
+  "date": "2026-06-26",
+  "dataset": "MemSim/MemDaily (中文)",
+  "source": "https://github.com/nuster1128/MemSim",
+  "sample_size": 120,
+  "sample_per_split": 20,
+  "retrieval": "Vector(all-MiniLM-L6-v2) + BM25(char+word) + RRF(k=40)",
+  "llm": "mimo-v2.5-pro",
+  "scoring": "exact match (MCQ A/B/C/D)",
+  "overall": {
+    "accuracy": 65.83
+  },
+  "by_split": {
+    "simple": {
+      "count": 20,
+      "correct": 18,
+      "accuracy": 90.0
+    },
+    "conditional": {
+      "count": 20,
+      "correct": 13,
+      "accuracy": 65.0
+    },
+    "comparative": {
+      "count": 20,
+      "correct": 15,
+      "accuracy": 75.0
+    },
+    "aggregative": {
+      "count": 20,
+      "correct": 11,
+      "accuracy": 55.0
+    },
+    "post_processing": {
+      "count": 20,
+      "correct": 15,
+      "accuracy": 75.0
+    },
+    "noisy": {
+      "count": 20,
+      "correct": 7,
+      "accuracy": 35.0
+    }
+  },
+  "amb_leaderboard_note": "AMB排行榜上memsim尚无任何框架跑出结果, 我们是第一个"
+}
