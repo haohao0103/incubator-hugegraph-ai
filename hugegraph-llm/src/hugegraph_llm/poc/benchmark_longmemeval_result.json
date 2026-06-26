@@ -1,0 +1,192 @@
+{
+  "date": "2026-06-26",
+  "dataset": "LongMemEval (ICLR 2025)",
+  "sample_size": 50,
+  "retrieval": "Vector(all-MiniLM-L6-v2) + BM25 + RRF(k=40)",
+  "llm": "mimo-v2.5-pro",
+  "judge": "MiMo LLM judge (0/0.5/1)",
+  "overall": {
+    "accuracy": 0.0
+  },
+  "by_type": {
+    "knowledge-update": {
+      "count": 8,
+      "avg_score": 0.0,
+      "accuracy": 0.0
+    },
+    "multi-session": {
+      "count": 10,
+      "avg_score": 0.0,
+      "accuracy": 0.0
+    },
+    "single-session-assistant": {
+      "count": 8,
+      "avg_score": 0.0,
+      "accuracy": 0.0
+    },
+    "single-session-preference": {
+      "count": 5,
+      "avg_score": 0.0,
+      "accuracy": 0.0
+    },
+    "single-session-user": {
+      "count": 10,
+      "avg_score": 0.0,
+      "accuracy": 0.0
+    },
+    "temporal-reasoning": {
+      "count": 9,
+      "avg_score": 0.0,
+      "accuracy": 0.0
+    }
+  },
+  "mem0_baseline": {
+    "single-session-user": 94.3,
+    "single-session-assistant": 97.1,
+    "multi-session": 70.7,
+    "knowledge-update": 100.0,
+    "overall": 93.4
+  },
+  "sample_results": [
+    {
+      "question_type": "single-session-user",
+      "question": "How long did it take me to assemble the IKEA bookshelf?",
+      "gold_answer": "4 hours",
+      "predicted_answer": "I don't have this information in our conversation memories.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "What did I bake for my uncle's birthday party?",
+      "gold_answer": "You did not mention this information. You mentioned baking for your niece's birthday party but not y",
+      "predicted_answer": "I don't have this information.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "Where do I take yoga classes?",
+      "gold_answer": "Serenity Yoga",
+      "predicted_answer": "I don't have this information.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "What did I bake for my niece's birthday party?",
+      "gold_answer": "a lemon blueberry cake",
+      "predicted_answer": "You baked a lemon blueberry cake for your niece's birthday party.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "What color did I repaint my bedroom walls?",
+      "gold_answer": "a lighter shade of gray",
+      "predicted_answer": "I don't have this information.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "How many bikes do I own?",
+      "gold_answer": "three",
+      "predicted_answer": "You own three bikes: a road bike, a mountain bike, and a third one you didn't fully describe in your",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "How many copies of my favorite artist's debut album were released worldwide?",
+      "gold_answer": "500",
+      "predicted_answer": "Your favorite artist's debut album had a limited edition release of only 500 copies worldwide.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "How many shirts did I pack for my 5-day trip to Costa Rica?",
+      "gold_answer": "7",
+      "predicted_answer": "I don't have this information. The memory mentions packing 7 shirts for a Costa Rica trip, but it do",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "What did I buy for my sister's birthday gift?",
+      "gold_answer": "a yellow dress",
+      "predicted_answer": "For your sister's birthday, you bought her a yellow dress and a pair of matching earrings.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-user",
+      "question": "How many hours did I spend watching documentaries on Netflix last month?",
+      "gold_answer": "10",
+      "predicted_answer": "I don't have this information, as our conversation memories do not include any data about your Netfl",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I wanted to check back on our previous conversation about Netflix. I mentioned that I wanted to be a",
+      "gold_answer": "Doc Martin",
+      "predicted_answer": "Yes, you used the show \"Doc Martin\" as an example of a series that was removed from Netflix, leaving",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I'm checking our previous chat about the shift rotation sheet for GM social media agents. Can you re",
+      "gold_answer": "Admon was assigned to the 8 am - 4 pm (Day Shift) on Sundays.",
+      "predicted_answer": "I don't have this information in our previous conversation memories.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I'm looking back at our previous conversation about building a cocktail bar. You recommended five bo",
+      "gold_answer": "Absinthe",
+      "predicted_answer": "I don't have this information, as the complete list of five bottles wasn't fully recorded in the con",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I wanted to follow up on our previous conversation about natural remedies for dark circles under the",
+      "gold_answer": "10 minutes",
+      "predicted_answer": "I don't have this information in my current context.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I'm trying to recall what the designation on my jumpsuit was that helped me find the file number in ",
+      "gold_answer": "The designation on your jumpsuit was 'LIV'.",
+      "predicted_answer": "The designation on your jumpsuit was \"LIV,\" which you realized was the Roman numeral for 54, leading",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I was going through our previous conversation about The Library of Babel, and I wanted to confirm - ",
+      "gold_answer": "According to Borges, 'The Library is a sphere whose exact center is any one of its hexagons and whos",
+      "predicted_answer": "I don't have this information.",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I remember you told me about the refining processes at CITGO's three refineries earlier. Can you rem",
+      "gold_answer": "Atmospheric distillation, fluid catalytic cracking (FCC), alkylation, and hydrotreating.",
+      "predicted_answer": "I don't have the specific details about the refining processes at the Lake Charles Refinery in my me",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-assistant",
+      "question": "I was looking back at our previous conversation about buying unique engagement rings directly from d",
+      "gold_answer": "@jessica_poole_jewellery",
+      "predicted_answer": "I don't have this information from our previous conversation. The memory only mentions buying direct",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-preference",
+      "question": "I'm planning my meal prep next week, any suggestions for new recipes?",
+      "gold_answer": "The user would prefer responses that suggest healthy meal prep recipes, especially those that incorp",
+      "predicted_answer": "Based on our previous conversations, you could try a new lentil bolognese bowl served with quinoa an",
+      "score": 0.0
+    },
+    {
+      "question_type": "single-session-preference",
+      "question": "My kitchen's becoming a bit of a mess again. Any tips for keeping it clean?",
+      "gold_answer": "The user would prefer responses that acknowledge and build upon their existing efforts to organize t",
+      "predicted_answer": "I don't have this information.",
+      "score": 0.0
+    }
+  ]
+}
