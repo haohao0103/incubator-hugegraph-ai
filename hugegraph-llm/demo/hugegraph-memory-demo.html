@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HugeGraph Memory System Demo</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2333;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--blue:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff;--teal:#39d353;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+header h1{font-size:16px;font-weight:600}
+header .tag{font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(88,166,255,.15);color:var(--blue)}
+.main{display:flex;flex:1;overflow:hidden}
+.panel{border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.panel-left{width:360px}
+.panel-right{width:420px}
+.panel-center{flex:1;min-width:0;display:flex;flex-direction:column}
+.panel-title{font-size:12px;font-weight:600;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title .count{font-size:11px;color:var(--text2);font-weight:400}
+.panel-body{flex:1;overflow-y:auto;padding:8px}
+.chat-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.chat-input-area{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.chat-input-area input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;outline:none}
+.chat-input-area input:focus{border-color:var(--blue)}
+.chat-input-area button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500}
+.msg{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;animation:fadeIn .3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg-user{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.msg-assistant{align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-system{align-self:center;background:transparent;border:1px solid var(--border);color:var(--text2);font-size:11px;padding:6px 12px;border-radius:16px}
+.msg-assistant .evidence{margin-top:8px;padding:6px 10px;background:rgba(88,166,255,.08);border-radius:6px;font-size:11px;color:var(--text2)}
+.msg-assistant .evidence span{color:var(--blue)}
+.entity-node{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;margin:2px;border-radius:6px;font-size:11px;font-weight:500}
+.entity-person{background:rgba(188,140,255,.15);color:var(--purple)}
+.entity-org{background:rgba(88,166,255,.15);color:var(--blue)}
+.entity-skill{background:rgba(63,185,80,.15);color:var(--green)}
+.entity-location{background:rgba(210,153,34,.15);color:var(--orange)}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px}
+.stat-card .label{font-size:11px;color:var(--text2);margin-bottom:4px}
+.stat-card .value{font-size:20px;font-weight:700}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.stat-row .stat-card .value{font-size:16px}
+.memory-item{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .2s}
+.memory-item:hover{border-color:var(--blue);background:rgba(88,166,255,.05)}
+.memory-item .meta{font-size:10px;color:var(--text2);margin-bottom:4px;display:flex;gap:8px}
+.memory-item .content{font-size:12px;line-height:1.5}
+.memory-item .entities{margin-top:6px;display:flex;flex-wrap:wrap;gap:2px}
+.decision-tag{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600}
+.decision-add{background:rgba(63,185,80,.2);color:var(--green)}
+.decision-update{background:rgba(88,166,255,.2);color:var(--blue)}
+.decision-skip{background:rgba(139,148,158,.2);color:var(--text2)}
+.relation-item{padding:8px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;display:flex;align-items:center;gap:6px}
+.relation-item .arrow{color:var(--blue)}
+.pipeline-step{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:11px}
+.pipeline-step .step-num{width:20px;height:20px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+.pipeline-step.active .step-num{background:var(--blue);border-color:var(--blue);color:#fff}
+.pipeline-step.done .step-num{background:var(--green);border-color:var(--green);color:#fff}
+.pipeline-step .step-text{padding-top:2px;line-height:1.4}
+.pipeline-step .step-text .detail{color:var(--text2);font-size:10px;margin-top:2px}
+canvas.graph-canvas{width:100%;height:100%}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab-btn{padding:8px 16px;font-size:12px;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;transition:all .2s}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--blue)}
+.tab-content{display:none;flex:1;overflow-y:auto;padding:12px}
+.tab-content.active{display:block}
+.ebbinghaus-bar{height:16px;border-radius:4px;transition:width .5s;position:relative}
+.ebbinghaus-bar .bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.ebbinghaus-bar .bar-label{position:absolute;top:0;left:8px;font-size:10px;line-height:16px;font-weight:500}
+</style>
+</head>
+<body>
+<header>
+<h1>HugeGraph Memory System</h1>
+<span class="tag">Interactive Demo</span>
+<span style="font-size:11px;color:var(--text2);margin-left:auto">mock backend | real logic</span>
+</header>
+<div class="main">
+<div class="panel panel-left">
+<div class="panel-title">Memory Store <span class="count" id="memCount">0 memories</span></div>
+<div class="tab-bar">
+<div class="tab-btn active" onclick="switchTab(this,'tab-memories')">Memories</div>
+<div class="tab-btn" onclick="switchTab(this,'tab-relations')">Relations</div>
+<div class="tab-btn" onclick="switchTab(this,'tab-stats')">Stats</div>
+<div class="tab-btn" onclick="switchTab(this,'tab-ebbinghaus')">Ebbinghaus</div>
+</div>
+<div class="tab-content active" id="tab-memories"><div class="panel-body" id="memoryList"></div></div>
+<div class="tab-content" id="tab-relations"><div class="panel-body" id="relationList"></div></div>
+<div class="tab-content" id="tab-stats"><div class="panel-body" id="statsPanel"></div></div>
+<div class="tab-content" id="tab-ebbinghaus"><div class="panel-body" id="ebbinghausPanel"></div></div>
+</div>
+<div class="panel-center">
+<div class="panel-title">Chat with Memory <span class="count" id="turnCount">0 turns</span></div>
+<div class="chat-area" id="chatArea">
+<div class="msg msg-system">Type messages to build memory graph. Try: "I am Zhang San, I work at Tencent in Shenzhen"</div>
+</div>
+<div class="chat-input-area">
+<input id="chatInput" placeholder="Type a message... (e.g. My colleague Li Si also works at Tencent)" onkeydown="if(event.key==='Enter')sendMessage()">
+<button onclick="sendMessage()">Send</button>
+</div>
+</div>
+<div class="panel panel-right">
+<div class="panel-title">Knowledge Graph</div>
+<div class="panel-body" style="padding:0">
+<canvas class="graph-canvas" id="graphCanvas"></canvas>
+</div>
+<div class="panel-title" style="border-top:1px solid var(--border)">Pipeline Trace</div>
+<div class="panel-body" id="pipelineTrace" style="max-height:240px;overflow-y:auto">
+<div class="pipeline-step"><div class="step-num">1</div><div class="step-text">Waiting for input<div class="detail">Send a message to start the pipeline</div></div></div>
+</div>
+</div>
+</div>
+<script>
+// ===== Mock Graph Backend =====
+const graph = {
+  nodes: new Map(),
+  edges: [],
+  memories: [],
+  nextId: 1,
+  userId: 'demo_user_001'
+};
+
+// ===== Entity Extraction (mirrors _extract_entities logic) =====
+function isQuestion(text) {
+  return /[？?谁多少哪里什么怎样如何哪个哪些吧呢啊哦]/.test(text) || /^(我[们]?的?|有|是|在)/.test(text);
+}
+
+function extractEntities(text) {
+  const entities = [];
+  // Skip pure question sentences (they should go through search, not extraction)
+  if (/^(我?同事|我?朋友|谁|哪些|什么|有多少|有哪些|认识谁|了解什么|知道)/.test(text)) {
+    return entities;
+  }
+  const patterns = [
+    // Person: 我叫XX / 我是XX / my name is XX / i am XX
+    { re: /(?:我叫|我是|my\s+name\s+is|i\s+am)\s*([\u4e00-\u9fa5]{2,10}|[a-zA-Z\s]{2,20})/i, type: 'person' },
+    // Person: 我的同事XX / 同事XX / colleague XX (not questions)
+    { re: /(?:我的?|the\s+)?(?:同事|colleague|friend|朋友)\s*(?:是叫)?([\u4e00-\u9fa5]{2,4})/i, type: 'person' },
+    // Person + Org: 张三在腾讯工作 / 张三works at Tencent
+    { re: /([\u4e00-\u9fa5]{2,4})(?:\s*)(?:在|at|works?\s*(?:at|for)?)\s*([\u4e00-\u9fa5a-zA-Z\s]{2,15})/i, type: 'person+org' },
+    // Skill: 喜欢XX / love XX / enjoy XX (split on 和/and)
+    { re: /(?:喜欢|love|prefer|enjoy|爱好|擅长)\s*([\u4e00-\u9fa5a-zA-Z\s]{2,30})/i, type: 'skill-list' },
+    // Location: 住在XX / live in XX / from XX
+    { re: /(?:住在?|live\s*in?|from|位于)\s*([\u4e00-\u9fa5a-zA-Z\s]{2,15})/i, type: 'location' },
+    // Org standalone: known companies
+    { re: /(?:腾讯|Tencent|阿里|Alibaba|字节|ByteDance|华为|Huawei|Google|Microsoft|Amazon)/i, type: 'org' },
+    // Location standalone: known cities
+    { re: /(?:北京|上海|深圳|广州|杭州|成都|武汉|南京|Shenzhen|Beijing|Shanghai|Hangzhou)/i, type: 'location' },
+  ];
+  for (const p of patterns) {
+    const m = text.match(p.re);
+    if (m) {
+      if (p.type === 'person+org') {
+        entities.push({ name: m[1].trim(), type: 'person' });
+        entities.push({ name: m[2].trim(), type: 'org' });
+      } else if (p.type === 'skill-list') {
+        // Split on 和 / and / 、/comma
+        const items = m[1].split(/[和、,，]|[aA]nd\s*/).map(s => s.trim()).filter(s => s.length >= 1);
+        for (const item of items) {
+          // Filter out function words
+          if (/^(的|了|着|过|喝|打|玩|做|看|听|吃)$/.test(item)) continue;
+          entities.push({ name: item, type: 'skill' });
+        }
+      } else {
+        entities.push({ name: m[1].trim(), type: p.type });
+      }
+    }
+  }
+  // Dedup by name (case-insensitive)
+  const seen = new Map();
+  return entities.filter(e => {
+    const key = e.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.set(key, true);
+    return true;
+  });
+}
+
+// ===== Relationship Extraction (mirrors _establish_relationships logic) =====
+function extractRelationships(text, entities) {
+  const rels = [];
+  // Find the current user person (first person detected)
+  const persons = entities.filter(e => e.type === 'person');
+  const orgs = entities.filter(e => e.type === 'org');
+  const locations = entities.filter(e => e.type === 'location');
+  const skills = entities.filter(e => e.type === 'skill');
+  // If no person extracted but we have user context, try to infer user references
+  const userPerson = persons[0];
+  if (!userPerson && (skills.length || orgs.length || locations.length)) return rels;
+  if (userPerson) {
+    for (const o of orgs) {
+      if (/在|at|work/i.test(text) && text.includes(userPerson.name) && text.includes(o.name)) {
+        rels.push({ source: userPerson.name, relationship: 'works_at', destination: o.name });
+      }
+    }
+    for (const l of locations) {
+      if (text.includes(userPerson.name) && text.includes(l.name)) {
+        rels.push({ source: userPerson.name, relationship: 'lives_in', destination: l.name });
+      }
+    }
+    for (const s of skills) {
+      rels.push({ source: userPerson.name, relationship: 'likes', destination: s.name });
+    }
+  }
+  // colleague relationship between multiple persons
+  if (persons.length > 1 && /(?:同事|colleague|一起|together)/i.test(text)) {
+    for (let i = 0; i < persons.length - 1; i++) {
+      rels.push({ source: persons[i].name, relationship: 'colleague_of', destination: persons[i + 1].name });
+    }
+    // If one person works at an org, infer the other also works there
+    for (const o of orgs) {
+      if (rels.some(r => r.source === persons[0].name && r.destination === o.name && r.relationship === 'works_at')) {
+        rels.push({ source: persons[persons.length - 1].name, relationship: 'works_at', destination: o.name });
+      }
+    }
+  }
+  // Dedup edges
+  const seen = new Set();
+  return rels.filter(r => {
+    const key = `${r.source}-${r.relationship}-${r.destination}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// ===== Self-reference Resolution (mirrors _resolve_self_reference logic) =====
+function resolveSelfRef(text, userId) {
+  return text.replace(/\bI\b/gi, userId).replace(/\bme\b/gi, userId).replace(/\bmy\b/gi, userId + "'s").replace(/我/g, userId);
+}
+
+// ===== Conflict Resolution / Decision (mirrors fact_extractor + action_decider) =====
+function decideAction(newContent, existingMemories) {
+  if (existingMemories.length === 0) return { action: 'ADD', reason: 'First memory for this topic' };
+  // Simple semantic check: overlap detection
+  for (const mem of existingMemories) {
+    const newWords = new Set(newContent.toLowerCase().split(/\s+/));
+    const oldWords = new Set(mem.content.toLowerCase().split(/\s+/));
+    let overlap = 0;
+    for (const w of newWords) if (oldWords.has(w)) overlap++;
+    const sim = overlap / Math.max(newWords.size, oldWords.size);
+    if (sim > 0.6) {
+      if (newContent.length > mem.content.length) return { action: 'UPDATE', reason: `Overlaps ${Math.round(sim*100)}% with #${mem.id}, new info is more detailed` };
+      return { action: 'SKIP', reason: `Similar to existing #${mem.id} (${Math.round(sim*100)}% overlap)` };
+    }
+  }
+  return { action: 'ADD', reason: 'New information detected' };
+}
+
+// ===== Ebbinghaus Decay (mirrors EbbinghausPlugin) =====
+const EBBINGHAUS = { lambda: 0.821, minRetention: 0.2, initialRetention: 1.0, reinforcement: 0.3 };
+function calcRetention(memory) {
+  const hours = (Date.now() - memory.createdAt) / 3600000;
+  const decay = Math.exp(-EBBINGHAUS.lambda * hours);
+  return Math.max(EBBINGHAUS.minRetention, decay * memory.retention);
+}
+function getLifecycleStage(r) {
+  if (r >= 0.8) return 'LONG_TERM';
+  if (r >= 0.6) return 'SHORT_TERM';
+  if (r >= 0.3) return 'WORKING';
+  return 'EXPIRED';
+}
+function reinforceMemory(memory) {
+  const current = calcRetention(memory);
+  memory.retention = Math.min(current + EBBINGHAUS.reinforcement, 1.0);
+  memory.lastAccessedAt = Date.now();
+  memory.accessCount = (memory.accessCount || 0) + 1;
+}
+
+// ===== Graph Operations =====
+function addNode(name, type) {
+  const key = name.toLowerCase();
+  if (graph.nodes.has(key)) {
+    const n = graph.nodes.get(key);
+    n.accessCount = (n.accessCount || 0) + 1;
+    reinforceMemory(n);
+    return n;
+  }
+  const node = { id: graph.nextId++, name, type, createdAt: Date.now(), lastAccessedAt: Date.now(), retention: 1.0, accessCount: 0 };
+  graph.nodes.set(key, node);
+  return node;
+}
+function addEdge(source, rel, dest) {
+  const existing = graph.edges.find(e => e.source === source && e.relationship === rel && e.destination === dest);
+  if (existing) { existing.weight = Math.min((existing.weight || 1) + 0.1, 2.0); return existing; }
+  const edge = { id: graph.nextId++, source, relationship: rel, destination: dest, weight: 1.0, createdAt: Date.now() };
+  graph.edges.push(edge);
+  return edge;
+}
+
+// ===== Core Memory Add (mirrors Memory.add with infer=True) =====
+function memoryAdd(text) {
+  const resolved = resolveSelfRef(text, 'demo_user_001');
+  const entities = extractEntities(resolved);
+  const relationships = extractRelationships(resolved, entities);
+  const decision = decideAction(resolved, graph.memories);
+  // Build graph nodes + edges
+  for (const e of entities) addNode(e.name, e.type);
+  for (const r of relationships) addEdge(r.source, r.relationship, r.destination);
+  // Store memory
+  if (decision.action !== 'SKIP') {
+    const mem = {
+      id: graph.nextId++,
+      content: resolved,
+      entities,
+      relationships,
+      decision: decision.action,
+      createdAt: Date.now(),
+      lastAccessedAt: Date.now(),
+      retention: 1.0,
+      accessCount: 0
+    };
+    if (decision.action === 'UPDATE') {
+      // update the most similar existing memory
+      const target = graph.memories[graph.memories.length - 1];
+      if (target) { target.content = resolved; target.entities = entities; target.relationships = relationships; reinforceMemory(target); }
+    } else {
+      graph.memories.push(mem);
+    }
+  }
+  return { entities, relationships, decision };
+}
+
+// ===== Core Memory Search (mirrors Memory.search with graph traversal) =====
+function memorySearch(query) {
+  const resolved = resolveSelfRef(query, 'demo_user_001');
+  const queryEntities = extractEntities(resolved);
+  const results = [];
+  // Graph traversal: find related memories through entity links
+  for (const mem of graph.memories) {
+    let score = 0;
+    for (const qe of queryEntities) {
+      for (const me of mem.entities) {
+        if (me.name.toLowerCase() === qe.name.toLowerCase()) score += 2;
+      }
+      // Check relationship traversal
+      for (const mr of mem.relationships) {
+        if (queryEntities.some(q => q.name.toLowerCase() === mr.source.toLowerCase()) || queryEntities.some(q => q.name.toLowerCase() === mr.destination.toLowerCase())) score += 1;
+      }
+    }
+    // BM25-like text matching
+    const qWords = new Set(resolved.toLowerCase().split(/\s+/));
+    const mWords = mem.content.toLowerCase().split(/\s+/);
+    for (const w of mWords) if (qWords.has(w)) score += 0.5;
+    // Ebbinghaus weighting
+    const retention = calcRetention(mem);
+    score *= (0.5 + 0.5 * retention);
+    // Access boost
+    score += (mem.accessCount || 0) * 0.1;
+    if (score > 0.3) {
+      reinforceMemory(mem);
+      results.push({ memory: mem, score: Math.round(score * 100) / 100, retention });
+    }
+  }
+  results.sort((a, b) => b.score - a.score);
+  return results;
+}
+
+// ===== Pipeline Visualization =====
+let pipelineSteps = [];
+function resetPipeline() { pipelineSteps = []; }
+function addPipelineStep(num, text, detail, status) {
+  pipelineSteps.push({ num, text, detail, status });
+  renderPipeline();
+}
+function renderPipeline() {
+  const el = document.getElementById('pipelineTrace');
+  el.innerHTML = pipelineSteps.map(s =>
+    `<div class="pipeline-step ${s.status}"><div class="step-num">${s.status === 'done' ? '&#10003;' : s.num}</div><div class="step-text">${s.text}<div class="detail">${s.detail}</div></div></div>`
+  ).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+// ===== UI Rendering =====
+function renderMemories() {
+  const el = document.getElementById('memoryList');
+  if (graph.memories.length === 0) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">No memories stored yet. Send a message to start.</div>';
+    document.getElementById('memCount').textContent = '0 memories';
+    return;
+  }
+  document.getElementById('memCount').textContent = graph.memories.length + ' memories';
+  el.innerHTML = graph.memories.map(m => {
+    const retention = calcRetention(m);
+    const stage = getLifecycleStage(retention);
+    const stageColors = { LONG_TERM: 'var(--green)', SHORT_TERM: 'var(--blue)', WORKING: 'var(--orange)', EXPIRED: 'var(--red)' };
+    return `<div class="memory-item" onclick="highlightMemory(${m.id})">
+      <div class="meta">
+        <span>#${m.id}</span>
+        <span class="decision-tag decision-${m.decision.toLowerCase()}">${m.decision}</span>
+        <span style="color:${stageColors[stage]}">${stage} ${Math.round(retention*100)}%</span>
+        <span>access: ${m.accessCount || 0}</span>
+      </div>
+      <div class="content">${m.content}</div>
+      <div class="entities">${m.entities.map(e => `<span class="entity-node entity-${e.type}">${e.name}</span>`).join('')}</div>
+    </div>`;
+  }).reverse().join('');
+}
+
+function renderRelations() {
+  const el = document.getElementById('relationList');
+  if (graph.edges.length === 0) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">No relations yet</div>';
+    return;
+  }
+  el.innerHTML = graph.edges.map(e => {
+    const relLabels = { works_at: 'works at', lives_in: 'lives in', likes: 'likes', colleague_of: 'colleague of', related_to: 'related to' };
+    return `<div class="relation-item">
+      <span class="entity-node entity-person">${e.source}</span>
+      <span class="arrow">&rarr;</span>
+      <span style="color:var(--blue);font-size:10px">${relLabels[e.relationship] || e.relationship}</span>
+      <span class="arrow">&rarr;</span>
+      <span class="entity-node entity-org">${e.destination}</span>
+      <span style="margin-left:auto;font-size:10px;color:var(--text2)">w:${e.weight.toFixed(1)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderStats() {
+  const el = document.getElementById('statsPanel');
+  const entityTypes = {};
+  graph.nodes.forEach(n => { entityTypes[n.type] = (entityTypes[n.type] || 0) + 1; });
+  const relTypes = {};
+  graph.edges.forEach(e => { relTypes[e.relationship] = (relTypes[e.relationship] || 0) + 1; });
+  el.innerHTML = `
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Memories</div><div class="value">${graph.memories.length}</div></div>
+      <div class="stat-card"><div class="label">Entities</div><div class="value">${graph.nodes.size}</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Relations</div><div class="value">${graph.edges.length}</div></div>
+      <div class="stat-card"><div class="label">Avg Retention</div><div class="value">${graph.memories.length ? Math.round(graph.memories.reduce((s,m) => s + calcRetention(m), 0) / graph.memories.length * 100) : 0}%</div></div>
+    </div>
+    <div class="stat-card"><div class="label">Entity Types</div><div class="value" style="font-size:13px;margin-top:4px">${Object.entries(entityTypes).map(([t,c]) => `<span class="entity-node entity-${t}">${t}: ${c}</span>`).join(' ') || 'none'}</div></div>
+    <div class="stat-card"><div class="label">Relation Types</div><div class="value" style="font-size:13px;margin-top:4px">${Object.entries(relTypes).map(([t,c]) => `<span style="margin-right:8px">${t}: ${c}</span>`).join('') || 'none'}</div></div>
+  `;
+}
+
+function renderEbbinghaus() {
+  const el = document.getElementById('ebbinghausPanel');
+  if (graph.memories.length === 0) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Ebbinghaus decay curve will appear as memories age</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px">R(t) = exp(-0.821 &times; hours), min=20%, reinforcement=+0.3</div>
+    ${graph.memories.map(m => {
+      const r = calcRetention(m);
+      const stage = getLifecycleStage(r);
+      const colors = { LONG_TERM: 'var(--green)', SHORT_TERM: 'var(--blue)', WORKING: 'var(--orange)', EXPIRED: 'var(--red)' };
+      const hours = Math.round((Date.now() - m.createdAt) / 60000);
+      return `<div style="margin-bottom:6px">
+        <div style="font-size:10px;color:var(--text2);margin-bottom:2px">#${m.id} | ${hours}min ago | access:${m.accessCount||0}</div>
+        <div class="ebbinghaus-bar">
+          <div class="bar-fill" style="width:${Math.round(r*100)}%;background:${colors[stage]}"></div>
+          <div class="bar-label">${Math.round(r*100)}% ${stage}</div>
+        </div>
+      </div>`;
+    }).reverse().join('')}
+    <div style="margin-top:12px;padding:8px;background:var(--surface2);border-radius:6px;font-size:11px;color:var(--text2);line-height:1.5">
+      <b style="color:var(--text)">How it works:</b><br>
+      1. New memory: retention = 100% (LONG_TERM)<br>
+      2. Each minute: R = exp(-0.821 &times; hours) &rarr; decays<br>
+      3. On search access: R = min(R + 0.3, 1.0) &rarr; reinforced<br>
+      4. Floor at 20% prevents total forgetting
+    </div>
+  `;
+}
+
+// ===== Graph Canvas Rendering =====
+let graphPositions = new Map();
+function renderGraph() {
+  const canvas = document.getElementById('graphCanvas');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  if (graph.nodes.size === 0) {
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Graph will appear as you add memories', rect.width / 2, rect.height / 2);
+    return;
+  }
+  // Layout: simple force-directed
+  const cx = rect.width / 2, cy = rect.height / 2;
+  const nodes = Array.from(graph.nodes.values());
+  if (!graphPositions.size) {
+    nodes.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / nodes.length;
+      const radius = Math.min(rect.width, rect.height) * 0.3;
+      graphPositions.set(n.id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
+    });
+  }
+  // Draw edges
+  ctx.lineWidth = 1;
+  for (const e of graph.edges) {
+    const srcNode = graph.nodes.get(e.source.toLowerCase());
+    const dstNode = graph.nodes.get(e.destination.toLowerCase());
+    if (!srcNode || !dstNode) continue;
+    const sp = graphPositions.get(srcNode.id) || { x: cx, y: cy };
+    const dp = graphPositions.get(dstNode.id) || { x: cx, y: cy };
+    ctx.strokeStyle = 'rgba(88,166,255,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(sp.x, sp.y);
+    // curved edge
+    const midX = (sp.x + dp.x) / 2;
+    const midY = (sp.y + dp.y) / 2 - 15;
+    ctx.quadraticCurveTo(midX, midY, dp.x, dp.y);
+    ctx.stroke();
+    // Edge label
+    ctx.fillStyle = 'rgba(88,166,255,0.5)';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    const relLabels = { works_at: 'works at', lives_in: 'lives in', likes: 'likes', colleague_of: 'colleague' };
+    ctx.fillText(relLabels[e.relationship] || e.relationship, midX, midY - 3);
+  }
+  // Draw nodes
+  const typeColors = { person: '#bc8cff', org: '#58a6ff', skill: '#3fb950', location: '#d29922' };
+  for (const n of nodes) {
+    const pos = graphPositions.get(n.id) || { x: cx, y: cy };
+    const color = typeColors[n.type] || '#8b949e';
+    const retention = calcRetention(n);
+    const glow = retention > 0.5 ? 8 : 3;
+    // Glow
+    ctx.shadowColor = color;
+    ctx.shadowBlur = glow;
+    // Circle
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Retention ring
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2 * retention);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Label
+    ctx.fillStyle = '#e6edf3';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.name, pos.x, pos.y + 30);
+  }
+}
+
+// ===== Chat UI =====
+let turnCounter = 0;
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addChatMsg('user', text);
+
+  // Detect if this is a query or a statement
+  const isQuery = /^我(的?|们)?(的)?(同事|朋友|认识|有哪些|谁|什么|了解|知道|记得|记得吗|之前|上次)/.test(text) || /[？?]/.test(text);
+
+  if (isQuery && graph.memories.length > 0) {
+    // === SEARCH PIPELINE ===
+    runSearchPipeline(text);
+  } else {
+    // === ADD PIPELINE ===
+    runAddPipeline(text);
+  }
+}
+
+function runSearchPipeline(text) {
+  resetPipeline();
+  addPipelineStep(1, 'Query Classification', 'Detected as QUERY (not a statement)', 'done');
+  addPipelineStep(2, 'Memory Search', `Searching ${graph.memories.length} memories for "${text}"...`, 'active');
+  setTimeout(() => {
+    const results = memorySearch(text);
+    const resultStr = results.length > 0 ? results.map(r => `#${r.memory.id} (score=${r.score})`).join(', ') : 'No matching memories';
+    addPipelineStep(2, 'Memory Search', `Found ${results.length} results: ${resultStr}`, 'done');
+    addPipelineStep(3, 'Ebbinghaus Reinforcement', `${results.length} memories reinforced (+0.3 retention)`, 'done');
+    addPipelineStep(4, 'Graph Traversal', `Checking entity neighbors...`, 'active');
+    setTimeout(() => {
+      // Build response
+      let responseText = '';
+      let evidence = '';
+      if (results.length === 0) {
+        responseText = 'I don\'t have enough information to answer that. Try adding more memories first.';
+      } else {
+        const topResults = results.slice(0, 3);
+        const contextParts = topResults.map(r => r.memory.content);
+        // Simple answer generation based on keywords
+        const queryLower = text.toLowerCase();
+        if (/同事|colleague|谁.*工作/.test(queryLower) || /有哪些/.test(queryLower)) {
+          // Find all persons that are colleagues
+          const persons = [];
+          graph.edges.forEach(e => {
+            if (e.relationship === 'colleague_of') {
+              persons.push(e.source, e.destination);
+            }
+          });
+          if (persons.length > 0) {
+            const unique = [...new Set(persons)];
+            responseText = `Based on my memory, the colleagues I know about are: <b>${unique.join(', ')}</b>.`;
+          } else {
+            responseText = `I found ${results.length} related memories but no specific colleague relationships.`;
+          }
+        } else if (/喜欢|爱好|兴趣/.test(queryLower)) {
+          const skills = [];
+          graph.edges.forEach(e => {
+            if (e.relationship === 'likes') skills.push(e.destination);
+          });
+          responseText = skills.length > 0 ? `Based on memory, the preferences are: <b>${skills.join(', ')}</b>.` : `Found ${results.length} related memories.`;
+        } else {
+          responseText = `Based on ${results.length} retrieved memories: <b>${contextParts.join('; ')}</b>`;
+        }
+        evidence = topResults.map(r => `<span>#${r.memory.id} [score=${r.score}] ${r.memory.content.substring(0, 60)}...</span>`).join('<br>');
+      }
+      addPipelineStep(4, 'Graph Traversal', `Traversed related entities for context enrichment`, 'done');
+      addPipelineStep(5, 'Answer Generation', `LLM generates answer with evidence traces`, 'done');
+      // Update UI
+      renderMemories();
+      renderEbbinghaus();
+      renderGraph();
+      turnCounter++;
+      document.getElementById('turnCount').textContent = turnCounter + ' turns';
+      setTimeout(() => addChatMsg('assistant', responseText, evidence), 200);
+    }, 300);
+  }, 300);
+}
+
+function runAddPipeline(text) {
+  resetPipeline();
+  addPipelineStep(1, 'Self-reference Resolution', `"${text}" &rarr; resolve I/me/my to user_id`, 'active');
+  setTimeout(() => {
+    addPipelineStep(1, 'Self-reference Resolution', `Resolved: "${resolveSelfRef(text, 'demo_user_001')}"`, 'done');
+    addPipelineStep(2, 'LLM Entity Extraction', `Analyzing text for entities...`, 'active');
+    setTimeout(() => {
+      const entities = extractEntities(text);
+      const entityStr = entities.length > 0 ? entities.map(e => `<span class="entity-node entity-${e.type}">${e.name}</span>`).join('') : '<span style="color:var(--text2)">No entities detected</span>';
+      addPipelineStep(2, 'LLM Entity Extraction', `Found ${entities.length} entities: ${entityStr}`, 'done');
+      addPipelineStep(3, 'Relationship Extraction', `Finding relationships between entities...`, 'active');
+      setTimeout(() => {
+        const rels = extractRelationships(text, entities);
+        const relStr = rels.length > 0 ? rels.map(r => `${r.source} &rarr; ${r.relationship} &rarr; ${r.destination}`).join(', ') : 'No relations';
+        addPipelineStep(3, 'Relationship Extraction', `Found ${rels.length} relations: ${relStr}`, 'done');
+        addPipelineStep(4, 'Conflict Detection', `Comparing with ${graph.memories.length} existing memories...`, 'active');
+        setTimeout(() => {
+          const result = memoryAdd(text);
+          addPipelineStep(4, 'Decision: ' + result.decision.action, result.decision.reason, 'done');
+          addPipelineStep(5, 'Graph Storage', `Nodes: ${graph.nodes.size}, Edges: ${graph.edges.length}`, 'done');
+          renderMemories();
+          renderRelations();
+          renderStats();
+          renderEbbinghaus();
+          renderGraph();
+          turnCounter++;
+          document.getElementById('turnCount').textContent = turnCounter + ' turns';
+          let responseText = '';
+          if (result.decision.action === 'ADD') {
+            const entitySummary = result.entities.map(e => e.name).join(', ');
+            responseText = `Memory stored successfully. I learned about: <b>${entitySummary || 'this information'}</b>. ${result.relationships.length} relationships established in the knowledge graph.`;
+          } else if (result.decision.action === 'UPDATE') {
+            responseText = `Memory updated. ${result.decision.reason}. The knowledge graph has been refreshed.`;
+          } else {
+            responseText = `This information seems similar to what I already know. ${result.decision.reason}. No new memory stored.`;
+          }
+          const evidence = result.relationships.length > 0
+            ? result.relationships.map(r => `<span>${r.source} &mdash; ${r.relationship} &mdash; ${r.destination}</span>`).join('<br>')
+            : '';
+          setTimeout(() => addChatMsg('assistant', responseText, evidence), 200);
+        }, 300);
+      }, 300);
+    }, 300);
+  }, 300);
+}
+
+function addChatMsg(role, content, evidenceHtml) {
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = 'msg msg-' + role;
+  div.innerHTML = content + (evidenceHtml ? `<div class="evidence"><b>Evidence:</b><br>${evidenceHtml}</div>` : '');
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function switchTab(btn, tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
+function highlightMemory(id) {
+  // Trigger search for this memory to demonstrate reinforcement
+  const mem = graph.memories.find(m => m.id === id);
+  if (!mem) return;
+  const results = memorySearch(mem.content);
+  resetPipeline();
+  addPipelineStep(1, 'Memory Search', `Searching for "${mem.content.substring(0, 40)}..."`, 'done');
+  addPipelineStep(2, 'Ebbinghaus Reinforcement', `Memory #${id} accessed, retention boosted by +0.3`, 'done');
+  addPipelineStep(3, `Found ${results.length} results`, results.map(r => `#${r.memory.id}: score=${r.score}, retention=${Math.round(r.retention*100)}%`).join(' | '), 'done');
+  renderMemories();
+  renderEbbinghaus();
+  renderGraph();
+}
+
+// ===== Initial Render =====
+renderMemories();
+renderRelations();
+renderStats();
+renderEbbinghaus();
+renderGraph();
+window.addEventListener('resize', renderGraph);
+
+// Simulate time passage for Ebbinghaus demo
+setInterval(() => { renderEbbinghaus(); renderStats(); }, 5000);
+</script>
+</body>
+</html>
