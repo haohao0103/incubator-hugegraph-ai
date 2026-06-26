@@ -55,7 +55,9 @@ import logging
 import numpy as np
 import os
 import re
+import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
@@ -1117,6 +1119,257 @@ class SQLiteCodeGraph:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # ── MCP tool helpers: structural analysis ───────────────────────────────
+
+    def trace_path(
+        self,
+        source_name: str,
+        target_name: str,
+        max_depth: int = 4,
+        direction: str = "forward",
+    ) -> List[List[Dict]]:
+        """Find call paths from source to target.
+
+        direction='forward'  → source calls ... calls target
+        direction='backward' → target called-by ... called-by source
+        """
+        edge_col = "target_id" if direction == "forward" else "source_id"
+        next_col = "source_id" if direction == "forward" else "target_id"
+        rows = self.conn.execute(
+            """SELECT n.id, n.name, n.node_type, n.file_path, n.line_start
+               FROM nodes n WHERE n.name = ?""",
+            (source_name,),
+        ).fetchall()
+        if not rows:
+            return []
+        start_ids = {r["id"] for r in rows}
+
+        target_rows = self.conn.execute(
+            "SELECT id FROM nodes WHERE name = ?", (target_name,)
+        ).fetchall()
+        target_ids = {r["id"] for r in target_rows}
+        if not target_ids:
+            return []
+
+        paths: List[List[Dict]] = []
+        visited: Set[str] = set()
+
+        def node_info(nid: str) -> Optional[Dict]:
+            r = self.conn.execute(
+                "SELECT id, name, node_type, file_path, line_start FROM nodes WHERE id = ?",
+                (nid,),
+            ).fetchone()
+            return dict(r) if r else None
+
+        def dfs(current: str, path: List[Dict], depth: int) -> None:
+            if depth > max_depth:
+                return
+            if current in target_ids and len(path) > 1:
+                paths.append(path.copy())
+                return
+            if current in visited and depth > 1:
+                return
+            visited.add(current)
+            for r in self.conn.execute(
+                f"SELECT {next_col} FROM edges WHERE {edge_col} = ? AND edge_type = 'calls'",
+                (current,),
+            ).fetchall():
+                nxt = r[next_col]
+                info = node_info(nxt)
+                if info is None:
+                    continue
+                if info in path:
+                    continue
+                path.append(info)
+                dfs(nxt, path, depth + 1)
+                path.pop()
+
+        for sid in start_ids:
+            sinfo = node_info(sid)
+            if sinfo is None:
+                continue
+            dfs(sid, [sinfo], 1)
+        return paths[:20]
+
+    def get_architecture(self) -> Dict[str, Any]:
+        """High-level architecture overview."""
+        node_counts = dict(
+            self.conn.execute(
+                "SELECT node_type, COUNT(*) FROM nodes GROUP BY node_type"
+            ).fetchall()
+        )
+        edge_counts = dict(
+            self.conn.execute(
+                "SELECT edge_type, COUNT(*) FROM edges GROUP BY edge_type"
+            ).fetchall()
+        )
+
+        # Top hubs: nodes with most outgoing calls
+        hubs = [
+            dict(r)
+            for r in self.conn.execute(
+                """SELECT n.name, n.node_type, COUNT(*) as out_degree
+                   FROM edges e JOIN nodes n ON e.source_id = n.id
+                   WHERE e.edge_type = 'calls'
+                   GROUP BY e.source_id
+                   ORDER BY out_degree DESC
+                   LIMIT 10"""
+            ).fetchall()
+        ]
+
+        # Services and routes
+        services = [
+            dict(r)
+            for r in self.conn.execute(
+                "SELECT name, file_path, line_start FROM nodes WHERE node_type = 'service'"
+            ).fetchall()
+        ]
+        routes = [
+            dict(r)
+            for r in self.conn.execute(
+                "SELECT name, file_path, line_start FROM nodes WHERE node_type = 'route'"
+            ).fetchall()
+        ]
+
+        # Module dependency graph
+        modules = [
+            dict(r)
+            for r in self.conn.execute(
+                """SELECT DISTINCT source_id, target_id FROM edges
+                   WHERE edge_type = 'imports' LIMIT 50"""
+            ).fetchall()
+        ]
+
+        return {
+            "node_counts": node_counts,
+            "edge_counts": edge_counts,
+            "top_hubs": hubs,
+            "services": services,
+            "routes": routes,
+            "module_dependencies": modules,
+        }
+
+    def find_dead_code(
+        self,
+        entry_points: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Detect unreachable functions from the given entry points.
+
+        If entry_points is None, use all modules and nodes named 'main' / '__main__'
+        and service/route classes as entry points.
+        """
+        all_func_ids = {
+            r["id"]: dict(r)
+            for r in self.conn.execute(
+                "SELECT id, name, node_type, file_path, line_start FROM nodes "
+                "WHERE node_type IN ('function','method')"
+            ).fetchall()
+        }
+        if not all_func_ids:
+            return {"reachable": [], "dead": [], "entry_points": []}
+
+        if entry_points is None:
+            # Auto-detect: module nodes, functions named main, service/route classes
+            ep_rows = self.conn.execute(
+                """SELECT id FROM nodes
+                   WHERE node_type = 'module'
+                      OR name IN ('main', '__main__')
+                      OR node_type IN ('service','route')"""
+            ).fetchall()
+            entry_ids = {r["id"] for r in ep_rows}
+        else:
+            entry_ids = set()
+            for ep in entry_points:
+                entry_ids.update(
+                    r["id"] for r in self.conn.execute(
+                        "SELECT id FROM nodes WHERE name = ?", (ep,)
+                    ).fetchall()
+                )
+
+        reachable: Set[str] = set()
+        frontier = list(entry_ids)
+        while frontier:
+            cur = frontier.pop()
+            if cur in reachable:
+                continue
+            reachable.add(cur)
+            for r in self.conn.execute(
+                "SELECT target_id FROM edges WHERE source_id = ? AND edge_type = 'calls'",
+                (cur,),
+            ).fetchall():
+                nxt = r["target_id"]
+                if nxt not in reachable and nxt in all_func_ids:
+                    frontier.append(nxt)
+
+        dead = [
+            all_func_ids[fid] for fid in all_func_ids if fid not in reachable
+        ]
+        return {
+            "entry_points": list(entry_ids),
+            "reachable_count": len(reachable & set(all_func_ids)),
+            "dead": dead,
+            "dead_count": len(dead),
+        }
+
+    def detect_changes(
+        self,
+        changes: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Map file+line changes to affected code symbols and their neighbors.
+
+        changes: list of {"file_path": ..., "line_start": ..., "line_end": ...}
+        If omitted, call git diff to detect changes automatically.
+        """
+        if changes is None:
+            changes = _git_diff_changes()
+
+        affected_nodes: List[Dict] = []
+        for ch in changes:
+            fp = ch.get("file_path") or ch.get("path")
+            if not fp:
+                continue
+            ls = ch.get("line_start", 0) or ch.get("line", 0) or 1
+            le = ch.get("line_end", 0) or ls
+            rows = self.conn.execute(
+                """SELECT id, name, node_type, file_path, line_start, line_end
+                   FROM nodes
+                   WHERE file_path = ? AND line_start <= ? AND line_end >= ?""",
+                (fp, le, ls),
+            ).fetchall()
+            affected_nodes.extend(dict(r) for r in rows)
+
+        affected_ids = {n["id"] for n in affected_nodes}
+
+        # Upstream callers and downstream callees of affected nodes
+        upstream: List[Dict] = []
+        downstream: List[Dict] = []
+        for nid in affected_ids:
+            upstream.extend(
+                dict(r)
+                for r in self.conn.execute(
+                    """SELECT n.name, n.node_type, n.file_path, n.line_start
+                       FROM edges e JOIN nodes n ON e.source_id = n.id
+                       WHERE e.target_id = ? AND e.edge_type = 'calls'""",
+                    (nid,),
+                ).fetchall()
+            )
+            downstream.extend(
+                dict(r)
+                for r in self.conn.execute(
+                    """SELECT n.name, n.node_type, n.file_path, n.line_start
+                       FROM edges e JOIN nodes n ON e.target_id = n.id
+                       WHERE e.source_id = ? AND e.edge_type = 'calls'""",
+                    (nid,),
+                ).fetchall()
+            )
+
+        return {
+            "changes": changes,
+            "affected_nodes": affected_nodes,
+            "upstream_callers": upstream,
+            "downstream_callees": downstream,
+        }
+
     def close(self) -> None:
         self.conn.close()
 
@@ -1266,6 +1519,167 @@ class HugeGraphCodeGraph:
         e = (ec or {}).get("data", [0])
         return {"vertices": v[0] if v else 0, "edges": e[0] if e else 0}
 
+    # ── MCP tool helpers: structural analysis ───────────────────────────────
+
+    def trace_path(
+        self,
+        source_name: str,
+        target_name: str,
+        max_depth: int = 4,
+        direction: str = "forward",
+    ) -> List[List[Dict]]:
+        """Find call paths from source to target using Gremlin path traversal."""
+        sn = source_name.replace("'", "\\'")
+        tn = target_name.replace("'", "\\'")
+        edge = "out" if direction == "forward" else "in"
+        g = (
+            f"g.V().has('code_node','name','{sn}')."
+            f"repeat(__.{edge}('calls')).until(__.has('code_node','name','{tn}').or_().loops().is({max_depth}))."
+            f"has('code_node','name','{tn}').path().limit(20)"
+        )
+        result = self._request("POST", "/gremlin", {"gremlin": g})
+        paths: List[List[Dict]] = []
+        if not result or "data" not in result:
+            return paths
+        for path in result["data"]:
+            if not isinstance(path, list):
+                continue
+            items = []
+            for obj in path:
+                if isinstance(obj, dict) and "properties" in obj:
+                    props = obj["properties"]
+                    items.append({
+                        "id": obj.get("id"),
+                        "name": self._prop(props, "name"),
+                        "node_type": self._prop(props, "node_type"),
+                        "file_path": self._prop(props, "file_path"),
+                        "line_start": self._prop(props, "line_start"),
+                    })
+            if items:
+                paths.append(items)
+        return paths
+
+    def get_architecture(self) -> Dict[str, Any]:
+        """High-level architecture overview from HugeGraph."""
+        node_counts = {}
+        for nt in ["function", "class", "module", "service", "route"]:
+            q = f"g.V().has('code_node','node_type','{nt}').count()"
+            res = self._request("POST", "/gremlin", {"gremlin": q})
+            node_counts[nt] = res["data"][0] if res and "data" in res and res["data"] else 0
+
+        edge_counts = {}
+        for et in ["calls", "imports", "inherits", "contains", "defines"]:
+            q = f"g.E().hasLabel('{et}').count()"
+            res = self._request("POST", "/gremlin", {"gremlin": q})
+            edge_counts[et] = res["data"][0] if res and "data" in res and res["data"] else 0
+
+        hubs = self._gremlin_valueMap(
+            "g.V().has('node_type','function').outE('calls').inV().groupCount().by('name').unfold().order().by(values,desc).limit(10).project('name','out_degree').by(keys).by(values)"
+        )
+        services = self._gremlin_valueMap(
+            "g.V().has('node_type','service').valueMap('name','file_path','line_start')"
+        )
+        routes = self._gremlin_valueMap(
+            "g.V().has('node_type','route').valueMap('name','file_path','line_start')"
+        )
+        modules = self._gremlin_valueMap(
+            "g.E().hasLabel('imports').project('source_id','target_id').by(outV().values('id')).by(inV().values('id')).limit(50)"
+        )
+
+        return {
+            "node_counts": node_counts,
+            "edge_counts": edge_counts,
+            "top_hubs": hubs,
+            "services": services,
+            "routes": routes,
+            "module_dependencies": modules,
+        }
+
+    def find_dead_code(
+        self,
+        entry_points: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Detect unreachable functions from HugeGraph."""
+        if entry_points is None:
+            g = (
+                "g.V().or_(has('node_type','module'),has('name',within('main','__main__')),"
+                "has('node_type',within('service','route'))).id()"
+            )
+        else:
+            names = ",".join(f"'{ep.replace(chr(39), chr(92)+chr(39))}'" for ep in entry_points)
+            g = f"g.V().has('code_node','name',within({names})).id()"
+
+        result = self._request("POST", "/gremlin", {"gremlin": g})
+        entry_ids = result["data"] if result and "data" in result else []
+
+        reachable: Set[str] = set()
+        frontier = list(entry_ids)
+        while frontier:
+            cur = frontier.pop()
+            if cur in reachable:
+                continue
+            reachable.add(cur)
+            q = f"g.V('{cur}').out('calls').id()"
+            res = self._request("POST", "/gremlin", {"gremlin": q})
+            if res and "data" in res:
+                for nxt in res["data"]:
+                    if nxt not in reachable:
+                        frontier.append(nxt)
+
+        all_funcs = self._gremlin_valueMap(
+            "g.V().has('node_type',within('function','method')).valueMap('id','name','file_path','line_start')"
+        )
+        func_ids = {f.get("id") for f in all_funcs}
+        dead = [f for f in all_funcs if f.get("id") not in reachable]
+
+        return {
+            "entry_points": entry_ids,
+            "reachable_count": len(reachable & func_ids),
+            "dead": dead,
+            "dead_count": len(dead),
+        }
+
+    def detect_changes(
+        self,
+        changes: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Map changes to affected symbols and their HugeGraph neighbors."""
+        if changes is None:
+            changes = _git_diff_changes()
+
+        affected_nodes: List[Dict] = []
+        for ch in changes:
+            fp = ch.get("file_path") or ch.get("path")
+            if not fp:
+                continue
+            ls = ch.get("line_start", 0) or ch.get("line", 0) or 1
+            le = ch.get("line_end", 0) or ls
+            g = (
+                f"g.V().has('code_node','file_path','{fp.replace(chr(39), chr(92)+chr(39))}')."
+                f"has('line_start',lte({le})).has('line_end',gte({ls}))."
+                "valueMap('id','name','node_type','file_path','line_start','line_end')"
+            )
+            affected_nodes.extend(self._gremlin_valueMap(g))
+
+        affected_ids = {n.get("id") for n in affected_nodes if n.get("id")}
+        upstream: List[Dict] = []
+        downstream: List[Dict] = []
+        for nid in affected_ids:
+            nid_escaped = str(nid).replace("'", "\\'")
+            upstream.extend(self._gremlin_valueMap(
+                f"g.V('{nid_escaped}').in('calls').valueMap('name','node_type','file_path','line_start')"
+            ))
+            downstream.extend(self._gremlin_valueMap(
+                f"g.V('{nid_escaped}').out('calls').valueMap('name','node_type','file_path','line_start')"
+            ))
+
+        return {
+            "changes": changes,
+            "affected_nodes": affected_nodes,
+            "upstream_callers": upstream,
+            "downstream_callees": downstream,
+        }
+
     # ── helpers ──────────────────────────────────────────────────────────────
 
     def _gremlin_valueMap(self, gremlin: str) -> List[Dict]:
@@ -1281,6 +1695,15 @@ class HugeGraphCodeGraph:
                 item[k] = v[-1] if isinstance(v, list) and v else v
             items.append(item)
         return items
+
+    @staticmethod
+    def _prop(props: Any, key: str) -> Any:
+        if isinstance(props, dict):
+            v = props.get(key)
+            if isinstance(v, list) and v:
+                return v[0]
+            return v
+        return None
 
 
 # ─── BM25 Full-text Search ────────────────────────────────────────────────────
@@ -1577,6 +2000,153 @@ def find_python_files(root_dir: str, max_files: int = 50) -> List[str]:
     return result
 
 
+def _git_diff_changes(base_ref: str = "HEAD~1") -> List[Dict[str, Any]]:
+    """Return changed file + line ranges from `git diff`.
+
+    Falls back to empty list if not in a git repository or git is unavailable.
+    """
+    if shutil.which("git") is None:
+        return []
+    try:
+        diff = subprocess.check_output(
+            ["git", "diff", "--no-color", "-U0", base_ref],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            cwd=os.getcwd(),
+        )
+    except subprocess.CalledProcessError:
+        return []
+
+    changes: List[Dict[str, Any]] = []
+    current_file = ""
+    for line in diff.splitlines():
+        if line.startswith("diff --git"):
+            # Extract right-side path
+            parts = line.split()
+            if len(parts) >= 3 and parts[2].startswith("b/"):
+                current_file = parts[2][2:]
+            else:
+                current_file = ""
+        elif line.startswith("@@"):
+            # @@ -l,s +l,s @@
+            m = re.search(r"\+\d+(?:,(\d+))?", line)
+            if m:
+                start = int(m.group(0)[1:].split(",")[0])
+                count = int(m.group(1)) if m.group(1) else 1
+                changes.append({
+                    "file_path": current_file,
+                    "line_start": start,
+                    "line_end": max(start + count - 1, start),
+                })
+    return changes
+
+
+# ─── MCP Tools ────────────────────────────────────────────────────────────────
+
+class CodeGraphMCP:
+    """MCP-style tool interface over the code graph.
+
+    Mirrors the utility surface of codebase-memory-mcp but backed by
+    SQLite + HugeGraph + BM25 + sentence-transformers.
+    """
+
+    def __init__(
+        self,
+        sqlite: SQLiteCodeGraph,
+        hugegraph: Optional[HugeGraphCodeGraph] = None,
+        hybrid: Optional[HybridCodeSearch] = None,
+    ) -> None:
+        self.sqlite = sqlite
+        self.hg = hugegraph
+        self.hybrid = hybrid
+
+    # ── Public MCP tool entry points ────────────────────────────────────────
+
+    def trace_path(
+        self,
+        source: str,
+        target: str,
+        max_depth: int = 4,
+        direction: str = "forward",
+    ) -> Dict[str, Any]:
+        """MCP tool: trace call paths from source to target."""
+        backend = "hugegraph" if self.hg else "sqlite"
+        paths = (
+            self.hg.trace_path(source, target, max_depth, direction)
+            if self.hg
+            else self.sqlite.trace_path(source, target, max_depth, direction)
+        )
+        return {
+            "tool": "trace_path",
+            "source": source,
+            "target": target,
+            "direction": direction,
+            "backend": backend,
+            "path_count": len(paths),
+            "paths": paths,
+        }
+
+    def get_architecture(self) -> Dict[str, Any]:
+        """MCP tool: high-level project architecture overview."""
+        backend = "hugegraph" if self.hg else "sqlite"
+        data = self.hg.get_architecture() if self.hg else self.sqlite.get_architecture()
+        return {
+            "tool": "get_architecture",
+            "backend": backend,
+            **data,
+        }
+
+    def find_dead_code(
+        self,
+        entry_points: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """MCP tool: list functions unreachable from entry points."""
+        backend = "hugegraph" if self.hg else "sqlite"
+        data = (
+            self.hg.find_dead_code(entry_points)
+            if self.hg
+            else self.sqlite.find_dead_code(entry_points)
+        )
+        return {
+            "tool": "find_dead_code",
+            "backend": backend,
+            **data,
+        }
+
+    def detect_changes(
+        self,
+        changes: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """MCP tool: map code changes to affected symbols and neighbors."""
+        backend = "hugegraph" if self.hg else "sqlite"
+        data = (
+            self.hg.detect_changes(changes)
+            if self.hg
+            else self.sqlite.detect_changes(changes)
+        )
+        return {
+            "tool": "detect_changes",
+            "backend": backend,
+            **data,
+        }
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 10,
+    ) -> Dict[str, Any]:
+        """MCP tool: hybrid code search (BM25 + semantic)."""
+        results: List[Tuple[str, float]] = []
+        if self.hybrid:
+            results = self.hybrid.search(query, top_k=top_k)
+        return {
+            "tool": "search",
+            "query": query,
+            "result_count": len(results),
+            "results": [{"id": did, "score": round(score, 4)} for did, score in results],
+        }
+
+
 def check_hugegraph_available(rest_url: str = HG_REST) -> bool:
     import urllib.request
     try:
@@ -1694,6 +2264,46 @@ def run_poc() -> bool:
     for name, ok, detail in assertions:
         log.info("  [%s] %s: %s", "PASS" if ok else "FAIL", name, detail)
 
+    # ── 6b. MCP tool demo ───────────────────────────────────────────────────
+    log.info("--- MCP Tools ---")
+    mcp = CodeGraphMCP(sqlite, hugegraph=hg, hybrid=hybrid)
+    func_names = sorted({n.name for n in parser.nodes if n.node_type == "function"})
+    mcp_trace: Dict[str, Any] = {}
+    if len(func_names) >= 2:
+        try:
+            mcp_trace = mcp.trace_path(func_names[0], func_names[-1], max_depth=3)
+            log.info("trace_path: %d paths", mcp_trace.get("path_count", 0))
+        except Exception as exc:
+            log.error("trace_path error: %s", exc)
+
+    try:
+        mcp_arch = mcp.get_architecture()
+        log.info("architecture node counts: %s", mcp_arch.get("node_counts", {}))
+    except Exception as exc:
+        log.error("get_architecture error: %s", exc)
+        mcp_arch = {}
+
+    try:
+        mcp_dead = mcp.find_dead_code()
+        log.info("find_dead_code: %d dead functions", mcp_dead.get("dead_count", 0))
+    except Exception as exc:
+        log.error("find_dead_code error: %s", exc)
+        mcp_dead = {}
+
+    try:
+        mcp_changes = mcp.detect_changes()
+        log.info("detect_changes: %d affected nodes", len(mcp_changes.get("affected_nodes", [])))
+    except Exception as exc:
+        log.error("detect_changes error: %s", exc)
+        mcp_changes = {}
+
+    try:
+        mcp_search = mcp.search(func_names[0] if func_names else "function", top_k=5)
+        log.info("search: %d results", mcp_search.get("result_count", 0))
+    except Exception as exc:
+        log.error("search error: %s", exc)
+        mcp_search = {}
+
     # ── 7. Save results ──────────────────────────────────────────────────────
     output = {
         "poc_name": "codegraph_hugegraph_mcp",
@@ -1717,6 +2327,13 @@ def run_poc() -> bool:
             "avg_hugegraph_ms": round(avg_hg, 2),
         },
         "assertions": [{"name": n, "passed": ok, "detail": d} for n, ok, d in assertions],
+        "mcp_tools": {
+            "trace_path": mcp_trace,
+            "get_architecture": mcp_arch,
+            "find_dead_code": mcp_dead,
+            "detect_changes": mcp_changes,
+            "search": mcp_search,
+        },
         "poc_result": f"{passed}/{total} PASS",
         "poc_redline_compliant": True,
         "redline_notes": [

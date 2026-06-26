@@ -62,11 +62,15 @@ from hugegraph_llm.poc.codegraph_hugegraph_mcp import (
     BM25CodeSearch,
     CodeEdge,
     CodeGraphBenchmark,
+    CodeGraphMCP,
     CodeNode,
     HugeGraphCodeGraph,
+    HybridCodeSearch,
     PythonCodeParser,
     QueryResult,
+    SemanticCodeSearch,
     SQLiteCodeGraph,
+    _git_diff_changes,
     check_hugegraph_available,
     find_python_files,
     run_poc,
@@ -1044,6 +1048,86 @@ def test_edge_cases():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# T10 — MCP Tools (trace_path / get_architecture / find_dead_code / detect_changes)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_mcp_tools():
+    print("\n── T10: MCP Tools ──")
+
+    db, db_path = _fresh_sqlite()
+    nodes = [
+        _make_node("main",   "function", "app.py", 1, 5),
+        _make_node("helper", "function", "app.py", 7, 12),
+        _make_node("utils",  "function", "util.py", 1, 10),
+        _make_node("DeadFn", "function", "legacy.py", 1, 5),
+        _make_node("AppService", "service", "app.py", 15, 30),
+        _make_node("app.py", "module", "app.py", 1, 30),
+    ]
+    for n in nodes:
+        n.id = f"t10__{n.name}"
+    db.insert_nodes(nodes)
+    db.insert_edges([
+        _make_edge("t10__main", "t10__helper", "calls"),
+        _make_edge("t10__helper", "t10__utils", "calls"),
+        _make_edge("t10__AppService", "t10__main", "calls"),
+        _make_edge("t10__app.py", "t10__main", "contains"),
+    ])
+
+    bm25 = BM25CodeSearch()
+    bm25.build_index(nodes)
+    semantic = SemanticCodeSearch()
+    # semantic disabled when sentence-transformers missing
+    hybrid = HybridCodeSearch(bm25, semantic)
+    mcp = CodeGraphMCP(db, hybrid=hybrid)
+
+    # T10.1 — trace_path forward main → utils
+    result = mcp.trace_path("main", "utils", max_depth=4, direction="forward")
+    check(result["tool"] == "trace_path", "T10.1 trace_path returns tool name")
+    check(result["path_count"] >= 1, f"T10.2 found path main→utils (got {result['path_count']})")
+
+    # T10.2 — trace_path backward utils → main
+    result2 = mcp.trace_path("utils", "main", max_depth=4, direction="backward")
+    check(result2["path_count"] >= 1, "T10.3 backward path utils→main found")
+
+    # T10.3 — trace_path with non-existent target
+    result3 = mcp.trace_path("main", "nonexistent_xyz", max_depth=2)
+    check(result3["path_count"] == 0, "T10.4 no path to nonexistent target")
+
+    # T10.4 — get_architecture returns expected keys
+    arch = mcp.get_architecture()
+    check(arch["tool"] == "get_architecture", "T10.5 get_architecture tool name")
+    check("node_counts" in arch, "T10.6 architecture has node_counts")
+    check("service" in arch.get("node_counts", {}), "T10.7 service node counted")
+
+    # T10.5 — find_dead_code detects DeadFn
+    dead = mcp.find_dead_code()
+    check(dead["tool"] == "find_dead_code", "T10.8 find_dead_code tool name")
+    dead_names = {n["name"] for n in dead["dead"]}
+    check("DeadFn" in dead_names, f"T10.9 DeadFn flagged as dead (got {dead_names})")
+    check("utils" not in dead_names, "T10.10 reachable utils not dead")
+
+    # T10.6 — detect_changes with explicit change range
+    changes = [{"file_path": "app.py", "line_start": 8, "line_end": 10}]
+    changes_result = mcp.detect_changes(changes)
+    check(changes_result["tool"] == "detect_changes", "T10.11 detect_changes tool name")
+    affected = {n["name"] for n in changes_result["affected_nodes"]}
+    check("helper" in affected, f"T10.12 change in helper lines detected (got {affected})")
+
+    # T10.7 — CodeGraphMCP.search uses hybrid channel
+    search_result = mcp.search("helper", top_k=5)
+    check(search_result["tool"] == "search", "T10.13 search tool name")
+    check(isinstance(search_result["results"], list), "T10.14 search returns list")
+
+    # T10.8 — _git_diff_changes returns list and is safe outside git
+    diff = _git_diff_changes()
+    check(isinstance(diff, list), "T10.15 _git_diff_changes returns list")
+
+    db.close()
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Runner
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -1062,6 +1146,7 @@ def main() -> None:
     test_utilities()
     test_integration()
     test_edge_cases()
+    test_mcp_tools()
 
     total = PASS + FAIL
     print("\n" + "=" * 64)
