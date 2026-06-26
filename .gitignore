@@ -214,8 +214,6 @@ cython_debug/
 *.tar.gz
 
 # Demo / benchmark runtime artifacts
-benchmark_data/
-demo_data/
 *.db
 *.db-shm
 *.db-wal
