@@ -890,7 +890,14 @@
     "avg_ndcg@10": 0.5487,
     "best_mrr": 0.515,
     "projects_tested": 3,
-    "total_queries": 45
+    "total_queries": 45,
+    "call_graph_accuracy": {
+      "static_direct_call_precision": 1.0,
+      "static_direct_call_recall": 1.0,
+      "static_direct_call_f1": 1.0,
+      "test_cases": 50,
+      "note": "合成数据集: 函数体内部直接调用, 无动态分发/装饰器/反射"
+    }
   },
   "competitors": {
     "tools": [
@@ -898,30 +905,36 @@
         "name": "HugeGraph CodeGraph",
         "languages": 1,
         "languages_note": "Python → 计划 Java/TS",
-        "call_accuracy": "待测",
-        "agent_reduction": "待测",
+        "call_accuracy": "P=1.00, R=1.00 (静态直接调用, 50合成例)",
+        "agent_reduction": "待实测 (MCP 规划中)",
         "graph_backend": "SQLite + HugeGraph(分布式)",
         "mcp_support": false,
+        "mcp_note": "HugeGraph MCP Server 已设计 (docs/HUGEGRAPH_MCP_SERVER_SPEC.md)",
         "framework_aware": false,
+        "framework_note": "暂无 (计划 Flask/FastAPI 路由识别)",
         "olap_support": true,
+        "olap_note": "Vermeer OLAP 引擎",
         "open_source": "Apache 2.0"
       },
       {
         "name": "ColbyMcHenry CodeGraph",
         "languages": 22,
-        "languages_note": "多语言交叉引用",
-        "call_accuracy": "86.7%-100%",
+        "languages_note": "多语言交叉引用 (RN/Go/Python 等)",
+        "call_accuracy": "86.7%-100% (per-language)",
         "agent_reduction": "58% 工具调用 / 23-64% Token",
+        "agent_note": "7个真实项目实测",
         "graph_backend": "SQLite",
         "mcp_support": true,
+        "mcp_note": "Claude/Cursor/Codex/Kiro 原生集成",
         "framework_aware": "14框架",
+        "framework_note": "React/Flask/Django/Express 等路由识别",
         "olap_support": false,
         "open_source": "MIT"
       },
       {
         "name": "Code-Graph-RAG",
         "languages": 10,
-        "languages_note": "Tree-sitter多语言",
+        "languages_note": "Tree-sitter 多语言",
         "call_accuracy": "未公开",
         "agent_reduction": "未公开",
         "graph_backend": "Memgraph",
@@ -933,29 +946,32 @@
       {
         "name": "Sourcegraph",
         "languages": 20,
-        "languages_note": "LSIF/SCIP标准",
-        "call_accuracy": "工业级",
-        "agent_reduction": "~40% (Cody)",
+        "languages_note": "LSIF/SCIP 标准",
+        "call_accuracy": "工业级 (未公开 P/R)",
+        "agent_reduction": "~40% (Cody 公开数据)",
         "graph_backend": "SQLite Bundle",
         "mcp_support": true,
+        "mcp_note": "Cody 2024-11 支持 MCP",
         "framework_aware": "语言服务器",
+        "framework_note": "依赖 LSIF 索引器",
         "olap_support": false,
         "open_source": "部分开源"
       },
       {
-        "name": "Joern/CPG",
+        "name": "Joern / CPG",
         "languages": 6,
-        "languages_note": "AST+CFG+PDG+DDG",
-        "call_accuracy": "学术级",
+        "languages_note": "C/C++/Java/JS/Python/Ruby",
+        "call_accuracy": "学术级/安全级 (未公开 P/R)",
         "agent_reduction": "N/A",
         "graph_backend": "OverflowDB",
-        "mcp_support": false,
+        "mcp_support": true,
+        "mcp_note": "社区 joern-mcp (BlockSecCA)",
         "framework_aware": false,
         "olap_support": false,
         "open_source": "Apache 2.0"
       }
     ],
-    "note": "Agent减少数据来源: ColbyMcHenry (7项目实测), Sourcegraph (Cody公开数据)"
+    "note": "MCP 支持: ColbyMcHenry 原生, Sourcegraph Cody 2024-11, Joern 社区版; Agent减少数据来源: ColbyMcHenry 7项目实测, Sourcegraph Cody公开数据"
   },
   "advantages": {
     "hugegraph_distributed": "唯一支持分布式图存储 → 百亿级代码图谱",

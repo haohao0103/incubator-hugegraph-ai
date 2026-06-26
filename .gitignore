@@ -221,3 +221,4 @@ memory_bm25/
 memory_faiss.index
 memory_faiss.index.meta.json
 memory_provenance.json
+hugegraph-llm/benchmark_data/

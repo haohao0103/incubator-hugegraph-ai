@@ -24,6 +24,14 @@ from flask import Flask, jsonify, request, send_from_directory
 
 app = Flask(__name__)
 
+# Enable CORS for dashboard served from other ports
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
 # ─── Load pre-parsed data ──────────────────────────────────
 DATA_FILE = os.path.join(os.path.dirname(__file__), "codegraph_parsed.json")
 with open(DATA_FILE, "r") as f:
@@ -368,6 +376,14 @@ def index():
     """Serve the demo frontend."""
     return send_from_directory(
         os.path.dirname(__file__), "codegraph_demo.html"
+    )
+
+
+@app.route("/build")
+def build_demo():
+    """Serve the graph build process demo."""
+    return send_from_directory(
+        os.path.dirname(__file__), "codegraph_build_demo.html"
     )
 
 

@@ -3,307 +3,372 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CodeGraph 代码知识图谱 | CTO Demo</title>
+<title>CodeGraph 代码知识图谱 | 交互式 CTO Demo</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
 :root {
-  --bg: #0a0e27;
-  --panel: #111640;
-  --accent: #6c5ce7;
-  --accent2: #00cec9;
-  --text: #e0e0f0;
-  --text-dim: #8890b5;
-  --green: #00b894;
-  --red: #e17055;
-  --orange: #fdcb6e;
-  --blue: #74b9ff;
-  --border: #1e2350;
+  --bg: #0a0e27; --panel: #111640; --panel2: #1a1f52;
+  --accent: #6c5ce7; --accent2: #00cec9; --text: #e0e0f0;
+  --text-dim: #8890b5; --green: #00b894; --red: #e17055;
+  --orange: #fdcb6e; --blue: #74b9ff; --border: #1e2350;
+  --func: #58a6ff; --class: #3fb950; --module: #8b949e;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg); color: var(--text);
-  overflow-x: hidden;
+  background: var(--bg); color: var(--text); overflow-x: hidden;
 }
 header {
   background: linear-gradient(135deg, #0c0f30 0%, #1a1050 50%, #0c0f30 100%);
-  border-bottom: 1px solid var(--border);
-  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border); padding: 1rem 1.5rem;
   display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
 }
-header h1 { font-size: 1.6rem; font-weight: 700; }
+header h1 { font-size: 1.4rem; font-weight: 700; }
 header h1 span { color: var(--accent); }
 .badge {
-  background: rgba(108,92,231,0.15);
-  border: 1px solid rgba(108,92,231,0.4);
-  padding: 0.3rem 0.8rem; border-radius: 20px;
-  font-size: 0.75rem; color: var(--accent);
+  background: rgba(108,92,231,0.15); border: 1px solid rgba(108,92,231,0.4);
+  padding: 0.25rem 0.7rem; border-radius: 20px; font-size: 0.7rem; color: var(--accent);
 }
-main { padding: 1.5rem 2rem; display: grid; gap: 1.5rem; }
-.row { display: grid; gap: 1.5rem; }
+main { padding: 1.25rem; display: grid; gap: 1.25rem; max-width: 1800px; margin: 0 auto; }
+.row { display: grid; gap: 1.25rem; }
 .row-4 { grid-template-columns: repeat(4, 1fr); }
 .row-2 { grid-template-columns: 1fr 1fr; }
-.row-3 { grid-template-columns: 1fr 1fr 1fr; }
 .row-32 { grid-template-columns: 2fr 1fr; }
 .card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px; padding: 1.25rem;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1rem;
 }
 .card h2 {
-  font-size: 0.85rem; color: var(--text-dim);
-  text-transform: uppercase; letter-spacing: 1px;
-  margin-bottom: 0.8rem;
+  font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 0.7rem; display: flex; align-items: center; gap: 0.4rem;
 }
-.metric-large {
-  font-size: 2.5rem; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.metric-unit { font-size: 0.9rem; color: var(--text-dim); margin-left: 0.3rem; }
-.metric-sub { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.3rem; }
+.metric-large { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric-unit { font-size: 0.8rem; color: var(--text-dim); margin-left: 0.2rem; }
+.metric-sub { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.2rem; }
 .accent-text { color: var(--accent2); }
 .green-text { color: var(--green); }
 .orange-text { color: var(--orange); }
-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.blue-text { color: var(--blue); }
+
+/* Interactive graph panel */
+#graph-panel { min-height: 520px; position: relative; overflow: hidden; }
+#graph-viz { width: 100%; height: 520px; border-radius: 8px; background: #080b20; }
+#graph-controls {
+  position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 10;
+}
+#graph-controls input, #graph-controls select, #graph-controls button {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; outline: none;
+}
+#graph-controls button { cursor: pointer; }
+#graph-controls button:hover { border-color: var(--accent); color: var(--accent); }
+#graph-controls button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+#graph-info {
+  position: absolute; bottom: 12px; left: 12px; right: 220px;
+  background: rgba(10,14,39,0.9); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; font-size: 0.7rem; color: var(--text-dim); z-index: 10;
+  display: none;
+}
+#mode-legend {
+  position: absolute; bottom: 12px; right: 12px; z-index: 10;
+  background: rgba(10,14,39,0.9); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 0.7rem;
+}
+.mode-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 th { text-align: left; color: var(--text-dim); font-weight: 600;
-     padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); font-size:0.7rem;
+     padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border); font-size:0.65rem;
      text-transform: uppercase; letter-spacing: 0.5px; }
-td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(30,35,80,0.5); }
+td { padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(30,35,80,0.5); }
 tr:hover td { background: rgba(108,92,231,0.05); }
 .chip {
-  display: inline-block; padding: 0.15rem 0.5rem;
-  border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+  display: inline-block; padding: 0.12rem 0.45rem;
+  border-radius: 10px; font-size: 0.65rem; font-weight: 600;
 }
 .chip-green { background: rgba(0,184,148,0.15); color: var(--green); }
 .chip-red { background: rgba(225,112,85,0.15); color: var(--red); }
 .chip-orange { background: rgba(253,203,110,0.15); color: var(--orange); }
 .chip-blue { background: rgba(116,185,255,0.15); color: var(--blue); }
-.progress-bar {
-  height: 6px; background: var(--border); border-radius: 3px;
-  margin-top: 0.4rem; overflow: hidden;
+.chip-purple { background: rgba(108,92,231,0.15); color: var(--accent); }
+
+/* Before/After */
+.ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.ba-box { background: var(--panel2); border-radius: 8px; padding: 0.8rem; border: 1px solid var(--border); }
+.ba-box h4 { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 0.4rem; }
+.ba-value { font-size: 1.4rem; font-weight: 700; }
+.ba-desc { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+/* Build demo */
+#build-steps { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.step-btn {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text-dim);
+  padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.72rem; cursor: pointer;
 }
-.progress-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
-.adv-card {
-  padding: 0.8rem; border-radius: 8px;
-  border: 1px solid rgba(108,92,231,0.2);
-  background: rgba(108,92,231,0.05);
-  margin-bottom: 0.5rem;
-}
-.adv-card h3 { font-size: 0.8rem; color: var(--accent); margin-bottom: 0.2rem; }
-.adv-card p { font-size: 0.75rem; color: var(--text-dim); line-height:1.4; }
+.step-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.step-btn.done { color: var(--green); border-color: var(--green); }
+#build-stage { background: var(--panel2); border-radius: 8px; padding: 0.8rem; min-height: 160px; font-size: 0.78rem; }
+#build-stage pre { background: #080b20; padding: 0.6rem; border-radius: 6px; overflow-x: auto; font-size: 0.7rem; margin-top: 0.4rem; }
+
 .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
-footer {
-  text-align: center; padding: 1.5rem;
-  color: var(--text-dim); font-size: 0.75rem;
-  border-top: 1px solid var(--border);
+footer { text-align: center; padding: 1rem; color: var(--text-dim); font-size: 0.7rem; border-top: 1px solid var(--border); }
+.note { font-size: 0.65rem; color: var(--text-dim); margin-top: 0.4rem; font-style: italic; }
+
+/* Tooltip */
+#tooltip { position: fixed; display: none; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; font-size: 12px; z-index: 1000; pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4); max-width: 300px; }
+
+@media (max-width: 1200px) {
+  .row-4 { grid-template-columns: repeat(2, 1fr); }
+  .row-2, .row-32 { grid-template-columns: 1fr; }
 }
-.note { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.5rem; font-style: italic; }
 </style>
 </head>
 <body>
 <header>
   <div>
     <h1>🦊 <span>CodeGraph</span> 代码知识图谱</h1>
-    <div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.3rem">
-      HugeGraph-Distributed · AST Parser · BM25 Search · Multi-Hop Traversal
+    <div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.2rem">
+      交互式 CTO Demo · 源代码 → AST → 图 → 查询 · HugeGraph 分布式后端
     </div>
   </div>
-  <div style="display:flex;gap:0.5rem;align-items:center">
-    <span class="badge">v1.0.0</span>
-    <span class="badge">CTO Demo</span>
-    <span class="badge" style="background:rgba(0,206,201,0.15);border-color:rgba(0,206,201,0.4);color:var(--accent2)">2026-06-26</span>
+  <div style="display:flex;gap:0.4rem;align-items:center">
+    <span class="badge">v1.1</span>
+    <span class="badge" style="background:rgba(0,206,201,0.15);border-color:rgba(0,206,201,0.4);color:var(--accent2)">Interactive</span>
   </div>
 </header>
 
 <main>
   <!-- Row 1: Key Metrics -->
-  <div class="row row-4">
-    <div class="card">
-      <h2>📊 总节点数</h2>
-      <div class="metric-large accent-text" id="total-nodes">--</div>
-      <div class="metric-sub">函数/类/模块</div>
+  <div class="row row-4" id="key-metrics">
+    <div class="card"><h2>📊 总节点数</h2><div class="metric-large accent-text" id="total-nodes">--</div><div class="metric-sub">函数 / 类 / 模块</div></div>
+    <div class="card"><h2>🔗 总边数</h2><div class="metric-large blue-text" id="total-edges">--</div><div class="metric-sub">调用 / 导入 / 继承 / 包含</div></div>
+    <div class="card"><h2>🎯 搜索 MRR</h2><div class="metric-large green-text" id="avg-mrr">--</div><div class="metric-sub">BM25 · 45 查询 · 3 项目</div></div>
+    <div class="card"><h2>⚡ 1-hop 延迟</h2><div class="metric-large orange-text" id="query-latency">--</div><div class="metric-sub">平均毫秒</div></div>
+  </div>
+
+  <!-- Row 2: Interactive Graph + Detail -->
+  <div class="row row-32">
+    <div class="card" id="graph-panel">
+      <h2>🕸️ 交互式代码图谱 (真实 hugegraph-llm 项目)</h2>
+      <div id="graph-controls">
+        <input type="text" id="graph-search" placeholder="🔍 搜索函数/类..." style="width:160px">
+        <select id="edge-filter"><option value="all">全部关系</option><option value="calls">调用图</option><option value="inherits">继承图</option><option value="imports">导入图</option><option value="contains">包含图</option></select>
+        <button id="btn-expand" title="点击节点后展开邻居">展开模式</button>
+        <button id="btn-impact">💥 影响分析</button>
+        <button id="btn-fit">⊞ 复位</button>
+        <button id="btn-reset">↺ 重置视图</button>
+      </div>
+      <svg id="graph-viz"></svg>
+      <div id="graph-info"></div>
+      <div id="mode-legend">
+        <div><span class="mode-dot" style="background:var(--func)"></span>Function</div>
+        <div><span class="mode-dot" style="background:var(--class)"></span>Class</div>
+        <div><span class="mode-dot" style="background:var(--module)"></span>Module</div>
+      </div>
     </div>
     <div class="card">
-      <h2>🔗 总边数</h2>
-      <div class="metric-large" style="color:var(--blue)" id="total-edges">--</div>
-      <div class="metric-sub">调用/导入/继承/包含</div>
-    </div>
-    <div class="card">
-      <h2>🎯 搜索MRR</h2>
-      <div class="metric-large green-text" id="avg-mrr">--</div>
-      <div class="metric-sub">BM25 on 3 projects · 45 queries</div>
-    </div>
-    <div class="card">
-      <h2>⚡ 查询延迟</h2>
-      <div class="metric-large orange-text" id="query-latency">--</div>
-      <div class="metric-sub">1-hop neighbor avg</div>
+      <h2>📋 选中节点详情</h2>
+      <div id="node-detail" class="loading">点击图谱节点查看详情</div>
+      <h2 style="margin-top:1rem">🔄 Before / After</h2>
+      <div class="ba-grid">
+        <div class="ba-box">
+          <h4>无 CodeGraph</h4>
+          <div class="ba-value red-text" id="ba-without">60</div>
+          <div class="ba-desc">个文件需人工扫描</div>
+        </div>
+        <div class="ba-box">
+          <h4>有 CodeGraph</h4>
+          <div class="ba-value green-text" id="ba-with">3</div>
+          <div class="ba-desc">跳内定位影响范围</div>
+        </div>
+      </div>
+      <div class="note">示例: 修改一个核心函数，传统方式需遍历全部源码；CodeGraph 通过调用链秒级定位。</div>
     </div>
   </div>
 
-  <!-- Row 2: Per-Project Coverage + Search -->
+  <!-- Row 3: Multi-hop + Build Demo -->
   <div class="row row-2">
     <div class="card">
-      <h2>📁 项目代码图谱覆盖</h2>
-      <table><thead><tr>
-        <th>项目</th><th>文件</th><th>节点</th><th>边</th><th>耗时</th><th>MRR</th>
-      </tr></thead>
-      <tbody id="coverage-table"></tbody></table>
-      <div class="note">数据来源: 真实开源项目源码 (pip installed)</div>
+      <h2>🌐 多跳遍历演示</h2>
+      <div style="display:flex;gap:1rem;align-items:center;margin-bottom:0.8rem">
+        <label style="font-size:0.78rem;color:var(--text-dim)">跳数:</label>
+        <input type="range" id="hop-slider" min="1" max="5" value="2" style="flex:1">
+        <span id="hop-value" class="chip chip-blue">2 hop</span>
+        <select id="hop-direction" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:0.75rem">
+          <option value="out">下游 (我调用谁)</option>
+          <option value="in">上游 (谁调用我)</option>
+          <option value="both">双向</option>
+        </select>
+      </div>
+      <div id="hop-result" style="font-size:0.78rem;color:var(--text-dim)">先点击图谱中一个节点，再点击“执行遍历”</div>
+      <button id="btn-hop" style="margin-top:0.6rem;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:0.75rem;cursor:pointer">执行遍历</button>
+      <table style="margin-top:0.8rem"><thead><tr><th>跳数</th><th>平均可达节点</th><th>requests</th><th>flask</th><th>django</th></tr></thead><tbody id="hop-table"></tbody></table>
     </div>
     <div class="card">
-      <h2>🔍 BM25 搜索质量详情</h2>
-      <table><thead><tr>
-        <th>项目</th><th>查询数</th><th>MRR</th><th>NDCG@10</th><th>Recall@10</th>
-      </tr></thead>
-      <tbody id="search-table"></tbody></table>
+      <h2>🏗️ 图构建流程</h2>
+      <div id="build-steps">
+        <button class="step-btn active" data-step="0">1. 源代码</button>
+        <button class="step-btn" data-step="1">2. AST 解析</button>
+        <button class="step-btn" data-step="2">3. 提取节点</button>
+        <button class="step-btn" data-step="3">4. 提取关系</button>
+        <button class="step-btn" data-step="4">5. 载入图库</button>
+        <button class="step-btn" data-step="5">6. 查询验证</button>
+      </div>
+      <div id="build-stage"></div>
+      <button id="btn-build-play" style="margin-top:0.6rem;background:var(--green);color:#0a0e27;border:none;border-radius:6px;padding:6px 14px;font-size:0.75rem;cursor:pointer;font-weight:600">▶ 自动播放构建流程</button>
     </div>
   </div>
 
-  <!-- Row 3: Structural Query Performance + Multi-Hop -->
+  <!-- Row 4: Benchmark Tables -->
   <div class="row row-2">
+    <div class="card">
+      <h2>📁 项目覆盖 & 搜索质量</h2>
+      <table><thead><tr><th>项目</th><th>文件</th><th>节点</th><th>边</th><th>MRR</th><th>NDCG@10</th></tr></thead><tbody id="coverage-table"></tbody></table>
+    </div>
     <div class="card">
       <h2>⏱️ 结构查询性能 (avg ms)</h2>
-      <table><thead><tr>
-        <th>查询类型</th><th>requests</th><th>flask</th><th>django</th>
-      </tr></thead>
-      <tbody id="perf-table"></tbody></table>
-    </div>
-    <div class="card">
-      <h2>🌐 多跳遍历可达性</h2>
-      <table><thead><tr>
-        <th>跳数</th><th>requests</th><th>flask</th><th>django</th>
-      </tr></thead>
-      <tbody id="hop-table"></tbody></table>
-      <div class="note">从30个随机函数出发，测量各hop层平均可达节点数</div>
+      <table><thead><tr><th>查询类型</th><th>requests</th><th>flask</th><th>django</th></tr></thead><tbody id="perf-table"></tbody></table>
     </div>
   </div>
 
-  <!-- Row 4: Competitor Comparison -->
+  <!-- Row 5: Call Graph + Competitor -->
+  <div class="row row-2">
+    <div class="card">
+      <h2>📞 调用图拓扑分析</h2>
+      <table><thead><tr><th>项目</th><th>调用边</th><th>内部调用率</th><th>跨模块调用率</th></tr></thead><tbody id="callgraph-table"></tbody></table>
+      <div class="note">内部调用率 = 项目内函数间调用 / 总调用边。跨模块率反映代码耦合度。</div>
+    </div>
+    <div class="card">
+      <h2>🧪 调用图准确率 (合成数据集)</h2>
+      <div class="ba-grid">
+        <div class="ba-box"><h4>Precision</h4><div class="ba-value green-text" id="cg-precision">1.00</div><div class="ba-desc">50 合成函数调用用例</div></div>
+        <div class="ba-box"><h4>Recall</h4><div class="ba-value green-text" id="cg-recall">1.00</div><div class="ba-desc">静态直接调用，无动态分发</div></div>
+      </div>
+      <div class="note">真实项目因动态调用/反射/装饰器，静态分析会损失部分边，这是行业共性问题。</div>
+    </div>
+  </div>
+
+  <!-- Row 6: Competitor Matrix -->
   <div class="card">
     <h2>🏆 竞品对标矩阵</h2>
     <div style="overflow-x:auto">
     <table><thead><tr>
-      <th>产品</th><th>语言支持</th><th>调用准确率</th><th>Agent减少</th>
+      <th>产品</th><th>语言</th><th>调用准确率</th><th>Agent 工具↓</th><th>Agent Token↓</th>
       <th>图后端</th><th>MCP</th><th>框架感知</th><th>OLAP</th><th>开源</th>
     </tr></thead>
     <tbody id="competitor-table"></tbody></table>
     </div>
-    <div class="note" style="margin-top:0.8rem">
-      HugeGraph CodeGraph 是唯一支持<b>分布式图存储</b>和<b>OLAP分析</b>的方案。
-      Agent减少数据来源: ColbyMcHenry 7项目实测, Sourcegraph Cody公开数据。
+    <div class="note">
+      MCP: ColbyMcHenry 原生；Sourcegraph Cody 2024-11 支持；Joern 有社区 joern-mcp；Code-Graph-RAG 无。<br>
+      Agent 减少数据：ColbyMcHenry 7项目实测；Sourcegraph Cody 公开数据；其余未公开。
     </div>
   </div>
 
-  <!-- Row 5: Call Graph Analysis + Unique Advantages -->
-  <div class="row row-2">
-    <div class="card">
-      <h2>📞 调用图拓扑分析</h2>
-      <table><thead><tr>
-        <th>项目</th><th>调用边</th><th>内部调用率</th><th>跨模块调用率</th>
-      </tr></thead>
-      <tbody id="callgraph-table"></tbody></table>
-    </div>
-    <div class="card">
-      <h2>💎 HugeGraph 独特优势</h2>
-      <div id="advantages-list"></div>
-    </div>
+  <!-- Row 7: Advantages -->
+  <div class="card">
+    <h2>💎 HugeGraph CodeGraph 独特优势</h2>
+    <div id="advantages-list"></div>
   </div>
 </main>
 
 <footer>
-  CodeGraph Benchmark Dashboard · Powered by HugeGraph · Generated <span id="gen-time">--</span>
+  CodeGraph Interactive Dashboard · Powered by HugeGraph · <span id="gen-time">--</span>
 </footer>
 
+<div id="tooltip"></div>
+
 <script>
-// Auto-load benchmark results
-async function loadResults() {
+const API = 'http://localhost:5100';
+let benchmarkData = null;
+let graphData = { nodes: [], edges: [] };
+let allNodes = [], allEdges = [];
+let currentMode = 'all';
+let selectedNode = null;
+let expandMode = false;
+let sim, svg, g, zoom;
+
+// ─── Init ─────────────────────────────────────────────────
+async function init() {
+  await loadBenchmark();
+  await initGraph();
+  setupBuildDemo();
+  setupEventListeners();
+}
+
+async function loadBenchmark() {
   try {
     const resp = await fetch('benchmark_result.json');
-    const data = await resp.json();
-    render(data);
+    benchmarkData = await resp.json();
+    renderBenchmark();
   } catch (e) {
-    document.querySelector('main').innerHTML +=
-      '<div class="card loading">⏳ 基准评测正在运行中...<br><small>首次运行约需2-3分钟解析 requests/flask/django</small></div>';
-    // Retry in 3 seconds
-    setTimeout(loadResults, 3000);
+    console.error('Failed to load benchmark:', e);
   }
 }
 
-function render(data) {
-  const cov = data.coverage || {};
-  const agg = data.aggregate || {};
-  const comps = (data.competitors || {}).tools || [];
-  const advs = data.advantages || {};
+// ─── Benchmark Rendering ──────────────────────────────────
+function renderBenchmark() {
+  const cov = benchmarkData.coverage || {};
+  const agg = benchmarkData.aggregate || {};
+  const comps = (benchmarkData.competitors || {}).tools || [];
+  const advs = benchmarkData.advantages || {};
 
-  // Key metrics
   document.getElementById('total-nodes').textContent = (agg.total_nodes || 0).toLocaleString();
   document.getElementById('total-edges').textContent = (agg.total_edges || 0).toLocaleString();
   document.getElementById('avg-mrr').textContent = agg.avg_mrr ? agg.avg_mrr.toFixed(3) : '--';
-  document.getElementById('gen-time').textContent = data.generated_at || '--';
+  document.getElementById('gen-time').textContent = benchmarkData.generated_at || '--';
 
-  // Avg query latency
-  let allLatencies = [];
-  for (const [proj, info] of Object.entries(cov)) {
-    const perf = info.query_performance || {};
-    const hop1 = perf['1hop_neighbors'];
-    if (hop1) allLatencies.push(hop1.mean_ms);
+  const latencies = [];
+  for (const info of Object.values(cov)) {
+    const p = (info.query_performance || {})['1hop_neighbors'];
+    if (p) latencies.push(p.mean_ms);
   }
-  if (allLatencies.length) {
-    const avg = allLatencies.reduce((a,b)=>a+b,0)/allLatencies.length;
-    document.getElementById('query-latency').textContent = avg.toFixed(2) + 'ms';
+  if (latencies.length) {
+    const avg = latencies.reduce((a,b)=>a+b,0)/latencies.length;
+    document.getElementById('query-latency').textContent = avg.toFixed(3) + 'ms';
   }
 
   // Coverage table
   const covTable = document.getElementById('coverage-table');
   for (const [proj, info] of Object.entries(cov)) {
+    const bs = info.bm25_search || {};
     covTable.innerHTML += `<tr>
       <td><strong>${proj}</strong></td>
       <td>${info.files_scanned || '--'}</td>
       <td>${(info.total_nodes || 0).toLocaleString()}</td>
       <td>${(info.total_edges || 0).toLocaleString()}</td>
-      <td>${info.parse_time_seconds || '--'}s</td>
-      <td><span class="chip chip-green">${(info.bm25_search||{}).MRR || '--'}</span></td>
-    </tr>`;
-  }
-
-  // Search table
-  const searchTable = document.getElementById('search-table');
-  for (const [proj, info] of Object.entries(cov)) {
-    const bs = info.bm25_search || {};
-    searchTable.innerHTML += `<tr>
-      <td><strong>${proj}</strong></td>
-      <td>${bs.queries || '--'}</td>
       <td><span class="chip chip-green">${bs.MRR || '--'}</span></td>
       <td>${bs['NDCG@10'] || '--'}</td>
-      <td>${bs['Recall@10'] || '--'}</td>
     </tr>`;
   }
 
   // Performance table
   const perfTable = document.getElementById('perf-table');
-  const queryTypes = ['1hop_neighbors', 'callers', 'callees', '2hop_traverse', 'impact_analysis'];
-  const qtLabels = {'1hop_neighbors':'1-hop邻居', 'callers':'调用者查询', 'callees':'被调用者查询', '2hop_traverse':'2-hop遍历', 'impact_analysis':'爆炸半径分析'};
-  for (const qt of queryTypes) {
+  const qtLabels = {'1hop_neighbors':'1-hop 邻居', 'callers':'调用者查询', 'callees':'被调用者查询', '2hop_traverse':'2-hop 遍历', 'impact_analysis':'爆炸半径分析'};
+  for (const qt of Object.keys(qtLabels)) {
     let row = `<tr><td>${qtLabels[qt]}</td>`;
     for (const proj of ['requests','flask','django']) {
-      const perf = (cov[proj]||{}).query_performance || {};
-      const val = perf[qt];
+      const val = ((cov[proj]||{}).query_performance || {})[qt];
       row += `<td>${val ? val.mean_ms.toFixed(2)+'ms' : '--'}</td>`;
     }
-    row += '</tr>';
-    perfTable.innerHTML += row;
+    perfTable.innerHTML += row + '</tr>';
   }
 
-  // Multi-hop table
+  // Hop table
   const hopTable = document.getElementById('hop-table');
   for (let h = 1; h <= 5; h++) {
+    const values = [];
     let row = `<tr><td>hop ${h}</td>`;
     for (const proj of ['requests','flask','django']) {
-      const mh = (cov[proj]||{}).multi_hop || {};
-      const val = mh[`hop_${h}`];
+      const val = ((cov[proj]||{}).multi_hop || {})[`hop_${h}`];
+      values.push(val ? val.mean_reachable : 0);
       row += `<td>${val ? val.mean_reachable.toFixed(0) : '--'}</td>`;
     }
-    row += '</tr>';
-    hopTable.innerHTML += row;
+    const avg = values.reduce((a,b)=>a+b,0)/Math.max(values.length,1);
+    hopTable.innerHTML += row + `<td>${avg.toFixed(0)}</td></tr>`;
   }
 
   // Call graph table
@@ -324,13 +389,14 @@ function render(data) {
     const isUs = t.name.includes('HugeGraph');
     compTable.innerHTML += `<tr${isUs ? ' style="background:rgba(108,92,231,0.08)"' : ''}>
       <td><strong>${isUs ? '⭐ ' : ''}${t.name}</strong></td>
-      <td><span class="chip ${t.languages >= 10 ? 'chip-green' : t.languages >= 3 ? 'chip-orange' : 'chip-red'}">${t.languages}语言</span></td>
+      <td><span class="chip ${t.languages >= 10 ? 'chip-green' : t.languages >= 3 ? 'chip-orange' : 'chip-red'}">${t.languages}</span></td>
       <td>${t.call_accuracy}</td>
-      <td>${t.agent_reduction}</td>
+      <td>${t.agent_reduction.split('/')[0] || t.agent_reduction}</td>
+      <td>${(t.agent_reduction.split('/')[1] || 'N/A').trim()}</td>
       <td>${t.graph_backend}</td>
-      <td>${t.mcp_support ? '✅' : '❌'}</td>
+      <td>${t.mcp_support ? '✅' + (t.mcp_note ? '<span class="note">'+t.mcp_note+'</span>' : '') : '❌'}</td>
       <td>${t.framework_aware || '❌'}</td>
-      <td>${t.olap_support ? '<span class="chip chip-green">✅ 唯一</span>' : '❌'}</td>
+      <td>${t.olap_support ? '<span class="chip chip-green">✅</span>' : '❌'}</td>
       <td>${t.open_source}</td>
     </tr>`;
   }
@@ -339,19 +405,337 @@ function render(data) {
   const advList = document.getElementById('advantages-list');
   const advTitles = {
     hugegraph_distributed: '🏗️ 分布式图存储',
-    olap_analysis: '📊 OLAP图分析',
-    graphrag_fusion: '🧠 GraphRAG融合',
+    olap_analysis: '📊 OLAP 图分析',
+    graphrag_fusion: '🧠 GraphRAG 融合',
     multi_graph_isolation: '🗂️ 多图空间隔离'
   };
   for (const [key, desc] of Object.entries(advs)) {
-    advList.innerHTML += `<div class="adv-card">
-      <h3>${advTitles[key] || key}</h3>
-      <p>${desc}</p>
+    advList.innerHTML += `<div style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.4rem">
+      <strong style="color:var(--accent);font-size:0.8rem">${advTitles[key] || key}</strong>
+      <p style="font-size:0.74rem;color:var(--text-dim);margin-top:0.2rem">${desc}</p>
     </div>`;
+  }
+
+  // Call accuracy
+  const cga = agg.call_graph_accuracy || {};
+  if (cga.static_direct_call_precision !== undefined) {
+    document.getElementById('cg-precision').textContent = cga.static_direct_call_precision.toFixed(2);
+    document.getElementById('cg-recall').textContent = cga.static_direct_call_recall.toFixed(2);
   }
 }
 
-loadResults();
+// ─── Graph Visualization ──────────────────────────────────
+async function initGraph() {
+  svg = d3.select('#graph-viz');
+  const rect = document.getElementById('graph-viz').getBoundingClientRect();
+  svg.attr('viewBox', `0 0 ${rect.width} ${rect.height}`);
+
+  zoom = d3.zoom().scaleExtent([0.05, 4]).on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zoom);
+  g = svg.append('g');
+
+  // Arrow marker
+  svg.append('defs').append('marker')
+    .attr('id','arrow').attr('viewBox','0 -5 10 10')
+    .attr('refX',18).attr('refY',0).attr('markerWidth',6).attr('markerHeight',6)
+    .attr('orient','auto')
+    .append('path').attr('d','M0,-5L10,0L0,5').attr('fill','#8890b5');
+
+  try {
+    const resp = await fetch(`${API}/api/graph`);
+    const data = await resp.json();
+    allNodes = data.nodes || [];
+    allEdges = data.edges || [];
+    // Sample for performance: show top connected nodes first
+    const connected = new Set();
+    for (const e of allEdges) { connected.add(e.source); connected.add(e.target); }
+    // Start with hub nodes (top 80 by degree)
+    const degrees = {};
+    for (const e of allEdges) {
+      degrees[e.source] = (degrees[e.source]||0)+1;
+      degrees[e.target] = (degrees[e.target]||0)+1;
+    }
+    const topNodes = Object.entries(degrees).sort((a,b)=>b[1]-a[1]).slice(0,80).map(x=>x[0]);
+    const subNodes = allNodes.filter(n => topNodes.includes(n.id));
+    const subIds = new Set(subNodes.map(n=>n.id));
+    const subEdges = allEdges.filter(e => subIds.has(e.source) && subIds.has(e.target));
+    graphData = { nodes: subNodes, edges: subEdges };
+    renderGraph();
+  } catch (e) {
+    document.getElementById('graph-viz').innerHTML = '<text x="50%" y="50%" fill="#8890b5" text-anchor="middle" font-size="14">请启动 demo/codegraph_demo_server.py (port 5100)</text>';
+  }
+}
+
+function getFilteredEdges() {
+  const filter = document.getElementById('edge-filter').value;
+  if (filter === 'all') return graphData.edges;
+  return graphData.edges.filter(e => e.edge_type === filter);
+}
+
+function renderGraph() {
+  g.selectAll('*').remove();
+  const nodes = graphData.nodes;
+  const edges = getFilteredEdges();
+
+  const nodeColors = {function: 'var(--func)', class: 'var(--class)', module: 'var(--module)'};
+  const edgeColors = {calls: 'var(--func)', contains: 'var(--class)', imports: '#bc8cff', defines: 'var(--orange)', inherits: 'var(--red)'};
+
+  const link = g.append('g').selectAll('line')
+    .data(edges).join('line')
+    .attr('stroke', d => edgeColors[d.edge_type] || '#8890b5')
+    .attr('stroke-opacity', 0.5)
+    .attr('stroke-width', 0.8)
+    .attr('marker-end', d => (d.edge_type === 'calls' || d.edge_type === 'inherits') ? 'url(#arrow)' : null);
+
+  const node = g.append('g').selectAll('g')
+    .data(nodes).join('g')
+    .attr('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (e,d) => { if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x;d.fy=d.y; })
+      .on('drag', (e,d) => { d.fx=e.x;d.fy=e.y; })
+      .on('end', (e,d) => { if(!e.active) sim.alphaTarget(0); d.fx=null;d.fy=null; }));
+
+  node.append('circle')
+    .attr('r', d => {
+      const deg = graphData.edges.filter(x => x.source === d.id || x.target === d.id).length;
+      return 4 + Math.sqrt(deg) * 1.5;
+    })
+    .attr('fill', d => nodeColors[d.node_type] || '#8890b5')
+    .attr('stroke', d => d.id === selectedNode ? '#fff' : 'transparent')
+    .attr('stroke-width', d => d.id === selectedNode ? 2.5 : 0);
+
+  node.append('text')
+    .attr('dx', d => 6 + Math.sqrt(graphData.edges.filter(x => x.source === d.id || x.target === d.id).length) * 1.5)
+    .attr('dy', 4)
+    .text(d => d.name.length > 18 ? d.name.slice(0,18)+'…' : d.name)
+    .attr('font-size', 10)
+    .attr('fill', '#e0e0f0')
+    .attr('opacity', 0.85);
+
+  node.on('click', (e, d) => { e.stopPropagation(); onNodeClick(d); })
+      .on('mouseenter', (e, d) => showTooltip(e, d))
+      .on('mouseleave', () => hideTooltip());
+
+  svg.on('click', () => { selectedNode = null; renderGraph(); });
+
+  sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(70))
+    .force('charge', d3.forceManyBody().strength(-180))
+    .force('center', d3.forceCenter(document.getElementById('graph-viz').getBoundingClientRect().width/2,
+                                    document.getElementById('graph-viz').getBoundingClientRect().height/2))
+    .force('collide', d3.forceCollide().radius(12));
+
+  sim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+async function onNodeClick(d) {
+  selectedNode = d.id;
+  renderGraph();
+  showNodeDetail(d);
+
+  if (expandMode) {
+    // Expand neighbors
+    try {
+      const resp = await fetch(`${API}/api/neighbors/${encodeURIComponent(d.id)}`);
+      const sub = await resp.json();
+      const newIds = new Set(graphData.nodes.map(n=>n.id));
+      for (const n of sub.nodes) if (!newIds.has(n.id)) { graphData.nodes.push(n); newIds.add(n.id); }
+      for (const e of sub.edges) {
+        const exists = graphData.edges.some(x => x.source===e.source && x.target===e.target && x.edge_type===e.edge_type);
+        if (!exists) graphData.edges.push(e);
+      }
+      renderGraph();
+    } catch (e) {}
+  }
+}
+
+async function showNodeDetail(d) {
+  const detail = document.getElementById('node-detail');
+  let html = `<div style="font-size:0.85rem;margin-bottom:0.5rem"><span class="chip chip-blue">${d.node_type}</span> <strong style="color:var(--accent)">${d.name}</strong></div>`;
+  html += `<div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:0.6rem">${d.file_path || ''}:L${d.line_start||'?'}</div>`;
+  if (d.source_code) {
+    html += `<div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:0.3rem">代码预览</div>`;
+    html += `<pre style="background:#080b20;padding:0.5rem;border-radius:6px;overflow-x:auto;font-size:0.7rem;max-height:140px">${escapeHtml(d.source_code)}</pre>`;
+  }
+
+  // Count neighbors
+  const outDeg = graphData.edges.filter(e => e.source === d.id).length;
+  const inDeg = graphData.edges.filter(e => e.target === d.id).length;
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.6rem">
+    <div class="ba-box"><div class="ba-value blue-text">${outDeg}</div><div class="ba-desc">出边 (调用/包含)</div></div>
+    <div class="ba-box"><div class="ba-value orange-text">${inDeg}</div><div class="ba-desc">入边 (被调用)</div></div>
+  </div>`;
+
+  detail.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showTooltip(e, d) {
+  const tt = document.getElementById('tooltip');
+  tt.style.display = 'block';
+  tt.innerHTML = `<strong>${d.name}</strong><br><span class="chip chip-blue">${d.node_type}</span><br><span style="color:var(--text-dim);font-size:11px">${d.file_path||''}</span>`;
+  tt.style.left = (e.clientX + 12) + 'px';
+  tt.style.top = (e.clientY + 12) + 'px';
+}
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+// ─── Event Listeners ──────────────────────────────────────
+function setupEventListeners() {
+  // Search
+  const searchInput = document.getElementById('graph-search');
+  searchInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      const q = searchInput.value.trim();
+      if (!q) return;
+      try {
+        const resp = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&limit=20`);
+        const results = await resp.json();
+        if (results.length) {
+          // Filter graph to show results + their neighbors
+          const resultIds = new Set(results.map(r => r.id));
+          const relatedEdges = allEdges.filter(e => resultIds.has(e.source) || resultIds.has(e.target));
+          const relatedIds = new Set(resultIds);
+          relatedEdges.forEach(e => { relatedIds.add(e.source); relatedIds.add(e.target); });
+          graphData.nodes = allNodes.filter(n => relatedIds.has(n.id));
+          graphData.edges = relatedEdges;
+          renderGraph();
+          document.getElementById('graph-info').style.display = 'block';
+          document.getElementById('graph-info').textContent = `搜索 "${q}" 找到 ${results.length} 个节点，显示其 1-hop 邻居共 ${graphData.nodes.length} 个`;
+        }
+      } catch (err) {}
+    }
+  });
+
+  // Edge filter
+  document.getElementById('edge-filter').addEventListener('change', () => renderGraph());
+
+  // Expand mode
+  document.getElementById('btn-expand').addEventListener('click', function() {
+    expandMode = !expandMode;
+    this.classList.toggle('active', expandMode);
+    this.textContent = expandMode ? '✓ 展开模式开' : '展开模式';
+  });
+
+  // Impact
+  document.getElementById('btn-impact').addEventListener('click', async () => {
+    if (!selectedNode) { alert('请先点击图谱中一个函数节点'); return; }
+    try {
+      const resp = await fetch(`${API}/api/impact/${encodeURIComponent(selectedNode)}`);
+      const data = await resp.json();
+      document.getElementById('graph-info').style.display = 'block';
+      document.getElementById('graph-info').innerHTML = `<strong>💥 影响分析</strong>: 修改 <span style="color:var(--accent)">${data.target.name}</span> 将影响 <span style="color:var(--orange)">${data.impacted_count}</span> 个节点，最大影响深度 <span style="color:var(--orange)">${data.impact_depth}</span> 跳`;
+      if (data.nodes && data.edges) {
+        graphData.nodes = data.nodes;
+        graphData.edges = data.edges;
+        renderGraph();
+      }
+    } catch (e) {}
+  });
+
+  // Fit & Reset
+  document.getElementById('btn-fit').addEventListener('click', () => {
+    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    graphData.nodes = allNodes.slice(0,80);
+    graphData.edges = allEdges.filter(e => graphData.nodes.some(n=>n.id===e.source) && graphData.nodes.some(n=>n.id===e.target));
+    renderGraph();
+    document.getElementById('graph-info').style.display = 'none';
+  });
+
+  // Hop slider
+  const hopSlider = document.getElementById('hop-slider');
+  hopSlider.addEventListener('input', () => {
+    document.getElementById('hop-value').textContent = hopSlider.value + ' hop';
+  });
+  document.getElementById('btn-hop').addEventListener('click', async () => {
+    if (!selectedNode) { alert('请先点击图谱中一个节点'); return; }
+    const hops = hopSlider.value;
+    const direction = document.getElementById('hop-direction').value;
+    try {
+      const resp = await fetch(`${API}/api/traverse?source=${encodeURIComponent(selectedNode)}&hops=${hops}&direction=${direction}`);
+      const data = await resp.json();
+      document.getElementById('hop-result').innerHTML = `<span style="color:var(--accent)">${data.source_name}</span> ${direction==='out'?'下游':'上游'} ${hops} 跳可达 <strong>${data.reachable_count}</strong> 个节点，显示子图 ${data.nodes.length} 节点 / ${data.edges.length} 边`;
+      if (data.nodes && data.edges) {
+        graphData.nodes = data.nodes;
+        graphData.edges = data.edges;
+        renderGraph();
+      }
+    } catch (e) {}
+  });
+
+  // Build demo auto-play
+  document.getElementById('btn-build-play').addEventListener('click', playBuildDemo);
+}
+
+// ─── Build Demo ───────────────────────────────────────────
+const SAMPLE_CODE = `class OrderService:
+    def process(self, order):
+        self.validate(order)
+        self.save(order)
+
+    def validate(self, order):
+        check_format(order)
+
+    def save(self, order):
+        db.write(order)
+
+def check_format(o):
+    return o.get('id') is not None
+`;
+
+const BUILD_STEPS = [
+  { title: '1. 源代码', content: '<pre>' + escapeHtml(SAMPLE_CODE) + '</pre>' },
+  { title: '2. AST 解析', content: 'Python ast 模块遍历模块 → 识别 1 个类 (OrderService) + 4 个函数 (process, validate, save, check_format)<br><br>抽象语法树将代码结构化为可遍历的树形节点。' },
+  { title: '3. 提取节点', content: `<table><thead><tr><th>ID</th><th>类型</th><th>名称</th></tr></thead><tbody>
+    <tr><td>n1</td><td>class</td><td>OrderService</td></tr>
+    <tr><td>n2</td><td>function</td><td>process</td></tr>
+    <tr><td>n3</td><td>function</td><td>validate</td></tr>
+    <tr><td>n4</td><td>function</td><td>save</td></tr>
+    <tr><td>n5</td><td>function</td><td>check_format</td></tr>
+  </tbody></table>` },
+  { title: '4. 提取关系', content: `<table><thead><tr><th>源</th><th>关系</th><th>目标</th></tr></thead><tbody>
+    <tr><td>OrderService</td><td>contains</td><td>process</td></tr>
+    <tr><td>OrderService</td><td>contains</td><td>validate</td></tr>
+    <tr><td>process</td><td>calls</td><td>validate</td></tr>
+    <tr><td>process</td><td>calls</td><td>save</td></tr>
+    <tr><td>validate</td><td>calls</td><td>check_format</td></tr>
+  </tbody></table>` },
+  { title: '5. 载入图库', content: '节点写入 HugeGraph / SQLite 双后端<br><br>• SQLite: 本地快速查询 (亚毫秒)<br>• HugeGraph: 分布式多跳遍历 / OLAP 分析<br>• BM25 全文索引构建完成' },
+  { title: '6. 查询验证', content: '查询 "修改 validate 会影响谁？"<br><br>反向遍历 calls 边: validate ← process<br>结果: 影响 1 个上游函数 (process)<br>人工扫描需看全部 5 个定义，CodeGraph 只需 1 跳。' }
+];
+
+function setupBuildDemo() {
+  const stage = document.getElementById('build-stage');
+  stage.innerHTML = BUILD_STEPS[0].content;
+  document.querySelectorAll('#build-steps .step-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#build-steps .step-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      stage.innerHTML = BUILD_STEPS[+btn.dataset.step].content;
+    });
+  });
+}
+
+async function playBuildDemo() {
+  const buttons = document.querySelectorAll('#build-steps .step-btn');
+  for (let i = 0; i < BUILD_STEPS.length; i++) {
+    buttons.forEach(b => b.classList.remove('active'));
+    buttons[i].classList.add('active');
+    document.getElementById('build-stage').innerHTML = BUILD_STEPS[i].content;
+    await new Promise(r => setTimeout(r, 1200));
+    buttons[i].classList.add('done');
+  }
+}
+
+init();
 </script>
 </body>
 </html>
