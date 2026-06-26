@@ -171,6 +171,30 @@ class PythonCodeParser:
                 self._visit_class(node, file_path, source, mod_id)
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
                 self._visit_import(node, file_path)
+        self._extract_top_level_calls(tree, mod_id, file_path)
+
+    def _extract_top_level_calls(
+        self,
+        tree: ast.Module,
+        module_id: str,
+        file_path: str,
+    ) -> None:
+        """Extract calls that appear at module top level (e.g. PyCG snippets)."""
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    if isinstance(child.func, ast.Name):
+                        callee = child.func.id
+                    elif isinstance(child.func, ast.Attribute):
+                        callee = child.func.attr
+                    else:
+                        continue
+                    self.edges.append(CodeEdge(
+                        source_id=module_id, target_id=callee,
+                        edge_type="calls", file_path=file_path,
+                    ))
 
     def _visit_function(
         self,

@@ -1,0 +1,738 @@
+{
+  "summary": {
+    "snippets_evaluated": 80,
+    "overall_precision": 0.32,
+    "overall_recall": 0.3478,
+    "overall_f1": 0.3333,
+    "avg_precision": 0.3495,
+    "avg_recall": 0.3776,
+    "avg_f1": 0.2749,
+    "total_reference_edges": 138,
+    "total_predicted_edges": 150,
+    "total_correct_edges": 48,
+    "dataset": "PyCG micro-benchmark snippets",
+    "note": "Function-name-level comparison; target file is not matched because CodeGraph stores callee as bare name."
+  },
+  "per_snippet": [
+    {
+      "directory": "micro-benchmark/snippets/args/assigned_call",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/args/call",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/args/imported_assigned_call",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/args/imported_call",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/args/nested_call",
+      "ref_edges": 3,
+      "pred_edges": 3,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/args/param_call",
+      "ref_edges": 3,
+      "pred_edges": 3,
+      "correct": 2,
+      "precision": 0.6667,
+      "recall": 0.6667,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/assignments/chained",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/assignments/recursive_tuple",
+      "ref_edges": 6,
+      "pred_edges": 6,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/assignments/starred",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/assignments/tuple",
+      "ref_edges": 3,
+      "pred_edges": 5,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/builtins/functions",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/builtins/map",
+      "ref_edges": 1,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 1.0,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/builtins/types",
+      "ref_edges": 0,
+      "pred_edges": 3,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/assigned_call",
+      "ref_edges": 1,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/assigned_self_call",
+      "ref_edges": 2,
+      "pred_edges": 3,
+      "correct": 2,
+      "precision": 0.6667,
+      "recall": 1.0,
+      "f1": 0.8
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/base_class_attr",
+      "ref_edges": 2,
+      "pred_edges": 3,
+      "correct": 2,
+      "precision": 0.6667,
+      "recall": 1.0,
+      "f1": 0.8
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/base_class_calls_child",
+      "ref_edges": 3,
+      "pred_edges": 4,
+      "correct": 1,
+      "precision": 0.25,
+      "recall": 0.3333,
+      "f1": 0.2857
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/call",
+      "ref_edges": 1,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/direct_call",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/imported_attr_access",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/imported_call",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/imported_call_without_init",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/imported_nested_attr_access",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/instance",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/nested_call",
+      "ref_edges": 2,
+      "pred_edges": 3,
+      "correct": 2,
+      "precision": 0.6667,
+      "recall": 1.0,
+      "f1": 0.8
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/nested_class_calls",
+      "ref_edges": 4,
+      "pred_edges": 5,
+      "correct": 2,
+      "precision": 0.4,
+      "recall": 0.5,
+      "f1": 0.4444
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/parameter_call",
+      "ref_edges": 3,
+      "pred_edges": 4,
+      "correct": 1,
+      "precision": 0.25,
+      "recall": 0.3333,
+      "f1": 0.2857
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/return_call",
+      "ref_edges": 2,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 0.5,
+      "f1": 0.4
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/return_call_direct",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/self_assign_func",
+      "ref_edges": 3,
+      "pred_edges": 4,
+      "correct": 2,
+      "precision": 0.5,
+      "recall": 0.6667,
+      "f1": 0.5714
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/self_assignment",
+      "ref_edges": 3,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 0.3333,
+      "f1": 0.3333
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/self_call",
+      "ref_edges": 4,
+      "pred_edges": 4,
+      "correct": 3,
+      "precision": 0.75,
+      "recall": 0.75,
+      "f1": 0.75
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/static_method_call",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/super_class_return",
+      "ref_edges": 2,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 0.5,
+      "f1": 0.4
+    },
+    {
+      "directory": "micro-benchmark/snippets/classes/tuple_assignment",
+      "ref_edges": 4,
+      "pred_edges": 5,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/assigned",
+      "ref_edges": 3,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.3333,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/call",
+      "ref_edges": 2,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/nested",
+      "ref_edges": 2,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/nested_decorators",
+      "ref_edges": 5,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 0.2,
+      "f1": 0.25
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/param_call",
+      "ref_edges": 3,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.3333,
+      "f1": 0.4
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/return",
+      "ref_edges": 3,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.3333,
+      "f1": 0.4
+    },
+    {
+      "directory": "micro-benchmark/snippets/decorators/return_different_func",
+      "ref_edges": 4,
+      "pred_edges": 3,
+      "correct": 2,
+      "precision": 0.6667,
+      "recall": 0.5,
+      "f1": 0.5714
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/add_key",
+      "ref_edges": 0,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/assign",
+      "ref_edges": 1,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/call",
+      "ref_edges": 2,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/ext_key",
+      "ref_edges": 0,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/nested",
+      "ref_edges": 1,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/new_key_param",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/param",
+      "ref_edges": 2,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/param_key",
+      "ref_edges": 3,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.3333,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/return",
+      "ref_edges": 2,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/return_assign",
+      "ref_edges": 2,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/type_coercion",
+      "ref_edges": 1,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/dicts/update",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/direct_calls/assigned_call",
+      "ref_edges": 2,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/direct_calls/imported_return_call",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/direct_calls/return_call",
+      "ref_edges": 3,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.3333,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/direct_calls/with_parameters",
+      "ref_edges": 3,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 0.3333,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/dynamic/eval",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/exceptions/raise",
+      "ref_edges": 1,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/exceptions/raise_assigned",
+      "ref_edges": 1,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/exceptions/raise_attr",
+      "ref_edges": 1,
+      "pred_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/external/attribute",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/external/attribute_assigned",
+      "ref_edges": 1,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 1.0,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/external/cls_parent",
+      "ref_edges": 1,
+      "pred_edges": 3,
+      "correct": 1,
+      "precision": 0.3333,
+      "recall": 1.0,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/external/function",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/external/function_asname",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/external/function_assigned",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/functions/assigned_call",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/functions/assigned_call_lit_param",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/functions/call",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 1,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/functions/imported_call",
+      "ref_edges": 0,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/generators/iter_param",
+      "ref_edges": 4,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.25,
+      "f1": 0.3333
+    },
+    {
+      "directory": "micro-benchmark/snippets/generators/iter_return",
+      "ref_edges": 4,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/generators/iterable",
+      "ref_edges": 3,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/generators/iterable_assigned",
+      "ref_edges": 3,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/generators/no_iter",
+      "ref_edges": 1,
+      "pred_edges": 1,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/generators/yield",
+      "ref_edges": 2,
+      "pred_edges": 2,
+      "correct": 1,
+      "precision": 0.5,
+      "recall": 0.5,
+      "f1": 0.5
+    },
+    {
+      "directory": "micro-benchmark/snippets/imports/chained_import",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "directory": "micro-benchmark/snippets/imports/import_all",
+      "ref_edges": 0,
+      "pred_edges": 2,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  ]
+}

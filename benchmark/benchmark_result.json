@@ -892,11 +892,18 @@
     "projects_tested": 3,
     "total_queries": 45,
     "call_graph_accuracy": {
-      "static_direct_call_precision": 1.0,
-      "static_direct_call_recall": 1.0,
-      "static_direct_call_f1": 1.0,
-      "test_cases": 50,
-      "note": "合成数据集: 函数体内部直接调用, 无动态分发/装饰器/反射"
+      "dataset": "PyCG micro-benchmark snippets (industry-standard Python call-graph ground truth)",
+      "snippets_evaluated": 80,
+      "overall_precision": 0.32,
+      "overall_recall": 0.3478,
+      "overall_f1": 0.3333,
+      "avg_precision": 0.3495,
+      "avg_recall": 0.3776,
+      "avg_f1": 0.2749,
+      "total_reference_edges": 138,
+      "total_predicted_edges": 150,
+      "total_correct_edges": 48,
+      "note": "Function-name-level comparison vs PyCG ground truth. Lower scores reflect known limitations of lightweight AST parsing (assignment chains, builtins, method dispatch)."
     }
   },
   "competitors": {
@@ -905,7 +912,7 @@
         "name": "HugeGraph CodeGraph",
         "languages": 1,
         "languages_note": "Python → 计划 Java/TS",
-        "call_accuracy": "P=1.00, R=1.00 (静态直接调用, 50合成例)",
+        "call_accuracy": "P=0.32, R=0.3478, F1=0.3333 (PyCG micro-benchmark, 80 snippets)",
         "agent_reduction": "待实测 (MCP 规划中)",
         "graph_backend": "SQLite + HugeGraph(分布式)",
         "mcp_support": false,

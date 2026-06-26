@@ -78,7 +78,7 @@
 
 | 维度 | 核心指标 | 测量方法 | CodeGraph 当前状态 |
 |------|----------|----------|-------------------|
-| **① 结构准确性** | Precision / Recall / F1 (调用边/导入边/继承边) | 与 PyCG 标注对比 | ❌ 未测量 |
+| **① 结构准确性** | Precision / Recall / F1 (调用边/导入边/继承边) | 与 PyCG 标注对比 | ✅ PyCG micro-benchmark: P=0.320, R=0.348, F1=0.333 (80 snippets) |
 | **② 代码搜索** | MRR, NDCG@10, Recall@10 | 在 CodeSearchNet Python 上跑 | ❌ 未测量（当前仅关键词匹配） |
 | **③ 查询延迟** | P50/P95/P99 延迟 (ms) | 遍历/搜索/影响分析基准 | ✅ SQLite: 0.26ms avg（非标准benchmark） |
 | **④ 覆盖率** | 文件覆盖率、节点覆盖率、边覆盖率 | 在标准项目（requests, flask, django）上测 | ❌ 未系统测量 |
@@ -90,7 +90,7 @@
 | 指标 | ColbyMcHenry CodeGraph | Sourcegraph | CodeQL | 我们 CodeGraph |
 |------|------------------------|-------------|--------|---------------|
 | 支持语言 | **22+** | 20+ (LSIF) | 8 | **1** (Python) |
-| 调用图准确率 | 86.7%-100% (per lang) | 工业级 (未公开 P/R) | 未公开 | **P=1.00, R=1.00** (静态直接调用, 50合成例) |
+| 调用图准确率 | 86.7%-100% (per lang) | 工业级 (未公开 P/R) | 未公开 | **P=0.320, R=0.348, F1=0.333** (PyCG micro-benchmark, 80 snippets) |
 | 语义搜索 MRR | ❌ 未公开 | ❌ 无NL搜索 | ❌ 无 | ❌ 未测 (BM25 MRR=0.433) |
 | Agent工具调用减少 | **58%** (7项目) | ~40% (Cody) | N/A | **待实测** (MCP 规划中) |
 | Agent Token减少 | **23-64%** | 未公开 | N/A | 待实测 |
@@ -238,7 +238,7 @@ Joern/CPG ────────────────────► 安全
 | 图存储 | SQLite | Memgraph | SQLite Bundle | OverflowDB | **SQLite+HG** | 🟢 唯一分布式图存储 |
 | 多跳遍历 | 2-3 hop | Cypher | SCIP | CPG查询 | **任意深度(HG)** | 🟢 核心优势 |
 | Agent验证 | ✅ 7项目 | ❌ | ✅ | N/A | **待实测** | 🔴 缺失CTO信任 |
-| 基准评测 | ✅ per-lang | ❌ | ❌ | 部分 | **部分(合成P/R)** | 🟡 需真实项目验证 |
+| 基准评测 | ✅ per-lang | ❌ | ❌ | 部分 | **PyCG: P=0.320/R=0.348/F1=0.333; BM25 MRR=0.433** | 🟡 调用图准确率需继续提升 |
 | OLAP | ❌ | ❌ | ❌ | 部分 | **✅ Vermeer** | 🟢 唯一OLAP |
 
 ### 4.3 我们的核心竞争力（与竞品差异化）
@@ -257,7 +257,7 @@ Joern/CPG ────────────────────► 安全
 | 优先级 | 任务 | 预期指标 | 对标 |
 |--------|------|----------|------|
 | **P0** | 下载 CodeSearchNet Python 子集 + 跑 MRR/NDCG@10 | MRR ≥ 0.30 (BM25基线) | CodeSearchNet |
-| **P0** | 下载 PyCG 标注 + 测调用边 Precision/Recall | P ≥ 0.85, R ≥ 0.75 | PyCG benchmark |
+| **P0** | 下载 PyCG 标注 + 测调用边 Precision/Recall | ✅ 已完成 P=0.320, R=0.348, F1=0.333 (80 snippets); 目标下一版 ≥0.60 | PyCG benchmark |
 | **P0** | 在 3 个标准项目（requests, flask, django）上跑 CodeGraph → 报告覆盖率 | 与 ColbyMcHenry 对标 | ColbyMcHenry |
 | **P0** | 用 Claude Code + CodeGraph MCP vs 无 → 测 Agent 效率 | 工具调用减少40%+ | ColbyMcHenry (58%) |
 | **P1** | 增加 Flask/FastAPI 框架感知（route识别） | 框架路由覆盖率80%+ | ColbyMcHenry (14框架) |

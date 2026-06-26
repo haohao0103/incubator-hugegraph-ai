@@ -11,7 +11,7 @@
 | `codegraph_demo_server.py` | Flask 后端，提供图数据 API |
 | `codegraph_demo.html` | 主可视化页面（力导向图 + 交互面板） |
 | `codegraph_build_demo.html` | 图构建流程 6 步演示 |
-| `codegraph_parsed.json` | 预解析的 hugegraph-llm 项目代码图（717 节点 / 676 有效边） |
+| `codegraph_parsed.json` | 预解析的业界标准 requests 库代码图（321 节点 / 1633 边） |
 
 ---
 
