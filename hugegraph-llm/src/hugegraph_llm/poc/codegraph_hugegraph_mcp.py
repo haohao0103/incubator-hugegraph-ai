@@ -52,6 +52,7 @@ from __future__ import annotations
 import builtins
 import json
 import logging
+import numpy as np
 import os
 import re
 import sqlite3
@@ -1334,6 +1335,78 @@ class BM25CodeSearch:
         ]
 
 
+class SemanticCodeSearch:
+    """Dense vector search over code symbols using sentence-transformers.
+
+    Reuses the same document text as BM25CodeSearch so BM25 and semantic
+    channels can be fused downstream.
+    """
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+        self.model_name = model_name
+        self.model: Any = None
+        self.embeddings: np.ndarray = np.zeros((0, 0), dtype=np.float32)
+        self.doc_ids: List[str] = []
+        self.dim = 0
+
+    def build_index(self, nodes: List[CodeNode]) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            log.warning("sentence-transformers not installed — semantic search disabled")
+            return
+
+        self.doc_ids = [n.id for n in nodes]
+        texts = [f"{n.name} {n.node_type} {n.source_code}" for n in nodes]
+        if not texts:
+            return
+
+        self.model = SentenceTransformer(self.model_name)
+        self.embeddings = self.model.encode(
+            texts, show_progress_bar=False, normalize_embeddings=True,
+        )
+        self.dim = self.embeddings.shape[1]
+        log.info("Semantic index built: %d documents, dim=%d", len(texts), self.dim)
+
+    def search(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+        if self.model is None or len(self.embeddings) == 0:
+            return []
+        qvec = self.model.encode([query], show_progress_bar=False, normalize_embeddings=True)
+        scores = np.dot(self.embeddings, qvec[0])
+        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        return [
+            (self.doc_ids[i], float(scores[i]))
+            for i in ranked[:top_k]
+            if scores[i] > 0.0
+        ]
+
+
+class HybridCodeSearch:
+    """RRF fusion of BM25 + semantic vector search.
+
+    Mirrors the GraphRAG retrieval pipeline: two independent channels produce
+    ranked lists, then Reciprocal Rank Fusion merges them into one list.
+    """
+
+    def __init__(self, bm25: BM25CodeSearch, semantic: SemanticCodeSearch, rrf_k: int = 60) -> None:
+        self.bm25 = bm25
+        self.semantic = semantic
+        self.rrf_k = rrf_k
+
+    def search(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+        bm25_results = self.bm25.search(query, top_k=top_k * 2)
+        sem_results = self.semantic.search(query, top_k=top_k * 2)
+
+        scores: Dict[str, float] = {}
+        for rank, (doc_id, _) in enumerate(bm25_results, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (rank + self.rrf_k)
+        for rank, (doc_id, _) in enumerate(sem_results, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (rank + self.rrf_k)
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return ranked[:top_k]
+
+
 # ─── Benchmark ────────────────────────────────────────────────────────────────
 
 class CodeGraphBenchmark:
@@ -1345,10 +1418,14 @@ class CodeGraphBenchmark:
         hugegraph: HugeGraphCodeGraph,
         bm25: BM25CodeSearch,
         nodes: List[CodeNode],
+        semantic: Optional[SemanticCodeSearch] = None,
+        hybrid: Optional[HybridCodeSearch] = None,
     ) -> None:
         self.sqlite    = sqlite
         self.hg        = hugegraph
         self.bm25      = bm25
+        self.semantic  = semantic
+        self.hybrid    = hybrid
         self.nodes     = nodes
         self.results:  List[QueryResult] = []
         self._name_idx: Dict[str, set[str]] = defaultdict(set)
@@ -1415,14 +1492,26 @@ class CodeGraphBenchmark:
                 lambda c=cn: self.hg.query_class_hierarchy(c),
             ))
 
-        # Q6 BM25 search
-        if self.bm25.bm25 and func_names:
+        # Q6 hybrid search (BM25 + semantic vector) / fallback to BM25 or semantic
+        search_fn = None
+        query_name = "code_search"
+        if self.hybrid and (self.bm25.bm25 or self.semantic and self.semantic.model):
+            search_fn = self.hybrid.search
+            query_name = "hybrid_code_search"
+        elif self.bm25.bm25:
+            search_fn = self.bm25.search
+            query_name = "bm25_code_search"
+        elif self.semantic and self.semantic.model:
+            search_fn = self.semantic.search
+            query_name = "semantic_code_search"
+
+        if search_fn and func_names:
             kw = func_names[len(func_names) // 3][:10]
             queries.append((
-                "bm25_code_search",
-                f"BM25 search for '{kw}'",
+                query_name,
+                f"Search for '{kw}'",
                 lambda k=kw: self.sqlite.search_by_name(k + "*"),
-                lambda k=kw: [(did, s) for did, s in self.bm25.search(k)],
+                lambda k=kw: [(did, s) for did, s in search_fn(k)],
             ))
 
         for name, question, sqlite_fn, hg_fn in queries:
@@ -1539,10 +1628,15 @@ def run_poc() -> bool:
     sqlite.insert_edges(parser.edges)
     log.info("SQLite ready: %d nodes, %d edges", len(parser.nodes), len(parser.edges))
 
-    # ── 3. BM25 ─────────────────────────────────────────────────────────────
+    # ── 3. BM25 + semantic vector index ────────────────────────────────────
     log.info("--- BM25 index ---")
     bm25 = BM25CodeSearch()
     bm25.build_index(parser.nodes)
+
+    log.info("--- Semantic index ---")
+    semantic = SemanticCodeSearch()
+    semantic.build_index(parser.nodes)
+    hybrid = HybridCodeSearch(bm25, semantic)
 
     # ── 4. HugeGraph ────────────────────────────────────────────────────────
     hg_available = check_hugegraph_available()
@@ -1565,12 +1659,12 @@ def run_poc() -> bool:
     # ── 5. Benchmark ────────────────────────────────────────────────────────
     log.info("--- Benchmark ---")
     if hg:
-        bench = CodeGraphBenchmark(sqlite, hg, bm25, parser.nodes)
+        bench = CodeGraphBenchmark(sqlite, hg, bm25, parser.nodes, semantic=semantic, hybrid=hybrid)
         results = bench.run_benchmark()
     else:
         # SQLite-only mode
         log.warning("HugeGraph unavailable — SQLite-only benchmark")
-        results = _run_sqlite_only(sqlite, bm25, parser.nodes)
+        results = _run_sqlite_only(sqlite, bm25, parser.nodes, semantic=semantic, hybrid=hybrid)
 
     # ── 6. Assertions ────────────────────────────────────────────────────────
     total_q = len(results)
@@ -1580,12 +1674,14 @@ def run_poc() -> bool:
     hg_valid = [r for r in results if r.hugegraph_time_ms > 0]
     avg_hg  = sum(r.hugegraph_time_ms for r in hg_valid) / max(len(hg_valid), 1)
 
+    semantic_ready = semantic.model is not None
     assertions = [
         ("parsed_nodes",   len(parser.nodes) >= 10, f"Parsed {len(parser.nodes)} nodes"),
         ("parsed_edges",   len(parser.edges) >= 5,  f"Parsed {len(parser.edges)} edges"),
         ("sqlite_queries", sq_pass >= 3,            f"{sq_pass}/{total_q} SQLite queries passed"),
         ("real_data",      True,                    "All data from real AST parsing"),
         ("real_bm25",      bm25.bm25 is not None,  f"BM25 {'available' if bm25.bm25 else 'N/A'}"),
+        ("real_semantic",  semantic_ready,         f"Semantic embedding {'available' if semantic_ready else 'N/A'}"),
     ]
     if hg:
         assertions.append(("hg_queries", hg_pass >= 1, f"{hg_pass}/{total_q} HG queries passed"))
@@ -1647,10 +1743,12 @@ def _run_sqlite_only(
     sqlite: SQLiteCodeGraph,
     bm25: BM25CodeSearch,
     nodes: List[CodeNode],
+    semantic: Optional[SemanticCodeSearch] = None,
+    hybrid: Optional[HybridCodeSearch] = None,
 ) -> List[QueryResult]:
     """Fallback: run structural queries on SQLite only (HugeGraph unavailable)."""
     func_names  = sorted({n.name for n in nodes if n.node_type == "function"})
-    class_names = sorted({n.name for n in nodes if n.node_type == "class"})
+    class_names = sorted({n.name for n in nodes if n.node_type in ("class", "service", "route")})
     file_paths  = sorted({n.file_path for n in nodes if n.node_type == "module"})
 
     tasks = []
@@ -1667,6 +1765,23 @@ def _run_sqlite_only(
     if class_names:
         tasks.append(("class_hierarchy", class_names[0],
                       lambda c: sqlite.query_class_hierarchy(c)))
+
+    # Add hybrid/semantic search task when available
+    search_fn = None
+    query_name = "code_search"
+    if hybrid and (bm25.bm25 or (semantic and semantic.model)):
+        search_fn = hybrid.search
+        query_name = "hybrid_code_search"
+    elif semantic and semantic.model:
+        search_fn = semantic.search
+        query_name = "semantic_code_search"
+    elif bm25.bm25:
+        search_fn = bm25.search
+        query_name = "bm25_code_search"
+
+    if search_fn and func_names:
+        kw = func_names[len(func_names) // 3][:10]
+        tasks.append((query_name, kw, lambda k: search_fn(k, top_k=10)))
 
     results: List[QueryResult] = []
     for name, target, fn in tasks:
