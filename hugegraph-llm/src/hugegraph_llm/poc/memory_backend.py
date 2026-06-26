@@ -1007,13 +1007,14 @@ class MemoryPipelineBackend:
                 messages=[
                     {"role": "system", "content":
                      "你是HugeGraph Memory助手，基于用户的记忆回答问题"
-                     "。回答要简短，不超过2句话。不要输出推理过程。"},
+                     "。回答要简短，不超过2句话。直接给出答案，不要输出推理过程。"
+                     "例如：问'张伟在哪工作'，答'张伟在深圳的货拉拉工作。'"},
                     {"role": "user", "content": ANSWER_PROMPT.format(
                         query=query, memories=memory_text,
                         graph_context=graph_context or "无")},
                 ],
-                temperature=0.3,
-                max_completion_tokens=256,
+                temperature=0.1,
+                max_completion_tokens=4096,
             )
             content = _get_llm_text(response)
             if not content:
@@ -1023,7 +1024,7 @@ class MemoryPipelineBackend:
             return content
         except Exception as e:
             print(f"[LLM answer error] {e}", file=sys.stderr, flush=True)
-            return f"\u751f\u6210\u56de\u7b54\u65f6\u51fa\u9519: {e}"
+            return f"生成回答时出错: {e}"
 
     # ---- ADD Pipeline (7 steps, aligned with PowerMem) ----
 
@@ -1674,24 +1675,40 @@ class MemoryPipelineBackend:
         return None
 
     def _strip_reasoning(self, text: str) -> str:
-        """Strip chain-of-thought from MiMo model. Take last meaningful sentence."""
+        """Strip chain-of-thought from MiMo model. Extract the actual answer."""
         if not text:
             return text
         text = text.strip()
-        if len(text) <= 60:
+        # MiMo reasoning model often outputs reasoning before the answer
+        # Look for answer patterns: "答案是", "所以", "因此", "根据记忆"
+        answer_markers = ["答案是", "所以，", "因此，", "根据记忆，", "根据记忆", "所以", "因此", "答：", "答案："]
+        for marker in answer_markers:
+            idx = text.rfind(marker)
+            if idx >= 0:
+                answer = text[idx + len(marker):].strip()
+                if answer:
+                    # Take first 2 sentences
+                    sents = answer.split("。")
+                    sents = [s.strip() for s in sents if s.strip()]
+                    if sents:
+                        result = "。".join(sents[:2])
+                        if not result.endswith("。"):
+                            result += "。"
+                        return result
+        # Fallback: if text is short, return as-is
+        if len(text) <= 80:
             return text
         # Take last non-empty line
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         if lines:
             last = lines[-1]
-            # If last line is too long, take last sentence (split by 。)
-            if len(last) > 60:
+            if len(last) > 80:
                 sents = last.split("。")
                 sents = [s.strip() for s in sents if s.strip()]
                 if sents:
-                    last = sents[-1] if len(sents[-1]) <= 60 else sents[-2] if len(sents) > 1 else last[:60]
+                    last = sents[-1] if len(sents[-1]) <= 80 else sents[-2] if len(sents) > 1 else last[:80]
             return last
-        return text[:60]
+        return text[:80]
 
     def _extract_query_entities(self, query: str) -> list:
         """Extract known entity names mentioned in the query.

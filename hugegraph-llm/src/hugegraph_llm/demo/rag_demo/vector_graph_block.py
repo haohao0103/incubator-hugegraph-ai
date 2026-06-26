@@ -234,7 +234,7 @@ def create_vector_graph_block():
                         value=prompt.doc_input_text,
                         label="Input Doc(s)",
                         lines=20,
-                        show_copy_button=True,
+                        
                     )
                 with gr.Tab("file") as tab_upload_file:
                     input_file = gr.File(

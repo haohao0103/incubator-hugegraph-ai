@@ -53,8 +53,8 @@ def _get_or_create_dependencies():
             llms = LLMs()
             agent_llm = llms.get_agent_llm()
             embedding = None  # Will be resolved when tools are used
-            from hugegraph_llm.models.embeddings.init_embedding import EmbeddingFactory
-            embedding = EmbeddingFactory.get_embedding()
+            from hugegraph_llm.models.embeddings.init_embedding import Embeddings
+            embedding = Embeddings().get_embedding()
 
             _cached_agent_llm = agent_llm
             _cached_tool_registry = create_default_tool_registry(
@@ -158,14 +158,15 @@ def community_build(
         if "flow" in flow_entry:
             flow = flow_entry["flow"]
             from hugegraph_llm.models.llms.init_llm import LLMs
-            from hugegraph_llm.utils.graph_index_utils import get_vector_index_class
-            from hugegraph_llm.models.embeddings.init_embedding import EmbeddingFactory
+            from hugegraph_llm.utils.vector_index_utils import get_vector_index_class
+            from hugegraph_llm.config.index_config import IndexConfig
+            from hugegraph_llm.models.embeddings.init_embedding import Embeddings
 
             try:
                 llms = LLMs()
                 flow.set_llm(llms.get_extract_llm()) if hasattr(flow, 'set_llm') else None
-                flow.set_embedding(EmbeddingFactory.get_embedding()) if hasattr(flow, 'set_embedding') else None
-                flow.set_vector_index_cls(get_vector_index_class()) if hasattr(flow, 'set_vector_index_cls') else None
+                flow.set_embedding(Embeddings().get_embedding()) if hasattr(flow, 'set_embedding') else None
+                flow.set_vector_index_cls(get_vector_index_class(IndexConfig().cur_vector_index)) if hasattr(flow, 'set_vector_index_cls') else None
             except Exception as e:
                 log.warning("Could not auto-configure community flow: %s", e)
 
@@ -205,8 +206,9 @@ def global_search(query: str) -> Dict[str, Any]:
 
     try:
         from hugegraph_llm.models.llms.init_llm import LLMs
-        from hugegraph_llm.utils.graph_index_utils import get_vector_index_class
-        from hugegraph_llm.models.embeddings.init_embedding import EmbeddingFactory
+        from hugegraph_llm.utils.vector_index_utils import get_vector_index_class
+        from hugegraph_llm.config.index_config import IndexConfig
+        from hugegraph_llm.models.embeddings.init_embedding import Embeddings
 
         # Configure the global search flow
         flow_entry = scheduler.pipeline_pool.get(FlowName.GLOBAL_SEARCH, {})
@@ -215,8 +217,8 @@ def global_search(query: str) -> Dict[str, Any]:
             try:
                 llms = LLMs()
                 flow.set_llm(llms.get_chat_llm()) if hasattr(flow, 'set_llm') else None
-                flow.set_embedding(EmbeddingFactory.get_embedding()) if hasattr(flow, 'set_embedding') else None
-                flow.set_vector_index_cls(get_vector_index_class()) if hasattr(flow, 'set_vector_index_cls') else None
+                flow.set_embedding(Embeddings().get_embedding()) if hasattr(flow, 'set_embedding') else None
+                flow.set_vector_index_cls(get_vector_index_class(IndexConfig().cur_vector_index)) if hasattr(flow, 'set_vector_index_cls') else None
             except Exception as e:
                 log.warning("Could not auto-configure global search flow: %s", e)
 
@@ -270,14 +272,15 @@ def graph_rag_search(
         from hugegraph_llm.agents.tool_registry import ToolRegistry
         from hugegraph_llm.models.llms.init_llm import LLMs
         from hugegraph_llm.utils.hugegraph_utils import get_hg_client
-        from hugegraph_llm.utils.graph_index_utils import get_vector_index_class
-        from hugegraph_llm.models.embeddings.init_embedding import EmbeddingFactory
+        from hugegraph_llm.utils.vector_index_utils import get_vector_index_class
+        from hugegraph_llm.config.index_config import IndexConfig
+        from hugegraph_llm.models.embeddings.init_embedding import Embeddings
 
         # Initialize dependencies
         llms = LLMs()
         agent_llm = llms.get_agent_llm()
-        embedding = EmbeddingFactory.get_embedding()
-        vector_index_cls = get_vector_index_class()
+        embedding = Embeddings().get_embedding()
+        vector_index_cls = get_vector_index_class(IndexConfig().cur_vector_index)
 
         # Create a fresh ToolRegistry and register default tools
         registry = ToolRegistry()

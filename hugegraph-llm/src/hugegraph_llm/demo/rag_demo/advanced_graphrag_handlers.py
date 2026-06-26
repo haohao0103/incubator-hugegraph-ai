@@ -273,12 +273,13 @@ def get_community_reports(limit: int = 10) -> Dict[str, Any]:
         Dict with reports list and summary stats.
     """
     try:
-        from hugegraph_llm.utils.graph_index_utils import get_vector_index_class
-        from hugegraph_llm.models.embeddings.init_embedding import EmbeddingFactory
+        from hugegraph_llm.utils.vector_index_utils import get_vector_index_class
+        from hugegraph_llm.config.index_config import IndexConfig
+        from hugegraph_llm.models.embeddings.init_embedding import Embeddings
 
         # Try to load community reports from the index
-        vector_index_cls = get_vector_index_class()
-        embedding = EmbeddingFactory.get_embedding()
+        vector_index_cls = get_vector_index_class(IndexConfig().cur_vector_index)
+        embedding = Embeddings().get_embedding()
 
         reports = []
         # Attempt to search community index
@@ -365,12 +366,13 @@ def rrf_demo(query: str = "", top_k: int = 5) -> Dict[str, Any]:
         }
 
     try:
-        from hugegraph_llm.models.embeddings.init_embedding import EmbeddingFactory
-        from hugegraph_llm.utils.graph_index_utils import get_vector_index_class
+        from hugegraph_llm.models.embeddings.init_embedding import Embeddings
+        from hugegraph_llm.utils.vector_index_utils import get_vector_index_class
+        from hugegraph_llm.config.index_config import IndexConfig
         from hugegraph_llm.operators.graph_op.rrf_fusion import ReciprocalRankFusion
 
-        embedding = EmbeddingFactory.get_embedding()
-        vector_index_cls = get_vector_index_class()
+        embedding = Embeddings().get_embedding()
+        vector_index_cls = get_vector_index_class(IndexConfig().cur_vector_index)
 
         # Simulate multi-channel search
         vector_results = []
