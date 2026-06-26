@@ -129,6 +129,13 @@ def _write_py(code: str) -> str:
     return path
 
 
+def _write_file(suffix: str, code: str) -> str:
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(textwrap.dedent(code))
+    return path
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # T1 — Data models
 # ═════════════════════════════════════════════════════════════════════════════
@@ -378,6 +385,50 @@ def test_parser_advanced_resolution():
     dynamic = {(t, et) for _, t, et in calls}
     check(("eval", "dynamic_call") in dynamic, "T2x.11 eval marked dynamic_call")
     check(("exec", "dynamic_call") in dynamic, "T2x.12 exec marked dynamic_call")
+
+    # T2x.13 — Java function/class/call extraction
+    java_path = _write_file(".java", """
+        class Foo {
+            void bar() {}
+            void run() { bar(); }
+        }
+    """)
+    jp = PythonCodeParser()
+    jp.parse_file(java_path)
+    os.remove(java_path)
+    java_funcs = {n.name for n in jp.nodes if n.node_type == "function"}
+    java_calls = {e.target_id for e in jp.edges if e.edge_type == "calls"}
+    check("bar" in java_funcs and "run" in java_funcs, "T2x.13 Java functions parsed")
+    check("bar" in java_calls, "T2x.14 Java call bar extracted")
+
+    # T2x.15 — Go function/call extraction
+    go_path = _write_file(".go", """
+        package main
+        func foo() {}
+        func main() { foo() }
+    """)
+    gp = PythonCodeParser()
+    gp.parse_file(go_path)
+    os.remove(go_path)
+    go_funcs = {n.name for n in gp.nodes if n.node_type == "function"}
+    go_calls = {e.target_id for e in gp.edges if e.edge_type == "calls"}
+    check("foo" in go_funcs and "main" in go_funcs, "T2x.15 Go functions parsed")
+    check("foo" in go_calls, "T2x.16 Go call foo extracted")
+
+    # T2x.17 — TypeScript function/class/call extraction
+    ts_path = _write_file(".ts", """
+        function foo(): void {}
+        class C {
+            run() { foo(); }
+        }
+    """)
+    tp = PythonCodeParser()
+    tp.parse_file(ts_path)
+    os.remove(ts_path)
+    ts_funcs = {n.name for n in tp.nodes if n.node_type == "function"}
+    ts_calls = {e.target_id for e in tp.edges if e.edge_type == "calls"}
+    check("foo" in ts_funcs and "run" in ts_funcs, "T2x.17 TS functions parsed")
+    check("foo" in ts_calls, "T2x.18 TS call foo extracted")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

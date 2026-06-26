@@ -49,7 +49,6 @@ Run:
 
 from __future__ import annotations
 
-import ast
 import builtins
 import json
 import logging
@@ -130,17 +129,56 @@ class QueryResult:
 
 # ─── AST Parser ──────────────────────────────────────────────────────────────
 
-class PythonCodeParser:
-    """Parse Python source files with stdlib ast and extract nodes + edges."""
+class TreeSitterCodeParser:
+    """Parse source files using tree-sitter and extract nodes + edges.
+
+    Supports Python, Java, Go, TypeScript. Produces the same CodeNode/CodeEdge
+    data model as the legacy Python AST parser.
+    """
+
+    _LANGUAGE_MAP = {
+        ".py": "python", ".pyw": "python",
+        ".java": "java",
+        ".go": "go",
+        ".ts": "typescript", ".tsx": "typescript",
+        ".js": "typescript", ".jsx": "typescript",
+    }
+    _PARSERS: Dict[str, Any] = {}
 
     def __init__(self) -> None:
         self.nodes: List[CodeNode] = []
         self.edges: List[CodeEdge] = []
         self._current_class: Optional[str] = None
+        self._ensure_parsers()
+
+    @classmethod
+    def _ensure_parsers(cls) -> None:
+        if cls._PARSERS:
+            return
+        try:
+            from tree_sitter import Language, Parser
+            from tree_sitter_python import language as py_language
+            from tree_sitter_java import language as java_language
+            from tree_sitter_go import language as go_language
+            from tree_sitter_typescript import language_typescript as ts_language
+
+            cls._PARSERS["python"] = Parser(Language(py_language()))
+            cls._PARSERS["java"] = Parser(Language(java_language()))
+            cls._PARSERS["go"] = Parser(Language(go_language()))
+            cls._PARSERS["typescript"] = Parser(Language(ts_language()))
+        except Exception as exc:  # pragma: no cover - tree-sitter unavailable
+            log.warning("Failed to load tree-sitter parsers: %s", exc)
 
     # ── public ──────────────────────────────────────────────────────────────
 
     def parse_file(self, file_path: str) -> None:
+        ext = os.path.splitext(file_path)[1].lower()
+        lang = self._LANGUAGE_MAP.get(ext)
+        parser = self._PARSERS.get(lang) if lang else None
+        if parser is None:
+            log.warning("Unsupported language for %s", file_path)
+            return
+
         try:
             with open(file_path, "r", encoding="utf-8") as fh:
                 source = fh.read()
@@ -148,15 +186,34 @@ class PythonCodeParser:
             log.warning("Skip %s: %s", file_path, exc)
             return
 
+        rel_path = os.path.relpath(file_path)
+        self._current_class = None
+
         try:
-            tree = ast.parse(source, filename=file_path)
-        except SyntaxError as exc:
+            tree = parser.parse(source.encode("utf-8"))
+        except Exception as exc:  # pragma: no cover
             log.warning("Parse error %s: %s", file_path, exc)
             return
 
-        rel_path = os.path.relpath(file_path)
-        self._current_class = None
-        self._visit_module(tree, rel_path, source)
+        if self._has_errors(tree.root_node):
+            log.warning("Parse error %s: tree contains ERROR nodes", file_path)
+            return
+
+        lines = source.splitlines()
+        mod_id = self._module_id(rel_path)
+        self.nodes.append(CodeNode(
+            id=mod_id, name=rel_path, node_type="module",
+            file_path=rel_path, line_start=1, line_end=len(lines) or 1,
+        ))
+
+        if lang == "python":
+            self._visit_python(tree.root_node, rel_path, source, mod_id)
+        elif lang == "java":
+            self._visit_java(tree.root_node, rel_path, source, mod_id)
+        elif lang == "go":
+            self._visit_go(tree.root_node, rel_path, source, mod_id)
+        elif lang == "typescript":
+            self._visit_ts(tree.root_node, rel_path, source, mod_id)
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -168,285 +225,732 @@ class PythonCodeParser:
     def _module_id(self, file_path: str) -> str:
         return "module__" + re.sub(r"[^a-zA-Z0-9_]", "_", file_path.replace(".py", ""))
 
-    # ── visitors ─────────────────────────────────────────────────────────────
+    def _node_text(self, node: Any, source: str) -> str:
+        return source[node.start_byte:node.end_byte]
 
-    def _visit_module(self, tree: ast.Module, file_path: str, source: str) -> None:
-        mod_id = self._module_id(file_path)
-        lines = source.splitlines()
-        self.nodes.append(CodeNode(
-            id=mod_id, name=file_path, node_type="module",
-            file_path=file_path, line_start=1, line_end=len(lines),
-        ))
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                self._visit_function(node, file_path, source, mod_id)
-            elif isinstance(node, ast.ClassDef):
-                self._visit_class(node, file_path, source, mod_id)
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                self._visit_import(node, file_path)
-        self._extract_top_level_calls(tree, mod_id, file_path)
+    def _line_no(self, node: Any) -> int:
+        return node.start_point[0] + 1
 
-    # ── call extraction helpers ──────────────────────────────────────────────
+    def _snippet(self, node: Any, source: str) -> str:
+        return self._node_text(node, source)[:200]
 
-    @staticmethod
-    def _name_from_expr(expr: ast.AST) -> Optional[str]:
-        """Best-effort name extraction from an expression AST."""
-        if isinstance(expr, ast.Name):
-            return expr.id
-        if isinstance(expr, ast.Attribute):
-            return expr.attr
-        if isinstance(expr, ast.Call):
-            return PythonCodeParser._name_from_expr(expr.func)
-        return None
+    def _find_descendants(self, node: Any, types: Tuple[str, ...]) -> List[Any]:
+        results: List[Any] = []
 
-    def _callee_names(
-        self,
-        call: ast.Call,
-        local_bindings: Dict[str, List[str]],
-    ) -> List[str]:
-        """Resolve a call site to one or more candidate callee names.
+        def walk(n: Any) -> None:
+            if n.type in types:
+                results.append(n)
+            for c in n.children:
+                walk(c)
 
-        Handles:
-        - direct call: func()
-        - attribute call: obj.method()
-        - aliased call: a = func; a()  -> resolves to func
-        - tuple unpacking: a, b = func1, func2; a()
-        """
-        candidates: List[str] = []
-
-        if isinstance(call.func, ast.Name):
-            name = call.func.id
-            if name in local_bindings:
-                candidates.extend(local_bindings[name])
-            else:
-                candidates.append(name)
-        elif isinstance(call.func, ast.Attribute):
-            candidates.append(call.func.attr)
-        return candidates
-
-    def _dynamic_call_targets(
-        self,
-        call: ast.Call,
-    ) -> List[Tuple[str, str]]:
-        """Detect dynamic dispatch patterns and return (target_name, edge_type).
-
-        Patterns:
-        - getattr(obj, 'name')()  -> calls 'name'
-        - obj.__getattr__('name')() -> calls 'name'
-        - eval(code) / exec(code) -> dynamic_call 'eval' / 'exec'
-        - setattr(obj, 'name', value) -> writes_to 'name'
-        """
-        results: List[Tuple[str, str]] = []
-
-        # getattr(obj, "method")()
-        if isinstance(call.func, ast.Call) and isinstance(call.func.func, ast.Name):
-            if call.func.func.id == "getattr" and len(call.func.args) >= 2:
-                second = call.func.args[1]
-                if isinstance(second, ast.Constant) and isinstance(second.value, str):
-                    results.append((second.value, "calls"))
-
-        # eval / exec
-        if isinstance(call.func, ast.Name) and call.func.id in ("eval", "exec"):
-            results.append((call.func.id, "dynamic_call"))
-
-        # setattr(obj, "name", value)
-        if isinstance(call.func, ast.Name) and call.func.id == "setattr" and len(call.func.args) >= 2:
-            second = call.func.args[1]
-            if isinstance(second, ast.Constant) and isinstance(second.value, str):
-                results.append((second.value, "writes_to"))
-
+        walk(node)
         return results
 
-    def _build_local_bindings(
+    def _has_errors(self, node: Any) -> bool:
+        if node.type == "ERROR":
+            return True
+        if getattr(node, "is_missing", False):
+            return True
+        return any(self._has_errors(c) for c in node.children)
+
+    def _add_call_edge(self, caller_id: str, callee: Optional[str], file_path: str) -> None:
+        if callee and callee not in _BUILTINS:
+            self.edges.append(CodeEdge(
+                source_id=caller_id, target_id=callee,
+                edge_type="calls", file_path=file_path,
+            ))
+
+    def _callee_name(self, call_node: Any, source: str) -> Optional[str]:
+        func = call_node.child_by_field_name("function")
+        if func is None:
+            return None
+        if func.type == "identifier":
+            return self._node_text(func, source)
+        if func.type == "attribute":
+            attr = func.child_by_field_name("attribute")
+            if attr:
+                return self._node_text(attr, source)
+        return None
+
+    # ── Python visitor ───────────────────────────────────────────────────────
+
+    def _visit_python(self, root: Any, file_path: str, source: str, parent_id: str) -> None:
+        bindings = self._python_bindings(root, source)
+        for child in root.children:
+            if child.type in ("function_definition", "async_function_definition"):
+                self._visit_python_function(child, file_path, source, parent_id, bindings)
+            elif child.type == "class_definition":
+                self._visit_python_class(child, file_path, source, parent_id, bindings)
+            elif child.type == "decorated_definition":
+                self._visit_python_decorated(child, file_path, source, parent_id, bindings)
+            elif child.type in ("import_statement", "import_from_statement"):
+                self._visit_python_import(child, file_path, source, parent_id)
+        self._python_top_level_calls(root, file_path, source, parent_id, bindings)
+
+    def _visit_python_decorated(
         self,
-        body: List[ast.stmt],
-    ) -> Dict[str, List[str]]:
-        """Scan function/module body for simple local aliases.
-
-        Supported:
-        - a = func_name
-        - a = obj.method
-        - a, b = func1, func2
-        - a = b = func_name  (chained assignment)
-        """
-        bindings: Dict[str, List[str]] = defaultdict(list)
-
-        def bind_targets(targets: List[ast.expr], value: ast.expr) -> None:
-            """Bind target name(s) to the name extracted from value."""
-            callee = self._name_from_expr(value)
-            if not callee:
-                return
-            for tgt in targets:
-                if isinstance(tgt, ast.Name):
-                    bindings[tgt.id].append(callee)
-                elif isinstance(tgt, ast.Tuple) or isinstance(tgt, ast.List):
-                    # tuple unpacking: a, b = func1(), func2()
-                    # heuristic: if value is a tuple of same length, pair-wise bind
-                    if isinstance(value, (ast.Tuple, ast.List)) and len(value.elts) == len(tgt.elts):
-                        for sub_tgt, sub_val in zip(tgt.elts, value.elts):
-                            if isinstance(sub_tgt, ast.Name):
-                                sub_name = self._name_from_expr(sub_val)
-                                if sub_name:
-                                    bindings[sub_tgt.id].append(sub_name)
-                    else:
-                        # fallback: bind every target to the whole value name
-                        for sub_tgt in tgt.elts:
-                            if isinstance(sub_tgt, ast.Name):
-                                bindings[sub_tgt.id].append(callee)
-
-        for stmt in body:
-            if isinstance(stmt, ast.Assign):
-                bind_targets(stmt.targets, stmt.value)
-            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # function-local function: bind name to itself for recursion detection
-                bindings[stmt.name].append(stmt.name)
-
-        return dict(bindings)
-
-    def _extract_top_level_calls(
-        self,
-        tree: ast.Module,
-        module_id: str,
-        file_path: str,
-    ) -> None:
-        """Extract calls that appear at module top level (e.g. PyCG snippets)."""
-        local_bindings = self._build_local_bindings(tree.body)
-        for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                continue
-            for child in ast.walk(node):
-                if isinstance(child, ast.Call):
-                    for callee in self._callee_names(child, local_bindings):
-                        if callee not in _BUILTINS:
-                            self.edges.append(CodeEdge(
-                                source_id=module_id, target_id=callee,
-                                edge_type="calls", file_path=file_path,
-                            ))
-                    for target, etype in self._dynamic_call_targets(child):
-                        if target not in _BUILTINS:
-                            self.edges.append(CodeEdge(
-                                source_id=module_id, target_id=target,
-                                edge_type=etype, file_path=file_path,
-                            ))
-
-    def _visit_function(
-        self,
-        node: ast.FunctionDef,
+        node: Any,
         file_path: str,
         source: str,
         parent_id: str,
-        class_name: str = "",
+        bindings: Dict[str, List[str]],
     ) -> None:
-        func_id = self._make_id(node.name, file_path, node.lineno)
-        lines = source.splitlines()
-        end = min(getattr(node, "end_lineno", node.lineno), len(lines))
-        snippet = "\n".join(lines[node.lineno - 1 : end])[:200]
+        """Handle @decorator wrapped function/class definitions."""
+        decorators: List[str] = []
+        definition: Any = None
+        for c in node.children:
+            if c.type == "decorator":
+                dec = self._python_decorator_name(c, source)
+                if dec:
+                    decorators.append(dec)
+            elif c.type in ("function_definition", "async_function_definition", "class_definition"):
+                definition = c
+        if definition is None:
+            return
+        if definition.type == "class_definition":
+            self._visit_python_class(definition, file_path, source, parent_id, bindings, decorators=decorators)
+        else:
+            self._visit_python_function(definition, file_path, source, parent_id, bindings, decorators=decorators)
 
+    def _python_bindings(self, root: Any, source: str) -> Dict[str, List[str]]:
+        bindings: Dict[str, List[str]] = defaultdict(list)
+
+        def final_value(n: Any) -> Any:
+            """Unwrap chained assignment a = b = ... = value."""
+            if n.type == "assignment":
+                right = n.child_by_field_name("right")
+                if right:
+                    return final_value(right)
+            return n
+
+        def name(n: Any) -> Optional[str]:
+            if n.type == "identifier":
+                return self._node_text(n, source)
+            if n.type == "attribute":
+                attr = n.child_by_field_name("attribute")
+                if attr:
+                    return self._node_text(attr, source)
+            return None
+
+        def identifiers(seq: Any) -> List[Any]:
+            return [c for c in seq.children if c.type == "identifier"]
+
+        def walk(n: Any) -> None:
+            if n.type == "assignment":
+                left = n.child_by_field_name("left")
+                right = n.child_by_field_name("right")
+                if left and right:
+                    val = final_value(right)
+                    callee = name(val)
+                    if left.type == "identifier" and callee:
+                        bindings[self._node_text(left, source)].append(callee)
+                    elif left.type in ("tuple", "list", "pattern_list"):
+                        left_ids = identifiers(left)
+                        if val.type in ("tuple", "list", "expression_list") and len(left_ids) == len(identifiers(val)):
+                            for lt, rt in zip(left_ids, identifiers(val)):
+                                cn = name(rt)
+                                if cn:
+                                    bindings[self._node_text(lt, source)].append(cn)
+                        else:
+                            for c in left_ids:
+                                if callee:
+                                    bindings[self._node_text(c, source)].append(callee)
+            for c in n.children:
+                walk(c)
+
+        walk(root)
+        return dict(bindings)
+
+    def _visit_python_function(
+        self,
+        node: Any,
+        file_path: str,
+        source: str,
+        parent_id: str,
+        bindings: Dict[str, List[str]],
+        class_name: str = "",
+        decorators: Optional[List[str]] = None,
+    ) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        func_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        func_id = self._make_id(func_name, file_path, lineno)
         self.nodes.append(CodeNode(
-            id=func_id, name=node.name, node_type="function",
-            file_path=file_path, line_start=node.lineno, line_end=end,
-            source_code=snippet,
+            id=func_id, name=func_name, node_type="function",
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code=self._snippet(node, source),
         ))
         self.edges.append(CodeEdge(
             source_id=parent_id, target_id=func_id,
             edge_type="contains", file_path=file_path,
         ))
         if class_name:
-            cls_id = self._make_id(class_name, file_path,
-                                   node.lineno - 1)  # approximate
+            cls_id = self._make_id(class_name, file_path, lineno)
             self.edges.append(CodeEdge(
                 source_id=cls_id, target_id=func_id,
                 edge_type="defines", file_path=file_path,
             ))
 
         # decorators: @decorator_name -> calls edge
-        for deco in node.decorator_list:
-            deco_name = self._name_from_expr(deco)
-            if deco_name and deco_name not in _BUILTINS:
-                self.edges.append(CodeEdge(
-                    source_id=func_id, target_id=deco_name,
-                    edge_type="calls", file_path=file_path,
-                ))
+        if decorators:
+            for dec in decorators:
+                self._add_call_edge(func_id, dec, file_path)
+        else:
+            for child in node.children:
+                if child.type == "decorator":
+                    dec = self._python_decorator_name(child, source)
+                    if dec:
+                        self._add_call_edge(func_id, dec, file_path)
 
-        local_bindings = self._build_local_bindings(node.body)
-        self._extract_calls(node, func_id, file_path, local_bindings)
+        body = node.child_by_field_name("body")
+        if body:
+            self._extract_python_calls(body, func_id, file_path, source, bindings)
 
-    def _visit_class(
+    def _visit_python_class(
         self,
-        node: ast.ClassDef,
+        node: Any,
         file_path: str,
         source: str,
         parent_id: str,
+        bindings: Dict[str, List[str]],
+        decorators: Optional[List[str]] = None,
     ) -> None:
-        cls_id = self._make_id(node.name, file_path, node.lineno)
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        cls_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        cls_id = self._make_id(cls_name, file_path, lineno)
+        node_type = "class"
+        if cls_name.endswith("Service"):
+            node_type = "service"
+        elif cls_name.endswith("Controller") or cls_name.endswith("Handler"):
+            node_type = "route"
         self.nodes.append(CodeNode(
-            id=cls_id, name=node.name, node_type="class",
-            file_path=file_path,
-            line_start=node.lineno,
-            line_end=getattr(node, "end_lineno", node.lineno),
+            id=cls_id, name=cls_name, node_type=node_type,
+            file_path=file_path, line_start=lineno, line_end=node.end_point[0] + 1,
         ))
         self.edges.append(CodeEdge(
             source_id=parent_id, target_id=cls_id,
             edge_type="contains", file_path=file_path,
         ))
-        for base in node.bases:
-            if isinstance(base, ast.Name):
-                self.edges.append(CodeEdge(
-                    source_id=cls_id, target_id=base.id,
-                    edge_type="inherits", file_path=file_path,
-                ))
 
-        # decorators on classes: @dataclass -> calls edge
-        for deco in node.decorator_list:
-            deco_name = self._name_from_expr(deco)
-            if deco_name and deco_name not in _BUILTINS:
-                self.edges.append(CodeEdge(
-                    source_id=cls_id, target_id=deco_name,
-                    edge_type="calls", file_path=file_path,
-                ))
+        # decorators on classes
+        if decorators:
+            for dec in decorators:
+                self._add_call_edge(cls_id, dec, file_path)
+        else:
+            for child in node.children:
+                if child.type == "decorator":
+                    dec = self._python_decorator_name(child, source)
+                    if dec:
+                        self._add_call_edge(cls_id, dec, file_path)
+
+        # inheritance
+        for child in node.children:
+            if child.type == "argument_list":
+                for arg in child.children:
+                    if arg.type == "identifier":
+                        self.edges.append(CodeEdge(
+                            source_id=cls_id, target_id=self._node_text(arg, source),
+                            edge_type="inherits", file_path=file_path,
+                        ))
 
         old = self._current_class
-        self._current_class = node.name
-        for child in node.body:
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                self._visit_function(child, file_path, source, cls_id, node.name)
+        self._current_class = cls_name
+        body = node.child_by_field_name("body")
+        if body:
+            for child in body.children:
+                if child.type in ("function_definition", "async_function_definition"):
+                    self._visit_python_function(child, file_path, source, cls_id, bindings, cls_name)
+                elif child.type == "class_definition":
+                    self._visit_python_class(child, file_path, source, cls_id, bindings)
+                elif child.type == "decorated_definition":
+                    self._visit_python_decorated(child, file_path, source, cls_id, bindings)
         self._current_class = old
 
-    def _visit_import(
-        self,
-        node: ast.Import | ast.ImportFrom,
-        file_path: str,
-    ) -> None:
-        src_id = self._module_id(file_path)
-        if isinstance(node, ast.ImportFrom) and node.module:
-            tgt_id = "module__" + node.module.replace(".", "_")
-            self.edges.append(CodeEdge(
-                source_id=src_id, target_id=tgt_id,
-                edge_type="imports", file_path=file_path,
-            ))
+    def _python_decorator_name(self, node: Any, source: str) -> Optional[str]:
+        expr = None
+        for c in node.children:
+            if c.type != "@":
+                expr = c
+                break
+        if expr is None:
+            return None
+        if expr.type == "identifier":
+            return self._node_text(expr, source)
+        if expr.type == "attribute":
+            attr = expr.child_by_field_name("attribute")
+            if attr:
+                return self._node_text(attr, source)
+        if expr.type == "call":
+            func = expr.child_by_field_name("function")
+            if func and func.type == "identifier":
+                return self._node_text(func, source)
+            if func and func.type == "attribute":
+                attr = func.child_by_field_name("attribute")
+                if attr:
+                    return self._node_text(attr, source)
+        return None
 
-    def _extract_calls(
+    def _visit_python_import(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        if node.type == "import_from_statement":
+            module = node.child_by_field_name("module")
+            if module:
+                mod_name = self._node_text(module, source)
+                tgt = "module__" + mod_name.replace(".", "_")
+                self.edges.append(CodeEdge(
+                    source_id=parent_id, target_id=tgt,
+                    edge_type="imports", file_path=file_path,
+                ))
+        elif node.type == "import_statement":
+            for c in node.children:
+                if c.type == "dotted_name":
+                    mod_name = self._node_text(c, source)
+                    tgt = "module__" + mod_name.replace(".", "_")
+                    self.edges.append(CodeEdge(
+                        source_id=parent_id, target_id=tgt,
+                        edge_type="imports", file_path=file_path,
+                    ))
+
+    def _extract_python_calls(
         self,
-        node: ast.FunctionDef,
+        node: Any,
         caller_id: str,
         file_path: str,
-        local_bindings: Optional[Dict[str, List[str]]] = None,
+        source: str,
+        bindings: Dict[str, List[str]],
     ) -> None:
-        local_bindings = local_bindings or {}
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                for callee in self._callee_names(child, local_bindings):
-                    if callee not in _BUILTINS:
-                        self.edges.append(CodeEdge(
-                            source_id=caller_id, target_id=callee,
-                            edge_type="calls", file_path=file_path,
-                        ))
-                for target, etype in self._dynamic_call_targets(child):
-                    if target not in _BUILTINS:
-                        self.edges.append(CodeEdge(
-                            source_id=caller_id, target_id=target,
-                            edge_type=etype, file_path=file_path,
-                        ))
+        for call in self._find_descendants(node, ("call",)):
+            callee = self._callee_name(call, source)
+            if callee:
+                if callee in bindings:
+                    for real in bindings[callee]:
+                        self._add_call_edge(caller_id, real, file_path)
+                else:
+                    self._add_call_edge(caller_id, callee, file_path)
+
+            for target, etype in self._python_dynamic_call_targets(call, source):
+                if target and (etype != "calls" or target not in _BUILTINS):
+                    self.edges.append(CodeEdge(
+                        source_id=caller_id, target_id=target,
+                        edge_type=etype, file_path=file_path,
+                    ))
+
+    def _python_dynamic_call_targets(self, call: Any, source: str) -> List[Tuple[str, str]]:
+        """Detect dynamic dispatch patterns and return (target_name, edge_type)."""
+        results: List[Tuple[str, str]] = []
+
+        func = call.child_by_field_name("function")
+        if func is None:
+            return results
+
+        def args_of(n: Any) -> List[Any]:
+            for c in n.children:
+                if c.type == "argument_list":
+                    return [a for a in c.children if a.type not in ("(", ")", ",")]
+            return []
+
+        if func.type == "identifier":
+            func_name = self._node_text(func, source)
+            if func_name in ("eval", "exec"):
+                results.append((func_name, "dynamic_call"))
+            elif func_name == "setattr":
+                args = args_of(func)
+                if len(args) >= 2:
+                    results.append((self._string_literal(args[1], source), "writes_to"))
+
+        elif func.type == "call":
+            inner_func = func.child_by_field_name("function")
+            if inner_func and inner_func.type == "identifier":
+                if self._node_text(inner_func, source) == "getattr":
+                    args = args_of(func)
+                    if len(args) >= 2:
+                        results.append((self._string_literal(args[1], source), "calls"))
+
+        return results
+
+    def _string_literal(self, node: Any, source: str) -> str:
+        """Extract string content from a string/string_content node."""
+        if node.type == "string":
+            for c in node.children:
+                if c.type == "string_content":
+                    return self._node_text(c, source)
+            return self._node_text(node, source).strip("'\"")
+        if node.type == "string_content":
+            return self._node_text(node, source)
+        return self._node_text(node, source).strip("'\"")
+
+    def _python_top_level_calls(
+        self,
+        root: Any,
+        file_path: str,
+        source: str,
+        module_id: str,
+        bindings: Dict[str, List[str]],
+    ) -> None:
+        for child in root.children:
+            if child.type in ("function_definition", "async_function_definition", "class_definition"):
+                continue
+            self._extract_python_calls(child, module_id, file_path, source, bindings)
+
+    # ── Java visitor ─────────────────────────────────────────────────────────
+
+    def _visit_java(self, root: Any, file_path: str, source: str, parent_id: str) -> None:
+        for child in root.children:
+            if child.type in ("class_declaration", "interface_declaration"):
+                self._visit_java_class(child, file_path, source, parent_id)
+            elif child.type == "import_declaration":
+                self._visit_java_import(child, file_path, source, parent_id)
+        for child in root.children:
+            if child.type in ("class_declaration", "interface_declaration"):
+                continue
+            self._extract_java_calls(child, parent_id, file_path, source)
+
+    def _visit_java_class(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        cls_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        cls_id = self._make_id(cls_name, file_path, lineno)
+        node_type = "class"
+        if cls_name.endswith("Service"):
+            node_type = "service"
+        elif cls_name.endswith("Controller") or cls_name.endswith("Handler"):
+            node_type = "route"
+        self.nodes.append(CodeNode(
+            id=cls_id, name=cls_name, node_type=node_type,
+            file_path=file_path, line_start=lineno, line_end=node.end_point[0] + 1,
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=cls_id,
+            edge_type="contains", file_path=file_path,
+        ))
+
+        for c in node.children:
+            if c.type == "super_interfaces":
+                for i in self._find_descendants(c, ("type_identifier",)):
+                    self.edges.append(CodeEdge(
+                        source_id=cls_id, target_id=self._node_text(i, source),
+                        edge_type="implements", file_path=file_path,
+                    ))
+            if c.type == "superclass":
+                for i in self._find_descendants(c, ("type_identifier",)):
+                    self.edges.append(CodeEdge(
+                        source_id=cls_id, target_id=self._node_text(i, source),
+                        edge_type="inherits", file_path=file_path,
+                    ))
+
+        body = node.child_by_field_name("body")
+        if body:
+            for child in body.children:
+                if child.type in ("method_declaration", "constructor_declaration"):
+                    self._visit_java_method(child, file_path, source, cls_id, cls_name)
+                elif child.type in ("class_declaration", "interface_declaration"):
+                    self._visit_java_class(child, file_path, source, cls_id)
+
+    def _visit_java_method(
+        self,
+        node: Any,
+        file_path: str,
+        source: str,
+        parent_id: str,
+        class_name: str = "",
+    ) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        method_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        func_id = self._make_id(method_name, file_path, lineno)
+        self.nodes.append(CodeNode(
+            id=func_id, name=method_name, node_type="function",
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code=self._snippet(node, source),
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=func_id,
+            edge_type="contains", file_path=file_path,
+        ))
+        if class_name:
+            cls_id = self._make_id(class_name, file_path, lineno)
+            self.edges.append(CodeEdge(
+                source_id=cls_id, target_id=func_id,
+                edge_type="defines", file_path=file_path,
+            ))
+
+        for c in node.children:
+            if c.type == "modifiers":
+                for ann in self._find_descendants(c, ("annotation",)):
+                    n = ann.child_by_field_name("name")
+                    if n:
+                        self._add_call_edge(func_id, self._node_text(n, source), file_path)
+        self._extract_java_calls(node, func_id, file_path, source)
+
+    def _visit_java_import(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        for c in self._find_descendants(node, ("scoped_identifier", "identifier")):
+            mod = self._node_text(c, source).replace(".", "_")
+            self.edges.append(CodeEdge(
+                source_id=parent_id, target_id="module__" + mod,
+                edge_type="imports", file_path=file_path,
+            ))
+            break
+
+    def _extract_java_calls(self, node: Any, caller_id: str, file_path: str, source: str) -> None:
+        for call in self._find_descendants(node, ("method_invocation",)):
+            method = call.child_by_field_name("name")
+            if method:
+                self._add_call_edge(caller_id, self._node_text(method, source), file_path)
+
+    # ── Go visitor ───────────────────────────────────────────────────────────
+
+    def _visit_go(self, root: Any, file_path: str, source: str, parent_id: str) -> None:
+        for child in root.children:
+            if child.type == "function_declaration":
+                self._visit_go_function(child, file_path, source, parent_id)
+            elif child.type == "method_declaration":
+                self._visit_go_method(child, file_path, source, parent_id)
+            elif child.type == "type_declaration":
+                self._visit_go_type(child, file_path, source, parent_id)
+            elif child.type == "import_declaration":
+                self._visit_go_import(child, file_path, source, parent_id)
+        for child in root.children:
+            if child.type in ("function_declaration", "method_declaration", "type_declaration"):
+                continue
+            self._extract_go_calls(child, parent_id, file_path, source)
+
+    def _visit_go_function(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        func_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        func_id = self._make_id(func_name, file_path, lineno)
+        self.nodes.append(CodeNode(
+            id=func_id, name=func_name, node_type="function",
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code=self._snippet(node, source),
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=func_id,
+            edge_type="contains", file_path=file_path,
+        ))
+        self._extract_go_calls(node, func_id, file_path, source)
+
+    def _visit_go_method(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        func_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        func_id = self._make_id(func_name, file_path, lineno)
+        self.nodes.append(CodeNode(
+            id=func_id, name=func_name, node_type="function",
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code=self._snippet(node, source),
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=func_id,
+            edge_type="contains", file_path=file_path,
+        ))
+        self._extract_go_calls(node, func_id, file_path, source)
+
+    def _visit_go_type(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        for spec in self._find_descendants(node, ("type_spec",)):
+            name_node = spec.child_by_field_name("name")
+            if name_node is None:
+                continue
+            cls_name = self._node_text(name_node, source)
+            lineno = self._line_no(spec)
+            cls_id = self._make_id(cls_name, file_path, lineno)
+            node_type = "class"
+            if cls_name.endswith("Service"):
+                node_type = "service"
+            self.nodes.append(CodeNode(
+                id=cls_id, name=cls_name, node_type=node_type,
+                file_path=file_path, line_start=lineno,
+                line_end=spec.end_point[0] + 1, source_code="",
+            ))
+            self.edges.append(CodeEdge(
+                source_id=parent_id, target_id=cls_id,
+                edge_type="contains", file_path=file_path,
+            ))
+
+    def _visit_go_import(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        for spec in self._find_descendants(node, ("import_spec",)):
+            path_node = spec.child_by_field_name("path")
+            if path_node:
+                mod = self._node_text(path_node, source).strip('"').replace("/", "_").replace(".", "_")
+                self.edges.append(CodeEdge(
+                    source_id=parent_id, target_id="module__" + mod,
+                    edge_type="imports", file_path=file_path,
+                ))
+
+    def _extract_go_calls(self, node: Any, caller_id: str, file_path: str, source: str) -> None:
+        for call in self._find_descendants(node, ("call_expression",)):
+            func = call.child_by_field_name("function")
+            if func is None:
+                continue
+            if func.type == "identifier":
+                self._add_call_edge(caller_id, self._node_text(func, source), file_path)
+            elif func.type == "selector_expression":
+                sel = func.child_by_field_name("field")
+                if sel:
+                    self._add_call_edge(caller_id, self._node_text(sel, source), file_path)
+
+    # ── TypeScript visitor ───────────────────────────────────────────────────
+
+    def _visit_ts(self, root: Any, file_path: str, source: str, parent_id: str) -> None:
+        for child in root.children:
+            if child.type == "function_declaration":
+                self._visit_ts_function(child, file_path, source, parent_id)
+            elif child.type == "class_declaration":
+                self._visit_ts_class(child, file_path, source, parent_id)
+            elif child.type == "import_statement":
+                self._visit_ts_import(child, file_path, source, parent_id)
+            elif child.type == "lexical_declaration":
+                for decl in self._find_descendants(child, ("variable_declarator",)):
+                    init = decl.child_by_field_name("value")
+                    name = decl.child_by_field_name("name")
+                    if init and init.type in ("arrow_function", "function") and name:
+                        self._visit_ts_function(init, file_path, source, parent_id, name=name)
+        for child in root.children:
+            if child.type in ("function_declaration", "class_declaration"):
+                continue
+            self._extract_ts_calls(child, parent_id, file_path, source)
+
+    def _visit_ts_function(
+        self,
+        node: Any,
+        file_path: str,
+        source: str,
+        parent_id: str,
+        name: Any = None,
+    ) -> None:
+        if name is None:
+            name = node.child_by_field_name("name")
+        if name is None:
+            return
+        func_name = self._node_text(name, source)
+        lineno = self._line_no(node)
+        func_id = self._make_id(func_name, file_path, lineno)
+        self.nodes.append(CodeNode(
+            id=func_id, name=func_name, node_type="function",
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code=self._snippet(node, source),
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=func_id,
+            edge_type="contains", file_path=file_path,
+        ))
+        self._extract_ts_calls(node, func_id, file_path, source)
+
+    def _visit_ts_class(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        cls_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        cls_id = self._make_id(cls_name, file_path, lineno)
+        node_type = "class"
+        if cls_name.endswith("Service"):
+            node_type = "service"
+        elif cls_name.endswith("Controller") or cls_name.endswith("Handler"):
+            node_type = "route"
+        self.nodes.append(CodeNode(
+            id=cls_id, name=cls_name, node_type=node_type,
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code="",
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=cls_id,
+            edge_type="contains", file_path=file_path,
+        ))
+
+        for c in node.children:
+            if c.type == "class_heritage":
+                for i in self._find_descendants(c, ("identifier", "type_identifier")):
+                    self.edges.append(CodeEdge(
+                        source_id=cls_id, target_id=self._node_text(i, source),
+                        edge_type="inherits", file_path=file_path,
+                    ))
+            if c.type == "decorator":
+                n = c.child_by_field_name("expression")
+                if n and n.type == "identifier":
+                    self._add_call_edge(cls_id, self._node_text(n, source), file_path)
+
+        body = node.child_by_field_name("body")
+        if body:
+            for child in body.children:
+                if child.type == "method_definition":
+                    self._visit_ts_method(child, file_path, source, cls_id, cls_name)
+                elif child.type == "class_declaration":
+                    self._visit_ts_class(child, file_path, source, cls_id)
+
+    def _visit_ts_method(
+        self,
+        node: Any,
+        file_path: str,
+        source: str,
+        parent_id: str,
+        class_name: str,
+    ) -> None:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return
+        method_name = self._node_text(name_node, source)
+        lineno = self._line_no(node)
+        func_id = self._make_id(method_name, file_path, lineno)
+        self.nodes.append(CodeNode(
+            id=func_id, name=method_name, node_type="function",
+            file_path=file_path, line_start=lineno,
+            line_end=node.end_point[0] + 1, source_code=self._snippet(node, source),
+        ))
+        self.edges.append(CodeEdge(
+            source_id=parent_id, target_id=func_id,
+            edge_type="contains", file_path=file_path,
+        ))
+        if class_name:
+            cls_id = self._make_id(class_name, file_path, lineno)
+            self.edges.append(CodeEdge(
+                source_id=cls_id, target_id=func_id,
+                edge_type="defines", file_path=file_path,
+            ))
+        for c in node.children:
+            if c.type == "decorator":
+                n = c.child_by_field_name("expression")
+                if n and n.type == "identifier":
+                    self._add_call_edge(func_id, self._node_text(n, source), file_path)
+        self._extract_ts_calls(node, func_id, file_path, source)
+
+    def _visit_ts_import(self, node: Any, file_path: str, source: str, parent_id: str) -> None:
+        for c in node.children:
+            if c.type == "import_clause":
+                for i in self._find_descendants(c, ("identifier", "string_fragment")):
+                    mod = self._node_text(i, source).replace(".", "_")
+                    self.edges.append(CodeEdge(
+                        source_id=parent_id, target_id="module__" + mod,
+                        edge_type="imports", file_path=file_path,
+                    ))
+
+    def _extract_ts_calls(self, node: Any, caller_id: str, file_path: str, source: str) -> None:
+        for call in self._find_descendants(node, ("call_expression",)):
+            func = call.child_by_field_name("function")
+            if func is None:
+                continue
+            if func.type in ("identifier", "property_identifier"):
+                self._add_call_edge(caller_id, self._node_text(func, source), file_path)
+            elif func.type == "member_expression":
+                prop = func.child_by_field_name("property")
+                if prop:
+                    self._add_call_edge(caller_id, self._node_text(prop, source), file_path)
+
+
+# Backward-compatible alias for existing imports/tests
+PythonCodeParser = TreeSitterCodeParser
 
 
 # ─── SQLite Backend ───────────────────────────────────────────────────────────
