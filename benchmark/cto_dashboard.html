@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeGraph 代码知识图谱 | CTO Demo</title>
+<style>
+:root {
+  --bg: #0a0e27;
+  --panel: #111640;
+  --accent: #6c5ce7;
+  --accent2: #00cec9;
+  --text: #e0e0f0;
+  --text-dim: #8890b5;
+  --green: #00b894;
+  --red: #e17055;
+  --orange: #fdcb6e;
+  --blue: #74b9ff;
+  --border: #1e2350;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  overflow-x: hidden;
+}
+header {
+  background: linear-gradient(135deg, #0c0f30 0%, #1a1050 50%, #0c0f30 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 1.5rem 2rem;
+  display: flex; align-items: center; justify-content: space-between;
+}
+header h1 { font-size: 1.6rem; font-weight: 700; }
+header h1 span { color: var(--accent); }
+.badge {
+  background: rgba(108,92,231,0.15);
+  border: 1px solid rgba(108,92,231,0.4);
+  padding: 0.3rem 0.8rem; border-radius: 20px;
+  font-size: 0.75rem; color: var(--accent);
+}
+main { padding: 1.5rem 2rem; display: grid; gap: 1.5rem; }
+.row { display: grid; gap: 1.5rem; }
+.row-4 { grid-template-columns: repeat(4, 1fr); }
+.row-2 { grid-template-columns: 1fr 1fr; }
+.row-3 { grid-template-columns: 1fr 1fr 1fr; }
+.row-32 { grid-template-columns: 2fr 1fr; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.25rem;
+}
+.card h2 {
+  font-size: 0.85rem; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 0.8rem;
+}
+.metric-large {
+  font-size: 2.5rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.metric-unit { font-size: 0.9rem; color: var(--text-dim); margin-left: 0.3rem; }
+.metric-sub { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.3rem; }
+.accent-text { color: var(--accent2); }
+.green-text { color: var(--green); }
+.orange-text { color: var(--orange); }
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th { text-align: left; color: var(--text-dim); font-weight: 600;
+     padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); font-size:0.7rem;
+     text-transform: uppercase; letter-spacing: 0.5px; }
+td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(30,35,80,0.5); }
+tr:hover td { background: rgba(108,92,231,0.05); }
+.chip {
+  display: inline-block; padding: 0.15rem 0.5rem;
+  border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+}
+.chip-green { background: rgba(0,184,148,0.15); color: var(--green); }
+.chip-red { background: rgba(225,112,85,0.15); color: var(--red); }
+.chip-orange { background: rgba(253,203,110,0.15); color: var(--orange); }
+.chip-blue { background: rgba(116,185,255,0.15); color: var(--blue); }
+.progress-bar {
+  height: 6px; background: var(--border); border-radius: 3px;
+  margin-top: 0.4rem; overflow: hidden;
+}
+.progress-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+.adv-card {
+  padding: 0.8rem; border-radius: 8px;
+  border: 1px solid rgba(108,92,231,0.2);
+  background: rgba(108,92,231,0.05);
+  margin-bottom: 0.5rem;
+}
+.adv-card h3 { font-size: 0.8rem; color: var(--accent); margin-bottom: 0.2rem; }
+.adv-card p { font-size: 0.75rem; color: var(--text-dim); line-height:1.4; }
+.loading { text-align: center; padding: 2rem; color: var(--text-dim); }
+footer {
+  text-align: center; padding: 1.5rem;
+  color: var(--text-dim); font-size: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.note { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.5rem; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🦊 <span>CodeGraph</span> 代码知识图谱</h1>
+    <div style="font-size:0.8rem;color:var(--text-dim);margin-top:0.3rem">
+      HugeGraph-Distributed · AST Parser · BM25 Search · Multi-Hop Traversal
+    </div>
+  </div>
+  <div style="display:flex;gap:0.5rem;align-items:center">
+    <span class="badge">v1.0.0</span>
+    <span class="badge">CTO Demo</span>
+    <span class="badge" style="background:rgba(0,206,201,0.15);border-color:rgba(0,206,201,0.4);color:var(--accent2)">2026-06-26</span>
+  </div>
+</header>
+
+<main>
+  <!-- Row 1: Key Metrics -->
+  <div class="row row-4">
+    <div class="card">
+      <h2>📊 总节点数</h2>
+      <div class="metric-large accent-text" id="total-nodes">--</div>
+      <div class="metric-sub">函数/类/模块</div>
+    </div>
+    <div class="card">
+      <h2>🔗 总边数</h2>
+      <div class="metric-large" style="color:var(--blue)" id="total-edges">--</div>
+      <div class="metric-sub">调用/导入/继承/包含</div>
+    </div>
+    <div class="card">
+      <h2>🎯 搜索MRR</h2>
+      <div class="metric-large green-text" id="avg-mrr">--</div>
+      <div class="metric-sub">BM25 on 3 projects · 45 queries</div>
+    </div>
+    <div class="card">
+      <h2>⚡ 查询延迟</h2>
+      <div class="metric-large orange-text" id="query-latency">--</div>
+      <div class="metric-sub">1-hop neighbor avg</div>
+    </div>
+  </div>
+
+  <!-- Row 2: Per-Project Coverage + Search -->
+  <div class="row row-2">
+    <div class="card">
+      <h2>📁 项目代码图谱覆盖</h2>
+      <table><thead><tr>
+        <th>项目</th><th>文件</th><th>节点</th><th>边</th><th>耗时</th><th>MRR</th>
+      </tr></thead>
+      <tbody id="coverage-table"></tbody></table>
+      <div class="note">数据来源: 真实开源项目源码 (pip installed)</div>
+    </div>
+    <div class="card">
+      <h2>🔍 BM25 搜索质量详情</h2>
+      <table><thead><tr>
+        <th>项目</th><th>查询数</th><th>MRR</th><th>NDCG@10</th><th>Recall@10</th>
+      </tr></thead>
+      <tbody id="search-table"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Row 3: Structural Query Performance + Multi-Hop -->
+  <div class="row row-2">
+    <div class="card">
+      <h2>⏱️ 结构查询性能 (avg ms)</h2>
+      <table><thead><tr>
+        <th>查询类型</th><th>requests</th><th>flask</th><th>django</th>
+      </tr></thead>
+      <tbody id="perf-table"></tbody></table>
+    </div>
+    <div class="card">
+      <h2>🌐 多跳遍历可达性</h2>
+      <table><thead><tr>
+        <th>跳数</th><th>requests</th><th>flask</th><th>django</th>
+      </tr></thead>
+      <tbody id="hop-table"></tbody></table>
+      <div class="note">从30个随机函数出发，测量各hop层平均可达节点数</div>
+    </div>
+  </div>
+
+  <!-- Row 4: Competitor Comparison -->
+  <div class="card">
+    <h2>🏆 竞品对标矩阵</h2>
+    <div style="overflow-x:auto">
+    <table><thead><tr>
+      <th>产品</th><th>语言支持</th><th>调用准确率</th><th>Agent减少</th>
+      <th>图后端</th><th>MCP</th><th>框架感知</th><th>OLAP</th><th>开源</th>
+    </tr></thead>
+    <tbody id="competitor-table"></tbody></table>
+    </div>
+    <div class="note" style="margin-top:0.8rem">
+      HugeGraph CodeGraph 是唯一支持<b>分布式图存储</b>和<b>OLAP分析</b>的方案。
+      Agent减少数据来源: ColbyMcHenry 7项目实测, Sourcegraph Cody公开数据。
+    </div>
+  </div>
+
+  <!-- Row 5: Call Graph Analysis + Unique Advantages -->
+  <div class="row row-2">
+    <div class="card">
+      <h2>📞 调用图拓扑分析</h2>
+      <table><thead><tr>
+        <th>项目</th><th>调用边</th><th>内部调用率</th><th>跨模块调用率</th>
+      </tr></thead>
+      <tbody id="callgraph-table"></tbody></table>
+    </div>
+    <div class="card">
+      <h2>💎 HugeGraph 独特优势</h2>
+      <div id="advantages-list"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  CodeGraph Benchmark Dashboard · Powered by HugeGraph · Generated <span id="gen-time">--</span>
+</footer>
+
+<script>
+// Auto-load benchmark results
+async function loadResults() {
+  try {
+    const resp = await fetch('benchmark_result.json');
+    const data = await resp.json();
+    render(data);
+  } catch (e) {
+    document.querySelector('main').innerHTML +=
+      '<div class="card loading">⏳ 基准评测正在运行中...<br><small>首次运行约需2-3分钟解析 requests/flask/django</small></div>';
+    // Retry in 3 seconds
+    setTimeout(loadResults, 3000);
+  }
+}
+
+function render(data) {
+  const cov = data.coverage || {};
+  const agg = data.aggregate || {};
+  const comps = (data.competitors || {}).tools || [];
+  const advs = data.advantages || {};
+
+  // Key metrics
+  document.getElementById('total-nodes').textContent = (agg.total_nodes || 0).toLocaleString();
+  document.getElementById('total-edges').textContent = (agg.total_edges || 0).toLocaleString();
+  document.getElementById('avg-mrr').textContent = agg.avg_mrr ? agg.avg_mrr.toFixed(3) : '--';
+  document.getElementById('gen-time').textContent = data.generated_at || '--';
+
+  // Avg query latency
+  let allLatencies = [];
+  for (const [proj, info] of Object.entries(cov)) {
+    const perf = info.query_performance || {};
+    const hop1 = perf['1hop_neighbors'];
+    if (hop1) allLatencies.push(hop1.mean_ms);
+  }
+  if (allLatencies.length) {
+    const avg = allLatencies.reduce((a,b)=>a+b,0)/allLatencies.length;
+    document.getElementById('query-latency').textContent = avg.toFixed(2) + 'ms';
+  }
+
+  // Coverage table
+  const covTable = document.getElementById('coverage-table');
+  for (const [proj, info] of Object.entries(cov)) {
+    covTable.innerHTML += `<tr>
+      <td><strong>${proj}</strong></td>
+      <td>${info.files_scanned || '--'}</td>
+      <td>${(info.total_nodes || 0).toLocaleString()}</td>
+      <td>${(info.total_edges || 0).toLocaleString()}</td>
+      <td>${info.parse_time_seconds || '--'}s</td>
+      <td><span class="chip chip-green">${(info.bm25_search||{}).MRR || '--'}</span></td>
+    </tr>`;
+  }
+
+  // Search table
+  const searchTable = document.getElementById('search-table');
+  for (const [proj, info] of Object.entries(cov)) {
+    const bs = info.bm25_search || {};
+    searchTable.innerHTML += `<tr>
+      <td><strong>${proj}</strong></td>
+      <td>${bs.queries || '--'}</td>
+      <td><span class="chip chip-green">${bs.MRR || '--'}</span></td>
+      <td>${bs['NDCG@10'] || '--'}</td>
+      <td>${bs['Recall@10'] || '--'}</td>
+    </tr>`;
+  }
+
+  // Performance table
+  const perfTable = document.getElementById('perf-table');
+  const queryTypes = ['1hop_neighbors', 'callers', 'callees', '2hop_traverse', 'impact_analysis'];
+  const qtLabels = {'1hop_neighbors':'1-hop邻居', 'callers':'调用者查询', 'callees':'被调用者查询', '2hop_traverse':'2-hop遍历', 'impact_analysis':'爆炸半径分析'};
+  for (const qt of queryTypes) {
+    let row = `<tr><td>${qtLabels[qt]}</td>`;
+    for (const proj of ['requests','flask','django']) {
+      const perf = (cov[proj]||{}).query_performance || {};
+      const val = perf[qt];
+      row += `<td>${val ? val.mean_ms.toFixed(2)+'ms' : '--'}</td>`;
+    }
+    row += '</tr>';
+    perfTable.innerHTML += row;
+  }
+
+  // Multi-hop table
+  const hopTable = document.getElementById('hop-table');
+  for (let h = 1; h <= 5; h++) {
+    let row = `<tr><td>hop ${h}</td>`;
+    for (const proj of ['requests','flask','django']) {
+      const mh = (cov[proj]||{}).multi_hop || {};
+      const val = mh[`hop_${h}`];
+      row += `<td>${val ? val.mean_reachable.toFixed(0) : '--'}</td>`;
+    }
+    row += '</tr>';
+    hopTable.innerHTML += row;
+  }
+
+  // Call graph table
+  const cgTable = document.getElementById('callgraph-table');
+  for (const [proj, info] of Object.entries(cov)) {
+    const cg = info.call_graph || {};
+    cgTable.innerHTML += `<tr>
+      <td><strong>${proj}</strong></td>
+      <td>${(cg.calls_edges || 0).toLocaleString()}</td>
+      <td><span class="chip chip-blue">${cg.internal_call_ratio ? (cg.internal_call_ratio*100).toFixed(1)+'%' : '--'}</span></td>
+      <td>${cg.cross_module_call_ratio ? (cg.cross_module_call_ratio*100).toFixed(1)+'%' : '--'}%</td>
+    </tr>`;
+  }
+
+  // Competitor table
+  const compTable = document.getElementById('competitor-table');
+  for (const t of comps) {
+    const isUs = t.name.includes('HugeGraph');
+    compTable.innerHTML += `<tr${isUs ? ' style="background:rgba(108,92,231,0.08)"' : ''}>
+      <td><strong>${isUs ? '⭐ ' : ''}${t.name}</strong></td>
+      <td><span class="chip ${t.languages >= 10 ? 'chip-green' : t.languages >= 3 ? 'chip-orange' : 'chip-red'}">${t.languages}语言</span></td>
+      <td>${t.call_accuracy}</td>
+      <td>${t.agent_reduction}</td>
+      <td>${t.graph_backend}</td>
+      <td>${t.mcp_support ? '✅' : '❌'}</td>
+      <td>${t.framework_aware || '❌'}</td>
+      <td>${t.olap_support ? '<span class="chip chip-green">✅ 唯一</span>' : '❌'}</td>
+      <td>${t.open_source}</td>
+    </tr>`;
+  }
+
+  // Advantages
+  const advList = document.getElementById('advantages-list');
+  const advTitles = {
+    hugegraph_distributed: '🏗️ 分布式图存储',
+    olap_analysis: '📊 OLAP图分析',
+    graphrag_fusion: '🧠 GraphRAG融合',
+    multi_graph_isolation: '🗂️ 多图空间隔离'
+  };
+  for (const [key, desc] of Object.entries(advs)) {
+    advList.innerHTML += `<div class="adv-card">
+      <h3>${advTitles[key] || key}</h3>
+      <p>${desc}</p>
+    </div>`;
+  }
+}
+
+loadResults();
+</script>
+</body>
+</html>

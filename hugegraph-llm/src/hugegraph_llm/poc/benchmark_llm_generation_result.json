@@ -1,0 +1,25 @@
+{
+  "date": "2026-06-23",
+  "llm": "mimo-v2.5-pro",
+  "dataset": "GraphRAG-Bench medical",
+  "sample_size": 30,
+  "results": {
+    "Contextual Summarize": {
+      "sample_size": 20,
+      "rouge_l": 0.0464,
+      "accuracy": 5.01,
+      "baseline_acc": 65.75,
+      "diff_vs_baseline": -60.74,
+      "baseline_framework": "RAG w/rerank"
+    },
+    "Creative Generation": {
+      "sample_size": 10,
+      "rouge_l": 0.0136,
+      "accuracy": 0.61,
+      "baseline_acc": 60.61,
+      "diff_vs_baseline": -60.0,
+      "baseline_framework": "RAG w/rerank FS"
+    }
+  },
+  "note": "只测了Contextual Summarize和Creative Generation两个弱项, 接入MiMo LLM生成答案"
+}

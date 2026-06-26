@@ -212,3 +212,14 @@ cython_debug/
 *.out
 *.zip
 *.tar.gz
+
+# Demo / benchmark runtime artifacts
+benchmark_data/
+demo_data/
+*.db
+*.db-shm
+*.db-wal
+memory_bm25/
+memory_faiss.index
+memory_faiss.index.meta.json
+memory_provenance.json

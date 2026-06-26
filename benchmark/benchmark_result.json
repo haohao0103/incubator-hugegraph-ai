@@ -1,0 +1,968 @@
+{
+  "coverage": {
+    "requests": {
+      "project": "requests",
+      "path": "/Users/mac/.workbuddy/binaries/python/envs/hg-llm/lib/python3.10/site-packages/requests",
+      "files_scanned": 19,
+      "files_with_code": 19,
+      "parse_errors": 0,
+      "total_nodes": 321,
+      "total_edges": 1576,
+      "node_types": {
+        "module": 19,
+        "class": 46,
+        "function": 256
+      },
+      "edge_types": {
+        "imports": 127,
+        "contains": 302,
+        "defines": 177,
+        "calls": 926,
+        "inherits": 44
+      },
+      "avg_nodes_per_file": 16.9,
+      "avg_edges_per_file": 82.9,
+      "parse_time_seconds": 0.06,
+      "nodes_per_second": 5326.0,
+      "bm25_search": {
+        "MRR": 0.515,
+        "NDCG@10": 0.5963,
+        "Recall@10": 0.4778,
+        "queries": 15,
+        "per_query": [
+          {
+            "query": "HTTP GET request",
+            "results": [
+              "__init__",
+              "get",
+              "get",
+              "request_url",
+              "get_encoding_from_headers"
+            ],
+            "first_rank": 2
+          },
+          {
+            "query": "JSON response parsing",
+            "results": [
+              "json",
+              "main",
+              "build_response",
+              "__init__",
+              "guess_json_utf"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "session with cookies",
+            "results": [
+              "merge_cookies",
+              "update",
+              "session",
+              "merge_hooks",
+              "extract_cookies_to_jar"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "SSL verification",
+            "results": [
+              "cert_verify",
+              "get",
+              "content",
+              "request",
+              "send"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "HTTP redirect handling",
+            "results": [
+              "is_redirect",
+              "get_redirect_target",
+              "is_permanent_redirect",
+              "handle_redirect",
+              "__init__"
+            ],
+            "first_rank": 2
+          },
+          {
+            "query": "connection timeout",
+            "results": [
+              "get_connection",
+              "build_connection_pool_key_attributes",
+              "get_connection_with_tls_context",
+              "resolve_redirects",
+              "send"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "URL encoding",
+            "results": [
+              "get_encoding_from_headers",
+              "apparent_encoding",
+              "text",
+              "to_native_string",
+              "stream_decode_response_unicode"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "file upload",
+            "results": [
+              "atomic_open",
+              "rewind_body",
+              "prepare_body",
+              "get",
+              "content"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "proxy support",
+            "results": [
+              "proxy_manager_for",
+              "proxy_headers",
+              "select_proxy",
+              "get_environ_proxies",
+              "resolve_proxies"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "streaming download",
+            "results": [
+              "get",
+              "content",
+              "request",
+              "send",
+              "send"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "authentication header",
+            "results": [
+              "_validate_header_part",
+              "_parse_content_type_header",
+              "check_header_validity",
+              "unquote_header_value",
+              "get_cookie_header"
+            ],
+            "first_rank": 8
+          },
+          {
+            "query": "user agent setting",
+            "results": [
+              "default_user_agent",
+              "merge_setting",
+              "default_headers",
+              "proxy_manager_for",
+              "cert_verify"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "retry request",
+            "results": [
+              "request_url",
+              "prepare_request",
+              "_urllib3_request_context",
+              "__init__",
+              "is_prepared"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "encoding detection",
+            "results": [
+              "_resolve_char_detection",
+              "get_encoding_from_headers",
+              "apparent_encoding",
+              "text",
+              "guess_json_utf"
+            ],
+            "first_rank": 2
+          },
+          {
+            "query": "status code check",
+            "results": [
+              "ok",
+              "__nonzero__",
+              "__bool__",
+              "__repr__",
+              "is_permanent_redirect"
+            ],
+            "first_rank": 10
+          }
+        ]
+      },
+      "call_graph": {
+        "total_edges": 1576,
+        "calls_edges": 926,
+        "internal_call_ratio": 0.3089,
+        "external_call_ratio": 0.6911,
+        "cross_module_call_ratio": 0.1879,
+        "edge_types": {
+          "imports": 127,
+          "contains": 302,
+          "defines": 177,
+          "calls": 926,
+          "inherits": 44
+        },
+        "top_callers": [
+          {
+            "name": "build_digest_header",
+            "calls_out": 36
+          },
+          {
+            "name": "resolve_redirects",
+            "calls_out": 32
+          },
+          {
+            "name": "send",
+            "calls_out": 32
+          },
+          {
+            "name": "_encode_files",
+            "calls_out": 25
+          },
+          {
+            "name": "send",
+            "calls_out": 22
+          }
+        ],
+        "top_callees": []
+      },
+      "query_performance": {
+        "1hop_neighbors": {
+          "mean_ms": 0.002,
+          "median_ms": 0.001,
+          "p95_ms": 0.002,
+          "p99_ms": 0.028
+        },
+        "callers": {
+          "mean_ms": 0.0,
+          "median_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0
+        },
+        "callees": {
+          "mean_ms": 0.0,
+          "median_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0
+        },
+        "2hop_traverse": {
+          "mean_ms": 0.005,
+          "median_ms": 0.003,
+          "p95_ms": 0.012,
+          "p99_ms": 0.026
+        },
+        "impact_analysis": {
+          "mean_ms": 0.005,
+          "median_ms": 0.001,
+          "p95_ms": 0.023,
+          "p99_ms": 0.025
+        }
+      },
+      "multi_hop": {
+        "hop_1": {
+          "mean_reachable": 3.9,
+          "median_reachable": 2.0,
+          "max_reachable": 22
+        },
+        "hop_2": {
+          "mean_reachable": 8.8,
+          "median_reachable": 2.0,
+          "max_reachable": 68
+        },
+        "hop_3": {
+          "mean_reachable": 12.1,
+          "median_reachable": 2.0,
+          "max_reachable": 121
+        },
+        "hop_4": {
+          "mean_reachable": 12.1,
+          "median_reachable": 2.0,
+          "max_reachable": 121
+        },
+        "hop_5": {
+          "mean_reachable": 12.1,
+          "median_reachable": 2.0,
+          "max_reachable": 121
+        }
+      }
+    },
+    "flask": {
+      "project": "flask",
+      "path": "/Users/mac/.workbuddy/binaries/python/envs/hg-llm/lib/python3.10/site-packages/flask",
+      "files_scanned": 24,
+      "files_with_code": 24,
+      "parse_errors": 0,
+      "total_nodes": 408,
+      "total_edges": 2017,
+      "node_types": {
+        "module": 24,
+        "function": 338,
+        "class": 46
+      },
+      "edge_types": {
+        "imports": 243,
+        "contains": 384,
+        "calls": 1090,
+        "defines": 270,
+        "inherits": 30
+      },
+      "avg_nodes_per_file": 17.0,
+      "avg_edges_per_file": 84.0,
+      "parse_time_seconds": 0.08,
+      "nodes_per_second": 5343.0,
+      "bm25_search": {
+        "MRR": 0.4825,
+        "NDCG@10": 0.7298,
+        "Recall@10": 0.5444,
+        "queries": 15,
+        "per_query": [
+          {
+            "query": "route decorator",
+            "results": [
+              "route",
+              "_method_route",
+              "delete",
+              "patch",
+              "get"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "JSON response",
+            "results": [
+              "response",
+              "response",
+              "process_response",
+              "make_response",
+              "make_default_options_response"
+            ],
+            "first_rank": 9
+          },
+          {
+            "query": "template rendering",
+            "results": [
+              "app_template_filter",
+              "app_template_global",
+              "app_template_test",
+              "template_global",
+              "render_template"
+            ],
+            "first_rank": 5
+          },
+          {
+            "query": "request form data",
+            "results": [
+              "_load_form_data",
+              "attach_enctype_error_multidict",
+              "max_form_memory_size",
+              "max_form_parts",
+              "__init__"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "session management",
+            "results": [
+              "make_null_session",
+              "session",
+              "get_expiration_time",
+              "should_set_cookie",
+              "save_session"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "error handler",
+            "results": [
+              "_find_error_handler",
+              "register_error_handler",
+              "handle_exception",
+              "errorhandler",
+              "app_errorhandler"
+            ],
+            "first_rank": 3
+          },
+          {
+            "query": "blueprint registration",
+            "results": [
+              "__init__",
+              "register_blueprint",
+              "blueprint",
+              "register_blueprint",
+              "_split_blueprint_path"
+            ],
+            "first_rank": 2
+          },
+          {
+            "query": "URL parameter",
+            "results": [
+              "create_url_adapter",
+              "make_config",
+              "dumps",
+              "get_cookie_domain",
+              "dispatch_request"
+            ],
+            "first_rank": 7
+          },
+          {
+            "query": "file upload",
+            "results": [
+              "get_send_file_max_age",
+              "get_send_file_max_age",
+              "send_file",
+              "_prepare_send_file_kwargs",
+              "send_static_file"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "redirect response",
+            "results": [
+              "redirect",
+              "redirect",
+              "process_response",
+              "make_response",
+              "make_default_options_response"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "request headers",
+            "results": [
+              "make_response",
+              "before_app_request",
+              "after_app_request",
+              "before_request",
+              "after_request"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "cookie setting",
+            "results": [
+              "get_cookie_secure",
+              "get_cookie_domain",
+              "get_cookie_httponly",
+              "should_set_cookie",
+              "get_cookie_path"
+            ],
+            "first_rank": 4
+          },
+          {
+            "query": "before request hook",
+            "results": [
+              "before_app_request",
+              "before_request",
+              "match_request",
+              "preprocess_request",
+              "open_session"
+            ],
+            "first_rank": 2
+          },
+          {
+            "query": "app configuration",
+            "results": [
+              "from_envvar",
+              "get_namespace",
+              "__init__",
+              "__init__",
+              "__init__"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "logging setup",
+            "results": [
+              "has_level_handler",
+              "_check_setup_finished",
+              "_check_setup_finished",
+              "_check_setup_finished",
+              "logger"
+            ],
+            "first_rank": 5
+          }
+        ]
+      },
+      "call_graph": {
+        "total_edges": 2017,
+        "calls_edges": 1090,
+        "internal_call_ratio": 0.3294,
+        "external_call_ratio": 0.6706,
+        "cross_module_call_ratio": 0.1817,
+        "edge_types": {
+          "imports": 243,
+          "contains": 384,
+          "calls": 1090,
+          "defines": 270,
+          "inherits": 30
+        },
+        "top_callers": [
+          {
+            "name": "routes_command",
+            "calls_out": 32
+          },
+          {
+            "name": "make_response",
+            "calls_out": 23
+          },
+          {
+            "name": "run_command",
+            "calls_out": 20
+          },
+          {
+            "name": "register",
+            "calls_out": 20
+          },
+          {
+            "name": "find_app_by_string",
+            "calls_out": 19
+          }
+        ],
+        "top_callees": []
+      },
+      "query_performance": {
+        "1hop_neighbors": {
+          "mean_ms": 0.001,
+          "median_ms": 0.001,
+          "p95_ms": 0.001,
+          "p99_ms": 0.002
+        },
+        "callers": {
+          "mean_ms": 0.0,
+          "median_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0
+        },
+        "callees": {
+          "mean_ms": 0.0,
+          "median_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0
+        },
+        "2hop_traverse": {
+          "mean_ms": 0.004,
+          "median_ms": 0.003,
+          "p95_ms": 0.008,
+          "p99_ms": 0.008
+        },
+        "impact_analysis": {
+          "mean_ms": 0.001,
+          "median_ms": 0.001,
+          "p95_ms": 0.003,
+          "p99_ms": 0.004
+        }
+      },
+      "multi_hop": {
+        "hop_1": {
+          "mean_reachable": 4.6,
+          "median_reachable": 3.0,
+          "max_reachable": 31
+        },
+        "hop_2": {
+          "mean_reachable": 7.0,
+          "median_reachable": 3.0,
+          "max_reachable": 80
+        },
+        "hop_3": {
+          "mean_reachable": 7.2,
+          "median_reachable": 3.0,
+          "max_reachable": 80
+        },
+        "hop_4": {
+          "mean_reachable": 7.2,
+          "median_reachable": 3.0,
+          "max_reachable": 80
+        },
+        "hop_5": {
+          "mean_reachable": 7.2,
+          "median_reachable": 3.0,
+          "max_reachable": 80
+        }
+      }
+    },
+    "django": {
+      "project": "django",
+      "path": "/Users/mac/.workbuddy/binaries/python/envs/hg-llm/lib/python3.10/site-packages/django",
+      "files_scanned": 100,
+      "files_with_code": 100,
+      "parse_errors": 0,
+      "total_nodes": 1440,
+      "total_edges": 7458,
+      "node_types": {
+        "module": 100,
+        "function": 1092,
+        "class": 248
+      },
+      "edge_types": {
+        "imports": 435,
+        "contains": 1340,
+        "calls": 4549,
+        "inherits": 218,
+        "defines": 916
+      },
+      "avg_nodes_per_file": 14.4,
+      "avg_edges_per_file": 74.6,
+      "parse_time_seconds": 0.25,
+      "nodes_per_second": 5741.0,
+      "bm25_search": {
+        "MRR": 0.3,
+        "NDCG@10": 0.3199,
+        "Recall@10": 0.1222,
+        "queries": 15,
+        "per_query": [
+          {
+            "query": "database query",
+            "results": [
+              "create_table",
+              "check_database_backends",
+              "__len__",
+              "../../../../.workbuddy/binaries/python/envs/hg-llm/lib/python3.10/site-packages/django/core/checks/database.py",
+              "sql_flush"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "URL routing",
+            "results": [
+              "check_url_settings",
+              "redirect",
+              "dumps",
+              "sign_object",
+              "_load_all_namespaces"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "model definition",
+            "results": [
+              "fields_for_model",
+              "_get_foreign_key",
+              "parse_apps_and_model_labels",
+              "get_default_prefix",
+              "create_table"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "form validation",
+            "results": [
+              "_get_validation_exclusions",
+              "_post_clean",
+              "_update_errors",
+              "validate_unique",
+              "_should_delete_form"
+            ],
+            "first_rank": 2
+          },
+          {
+            "query": "template tag",
+            "results": [
+              "tag",
+              "tag_exists",
+              "as_table",
+              "as_ul",
+              "get_template"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "middleware processing",
+            "results": [
+              "_csrf_middleware",
+              "_security_middleware",
+              "_session_middleware",
+              "_xframe_middleware",
+              "check_csrf_middleware"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "admin registration",
+            "results": [
+              "handle_extensions",
+              "__hash__",
+              "format_value",
+              "run_validators",
+              "has_changed"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "user authentication",
+            "results": [
+              "_check_token",
+              "handle_default_options",
+              "add_httponly_message",
+              "add_session_cookie_message",
+              "send_mass_mail"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "migration operations",
+            "results": [
+              "__hash__",
+              "format_value",
+              "run_validators",
+              "has_changed",
+              "has_changed"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "serializer class",
+            "results": [
+              "__init__",
+              "get",
+              "dumps",
+              "sign_object",
+              "unsign_object"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "view class",
+            "results": [
+              "check_csrf_failure_view",
+              "_get_failure_view",
+              "process_view",
+              "_reject",
+              "modelform_defines_fields"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "cache framework",
+            "results": [
+              "_should_update_cache",
+              "cache",
+              "cache",
+              "do_cache",
+              "_list_cache_files"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "signal dispatch",
+            "results": [
+              "emit_post_migrate_signal",
+              "emit_pre_migrate_signal",
+              "__hash__",
+              "format_value",
+              "run_validators"
+            ],
+            "first_rank": 1
+          },
+          {
+            "query": "test case",
+            "results": [
+              "__init__",
+              "do_translate",
+              "get_context",
+              "flatatt",
+              "get_wsgi_application"
+            ],
+            "first_rank": 0
+          },
+          {
+            "query": "file storage",
+            "results": [
+              "handle_simple",
+              "__init__",
+              "_write_content",
+              "attach_file",
+              "__init__"
+            ],
+            "first_rank": 0
+          }
+        ]
+      },
+      "call_graph": {
+        "total_edges": 6155,
+        "calls_edges": 3608,
+        "internal_call_ratio": 0.3401,
+        "external_call_ratio": 0.6599,
+        "cross_module_call_ratio": 0.217,
+        "edge_types": {
+          "imports": 319,
+          "contains": 1213,
+          "calls": 3608,
+          "inherits": 198,
+          "defines": 817
+        },
+        "top_callers": [
+          {
+            "name": "handle",
+            "calls_out": 67
+          },
+          {
+            "name": "call_command",
+            "calls_out": 44
+          },
+          {
+            "name": "check_all_models",
+            "calls_out": 38
+          },
+          {
+            "name": "_base_set",
+            "calls_out": 37
+          },
+          {
+            "name": "create_table",
+            "calls_out": 31
+          }
+        ],
+        "top_callees": []
+      },
+      "query_performance": {
+        "1hop_neighbors": {
+          "mean_ms": 0.002,
+          "median_ms": 0.001,
+          "p95_ms": 0.004,
+          "p99_ms": 0.004
+        },
+        "callers": {
+          "mean_ms": 0.0,
+          "median_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.001
+        },
+        "callees": {
+          "mean_ms": 0.0,
+          "median_ms": 0.0,
+          "p95_ms": 0.0,
+          "p99_ms": 0.0
+        },
+        "2hop_traverse": {
+          "mean_ms": 0.009,
+          "median_ms": 0.009,
+          "p95_ms": 0.014,
+          "p99_ms": 0.015
+        },
+        "impact_analysis": {
+          "mean_ms": 0.002,
+          "median_ms": 0.002,
+          "p95_ms": 0.003,
+          "p99_ms": 0.008
+        }
+      },
+      "multi_hop": {
+        "hop_1": {
+          "mean_reachable": 3.7,
+          "median_reachable": 2.5,
+          "max_reachable": 27
+        },
+        "hop_2": {
+          "mean_reachable": 8.5,
+          "median_reachable": 3.0,
+          "max_reachable": 76
+        },
+        "hop_3": {
+          "mean_reachable": 9.2,
+          "median_reachable": 3.0,
+          "max_reachable": 97
+        },
+        "hop_4": {
+          "mean_reachable": 9.2,
+          "median_reachable": 3.0,
+          "max_reachable": 97
+        },
+        "hop_5": {
+          "mean_reachable": 9.2,
+          "median_reachable": 3.0,
+          "max_reachable": 97
+        }
+      }
+    }
+  },
+  "aggregate": {
+    "total_nodes": 2169,
+    "total_edges": 11051,
+    "avg_mrr": 0.4325,
+    "avg_ndcg@10": 0.5487,
+    "best_mrr": 0.515,
+    "projects_tested": 3,
+    "total_queries": 45
+  },
+  "competitors": {
+    "tools": [
+      {
+        "name": "HugeGraph CodeGraph",
+        "languages": 1,
+        "languages_note": "Python → 计划 Java/TS",
+        "call_accuracy": "待测",
+        "agent_reduction": "待测",
+        "graph_backend": "SQLite + HugeGraph(分布式)",
+        "mcp_support": false,
+        "framework_aware": false,
+        "olap_support": true,
+        "open_source": "Apache 2.0"
+      },
+      {
+        "name": "ColbyMcHenry CodeGraph",
+        "languages": 22,
+        "languages_note": "多语言交叉引用",
+        "call_accuracy": "86.7%-100%",
+        "agent_reduction": "58% 工具调用 / 23-64% Token",
+        "graph_backend": "SQLite",
+        "mcp_support": true,
+        "framework_aware": "14框架",
+        "olap_support": false,
+        "open_source": "MIT"
+      },
+      {
+        "name": "Code-Graph-RAG",
+        "languages": 10,
+        "languages_note": "Tree-sitter多语言",
+        "call_accuracy": "未公开",
+        "agent_reduction": "未公开",
+        "graph_backend": "Memgraph",
+        "mcp_support": false,
+        "framework_aware": false,
+        "olap_support": false,
+        "open_source": "MIT"
+      },
+      {
+        "name": "Sourcegraph",
+        "languages": 20,
+        "languages_note": "LSIF/SCIP标准",
+        "call_accuracy": "工业级",
+        "agent_reduction": "~40% (Cody)",
+        "graph_backend": "SQLite Bundle",
+        "mcp_support": true,
+        "framework_aware": "语言服务器",
+        "olap_support": false,
+        "open_source": "部分开源"
+      },
+      {
+        "name": "Joern/CPG",
+        "languages": 6,
+        "languages_note": "AST+CFG+PDG+DDG",
+        "call_accuracy": "学术级",
+        "agent_reduction": "N/A",
+        "graph_backend": "OverflowDB",
+        "mcp_support": false,
+        "framework_aware": false,
+        "olap_support": false,
+        "open_source": "Apache 2.0"
+      }
+    ],
+    "note": "Agent减少数据来源: ColbyMcHenry (7项目实测), Sourcegraph (Cody公开数据)"
+  },
+  "advantages": {
+    "hugegraph_distributed": "唯一支持分布式图存储 → 百亿级代码图谱",
+    "olap_analysis": "Vermeer引擎 → PageRank/社区检测/全局模式挖掘",
+    "graphrag_fusion": "代码图+文档图+KG融合 → 跨域推理",
+    "multi_graph_isolation": "多图空间 → 供应链/风控/代码独立管理"
+  },
+  "generated_at": "2026-06-26 11:08:07",
+  "version": "1.0.0"
+}

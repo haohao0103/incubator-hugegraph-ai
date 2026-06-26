@@ -1,0 +1,556 @@
+{
+  "summary": {
+    "test_files": 60,
+    "overall_precision": 0.0,
+    "overall_recall": 0.0,
+    "overall_f1": 0.0,
+    "avg_precision": 0.0,
+    "avg_recall": 0.0,
+    "avg_f1": 0.0,
+    "total_pycg_reference": 0,
+    "total_codegraph_predicted": 0,
+    "total_correct": 0
+  },
+  "per_file": [
+    {
+      "file": "micro-benchmark/snippets/args/assigned_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/imported_assigned_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/imported_assigned_call/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/imported_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/imported_call/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/nested_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/args/param_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/assignments/chained/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/assignments/recursive_tuple/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/assignments/starred/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/assignments/tuple/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/builtins/functions/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/assigned_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/assigned_self_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/base_class_attr/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/base_class_calls_child/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/direct_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_attr_access/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_attr_access/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_call/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_call_without_init/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_call_without_init/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_nested_attr_access/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/imported_nested_attr_access/nest/imported.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/instance/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/nested_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/nested_class_calls/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/parameter_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/return_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/return_call_direct/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/self_assign_func/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/self_assignment/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/self_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/static_method_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/super_class_return/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/classes/tuple_assignment/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/assigned/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/nested/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/nested_decorators/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/param_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/return/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/decorators/return_different_func/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/functions/assigned_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/functions/assigned_call_lit_param/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/functions/call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/functions/imported_call/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/functions/imported_call/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/chained_import/chained_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/chained_import/from_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/chained_import/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/import_all/from_module.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/import_all/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/import_as/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/import_as/to_import.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/import_from/from_module.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "file": "micro-benchmark/snippets/imports/import_from/main.py",
+      "pycg_edges": 0,
+      "codegraph_edges": 0,
+      "correct": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  ]
+}
