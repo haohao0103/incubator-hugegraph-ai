@@ -335,19 +335,24 @@ class HugeGraphMemoryClient:
             return None
 
     def get_vertex_by_name(self, name: str) -> Optional[dict]:
-        """Get a vertex by its 'name' property."""
-        g = self.client.graph()
-        vertices = g.getVertexByCondition(limit=100)
-        if vertices:
-            for v in vertices:
-                if getattr(v, 'properties', {}).get('name') == name or \
-                   getattr(v, 'property', {}).get('name') == name:
-                    return {"id": v.id, "label": v.label,
-                            "properties": getattr(v, 'properties', {})}
-        # Fallback: use gremlin
-        result = self.exec_gremlin(f"g.V().has(\"name\",\"{name}\")")
-        if result and len(result) > 0:
-            return {"id": result[0]["id"], "label": result[0].get("label", "?")}
+        """Get a vertex by its 'name' property using REST API (bypass Gremlin)."""
+        try:
+            import requests as req
+            # Use REST API with vertex condition query (avoid Gremlin language issue)
+            url = f"{HUGEGRAPH_URL}/graphs/{HUGEGRAPH_GRAPH}/graph/vertices?limit=500"
+            r = req.get(url, auth=(HUGEGRAPH_USER, HUGEGRAPH_PASS), timeout=10)
+            resp = r.json()
+            if resp and "vertices" in resp:
+                for v in resp["vertices"]:
+                    props = v.get("properties", {}) or {}
+                    vname = props.get("name", "")
+                    if isinstance(vname, dict):
+                        vname = vname.get("value", "")
+                    if vname == name:
+                        return {"id": str(v.get("id", "")), "label": v.get("label", ""),
+                                "properties": props}
+        except Exception as e:
+            print(f"[HugeGraph] get_vertex_by_name error: {e}", file=sys.stderr)
         return None
 
     def add_edge(self, edge_label: str, src_name: str, tgt_name: str,
@@ -416,16 +421,25 @@ class HugeGraphMemoryClient:
         """Get all vertices for visualization using REST API directly."""
         vertices = []
         try:
-            g = self.client.graph()
-            session = g._sess
-            resp = session.request("graph/vertices?limit=500&page")
+            # Use requests directly (reliable, gzip-safe)
+            import requests as req
+            url = f"{HUGEGRAPH_URL}/graphs/{HUGEGRAPH_GRAPH}/graph/vertices?limit=500"
+            r = req.get(url, auth=(HUGEGRAPH_USER, HUGEGRAPH_PASS), timeout=10)
+            resp = r.json()
             if resp and "vertices" in resp:
                 for v in resp["vertices"]:
                     props = v.get("properties", {}) or {}
+                    # Handle nested property format {value: ...}
+                    name_val = props.get("name", v.get("id", ""))
+                    if isinstance(name_val, dict):
+                        name_val = name_val.get("value", str(v.get("id", "")))
+                    type_val = props.get("type", v.get("label", ""))
+                    if isinstance(type_val, dict):
+                        type_val = type_val.get("value", v.get("label", ""))
                     vertices.append({
-                        "id": v.get("id", ""),
-                        "name": props.get("name", v.get("id", "")),
-                        "type": props.get("type", v.get("label", "")),
+                        "id": str(v.get("id", "")),
+                        "name": name_val,
+                        "type": type_val,
                         "label": v.get("label", ""),
                         "properties": props,
                     })
@@ -529,19 +543,24 @@ class FaissMemoryIndex:
         return self.embedding_client
 
     def embed_text(self, text: str) -> np.ndarray:
-        """Get embedding vector for text using MiMo API."""
+        """Get embedding vector for text using sentence-transformers (local, no API needed)."""
         try:
-            client = self._get_embedding_client()
-            # Use a simple approach: call chat completions and extract features
-            # For production, use proper embedding endpoint
-            response = client.embeddings.create(
-                model="text-embedding-ada-002",
-                input=text[:800],
-            )
-            return np.array(response.data[0].embedding, dtype=np.float32)
+            # Use sentence-transformers for reliable local embeddings
+            if not hasattr(self, '_st_model'):
+                from sentence_transformers import SentenceTransformer
+                self._st_model = SentenceTransformer('all-MiniLM-L6-v2')
+                self._st_dim = 384
+            emb = self._st_model.encode([text[:800]], show_progress_bar=False)[0]
+            # Pad/truncate to self.dim (1536) to match FAISS index dimension
+            result = np.zeros(self.dim, dtype=np.float32)
+            result[:min(len(emb), self.dim)] = emb[:min(len(emb), self.dim)]
+            norm = np.linalg.norm(result)
+            if norm > 0:
+                result /= norm
+            return result
         except Exception as e:
-            # Fallback: deterministic hash-based pseudo-embedding
-            print(f"[FAISS] Embedding API error ({e}), using fallback", file=sys.stderr, flush=True)
+            # Final fallback: deterministic hash-based pseudo-embedding
+            print(f"[FAISS] Embedding error ({e}), using hash fallback", file=sys.stderr, flush=True)
             return self._fallback_embedding(text)
 
     def _fallback_embedding(self, text: str) -> np.ndarray:
@@ -2007,7 +2026,8 @@ class MemoryPipelineBackend:
     def get_graph_data(self) -> dict:
         nodes = self.hg.get_all_vertices()
         edges = self.hg.get_all_edges()
-        return {"vertices": nodes, "edges": edges}
+        # Return both "vertices"/"edges" and "nodes"/"edges" for frontend compatibility
+        return {"vertices": nodes, "edges": edges, "nodes": nodes}
 
     def get_memories(self, user_id: str = "demo_user") -> list:
         db = get_metadata_db()
@@ -2056,9 +2076,28 @@ class MemoryPipelineBackend:
 # ============================================================================
 
 def create_app(backend: MemoryPipelineBackend = None) -> Flask:
-    app = Flask(__name__)
+    # Serve frontend from the demo directory (project_root/demo, not src/hugegraph_llm/demo)
+    _src_dir = os.path.dirname(os.path.abspath(__file__))  # .../src/hugegraph_llm/poc
+    _pkg_dir = os.path.dirname(_src_dir)                    # .../src/hugegraph_llm
+    _src_root = os.path.dirname(_pkg_dir)                   # .../src
+    _proj_root = os.path.dirname(_src_root)                 # .../hugegraph-llm
+    _demo_dir = os.path.join(_proj_root, "demo")            # .../hugegraph-llm/demo
+
+    app = Flask(__name__, static_folder=_demo_dir, static_url_path="")
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     store = backend or MemoryPipelineBackend()
+
+    @app.route("/")
+    def index():
+        """Serve the main frontend page."""
+        from flask import send_from_directory
+        return send_from_directory(_demo_dir, "memory_frontend.html")
+
+    @app.route("/demo")
+    def standalone_demo():
+        """Serve the standalone single-file demo."""
+        from flask import send_from_directory
+        return send_from_directory(_demo_dir, "hugegraph-memory-demo.html")
 
     @app.route("/api/memory/add", methods=["POST"])
     def api_add_memory():
