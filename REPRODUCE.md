@@ -245,6 +245,8 @@ python3 -m http.server 5200 --directory .
 
 > 需要 HugeGraph 已启动且 `.env` 中 LLM 配置正确。
 
+### 9.1 原始 GraphRAG-Bench 评测
+
 ```bash
 cd hugegraph-llm
 python src/hugegraph_llm/poc/benchmark_llm_generation.py
@@ -255,16 +257,48 @@ python src/hugegraph_llm/poc/benchmark_llm_generation.py
 - `hugegraph-llm/src/hugegraph_llm/poc/benchmark_llm_generation_result.json`
 - 并更新 `hugegraph-llm/docs/daily_research/2026-06-26-graphrag-bench-evaluation.md`
 
-> 注意：完整跑完 120 题约需 15-30 分钟，取决于 LLM 延迟。
+### 9.2 P0-Improved 全管道评测（推荐）
+
+使用真实 embedding、FAISS + BM25 + HugeGraph 三通道检索、RRF 融合：
+
+```bash
+cd hugegraph-llm
+python src/hugegraph_llm/poc/graphrag_bench_p0_improved.py
+```
+
+输出：
+
+- `hugegraph-llm/poc_results/graphrag_bench_p0_improved_result.json`
+
+> 注意：完整跑完约需 15-30 分钟，取决于 LLM 延迟。
 
 ---
 
-## 10. 数据集说明
+## 10. MemSim 中文记忆基准复现
+
+> 无需 HugeGraph，只需 `.env` 中 LLM 配置正确。
+
+```bash
+cd hugegraph-llm
+python src/hugegraph_llm/poc/benchmark_memsim.py
+```
+
+输出：
+
+- `hugegraph-llm/src/hugegraph_llm/poc/benchmark_memsim_result.json`
+
+默认每个 split 采样 20 题（共 120 题），可通过 `.env` 中的 `MEMSIM_SAMPLE_PER_SPLIT` 调整。
+
+---
+
+## 11. 数据集说明
 
 本仓库已内置以下数据集，可直接复现：
 
 | 路径 | 来源 | 用途 |
 |------|------|------|
+| `hugegraph-llm/benchmark_data/GraphRAG-Bench/` | [GraphRAG-Bench](https://github.com/.../GraphRAG-Bench) (ICLR'26) | GraphRAG 端到端评测 |
+| `hugegraph-llm/benchmark_data/MemSim/memdaily.json` | [MemSim](https://github.com/nuster1128/MemSim) | 中文记忆基准评测 |
 | `benchmark_data/PyCG/` | [PyCG](https://github.com/vitsalis/PyCG) | 调用图准确率评测真值 |
 | `demo_data/airports.dat` | OpenFlights | 交通/物流网络演示 |
 | `demo_data/airlines.dat` | OpenFlights | 航空公司元数据 |
@@ -274,7 +308,7 @@ python src/hugegraph_llm/poc/benchmark_llm_generation.py
 
 ---
 
-## 11. 常见问题
+## 12. 常见问题
 
 ### Q1: `ImportError: cannot import name 'PythonCodeParser'`
 
@@ -311,18 +345,25 @@ BM25 使用精确 token 匹配。查询词应使用完整函数名，例如 `pro
 
 ---
 
-## 12. 目录结构速查
+## 13. 目录结构速查
 
 ```
 incubator-hugegraph-ai/
 ├── hugegraph-llm/
 │   ├── .env.example                  # LLM / HugeGraph 配置模板
+│   ├── BENCHMARK.md                  # GraphRAG-Bench / MemSim 评测说明
 │   ├── src/hugegraph_llm/poc/
 │   │   ├── codegraph_hugegraph_mcp.py          # CodeGraph PoC 主文件
 │   │   ├── codegraph_hugegraph_mcp_result.json # PoC 运行结果
-│   │   └── benchmark_llm_generation.py         # GraphRAG-Bench 评测
+│   │   ├── benchmark_llm_generation.py         # GraphRAG-Bench 原始评测
+│   │   ├── graphrag_bench_p0_improved.py       # GraphRAG-Bench P0 改进版
+│   │   ├── benchmark_memsim.py                 # MemSim 中文记忆基准
+│   │   └── benchmark_memsim_result.json        # MemSim 评测结果
 │   ├── tests/poc/
 │   │   └── test_codegraph_hugegraph_mcp.py     # 108 个单元测试
+│   ├── benchmark_data/             # 评测数据集
+│   │   ├── GraphRAG-Bench/         # GraphRAG-Bench (ICLR'26)
+│   │   └── MemSim/                 # MemDaily 中文记忆数据集
 │   └── docs/daily_research/
 │       └── 2026-06-26-graphrag-bench-evaluation.md
 ├── demo/
@@ -336,7 +377,6 @@ incubator-hugegraph-ai/
 │   ├── cto_dashboard.html            # 交互式仪表盘
 │   ├── benchmark_result.json         # 实测结果
 │   └── pycg_eval_result.json         # PyCG 评估结果
-├── benchmark_data/                   # 评测数据集
 ├── demo_data/                        # 演示数据集
 ├── docs/
 │   └── CODEGRAPH_BENCHMARK_AND_COMPETITOR_ANALYSIS.md
@@ -345,7 +385,7 @@ incubator-hugegraph-ai/
 
 ---
 
-## 13. 最小可运行验证
+## 14. 最小可运行验证
 
 ```bash
 # 1. 环境

@@ -221,4 +221,7 @@ memory_bm25/
 memory_faiss.index
 memory_faiss.index.meta.json
 memory_provenance.json
-hugegraph-llm/benchmark_data/
+hugegraph-llm/benchmark_data/*
+# Keep reproducibility datasets in repo
+!hugegraph-llm/benchmark_data/GraphRAG-Bench/
+!hugegraph-llm/benchmark_data/MemSim/
