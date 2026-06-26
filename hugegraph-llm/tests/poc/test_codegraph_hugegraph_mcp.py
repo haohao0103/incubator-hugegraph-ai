@@ -273,6 +273,113 @@ def test_parser():
     check(True, "T2.17 relative ImportFrom doesn't crash")
 
 
+def test_parser_advanced_resolution():
+    print("\n── T2x: Advanced AST resolution ──")
+
+    def calls_from(src: str) -> List[Tuple[str, str, str]]:
+        """Return (caller_name, target_name, edge_type) for a code snippet."""
+        path = _write_py(src)
+        parser = PythonCodeParser()
+        parser.parse_file(path)
+        os.remove(path)
+        return [
+            (n.name, e.target_id, e.edge_type)
+            for n in parser.nodes
+            for e in parser.edges
+            if e.source_id == n.id and n.node_type == "function"
+        ]
+
+    # T2x.1 — builtins are filtered from calls
+    calls = calls_from("""
+        def foo(x):
+            print(len(x))
+            return int(x)
+    """)
+    targets = {t for _, t, _ in calls}
+    check("print" not in targets, "T2x.1 builtins filtered: print")
+    check("len" not in targets, "T2x.2 builtins filtered: len")
+    check("int" not in targets, "T2x.3 builtins filtered: int")
+
+    # T2x.4 — simple alias resolved: a = real_func; a()
+    calls = calls_from("""
+        def real_func(): pass
+        def wrapper():
+            alias = real_func
+            alias()
+    """)
+    pairs = {(s, t) for s, t, _ in calls}
+    check(("wrapper", "real_func") in pairs, "T2x.4 alias call resolved to real_func")
+
+    # T2x.5 — chained assignment resolved: a = b = real_func; a()
+    calls = calls_from("""
+        def real_func(): pass
+        def wrapper():
+            a = b = real_func
+            a()
+    """)
+    pairs = {(s, t) for s, t, _ in calls}
+    check(("wrapper", "real_func") in pairs, "T2x.5 chained assignment resolved")
+
+    # T2x.6 — tuple unpacking resolved
+    calls = calls_from("""
+        def f1(): pass
+        def f2(): pass
+        def wrapper():
+            a, b = f1, f2
+            a()
+            b()
+    """)
+    pairs = {(s, t) for s, t, _ in calls}
+    check(("wrapper", "f1") in pairs, "T2x.6 tuple unpacking resolves a->f1")
+    check(("wrapper", "f2") in pairs, "T2x.7 tuple unpacking resolves b->f2")
+
+    # T2x.8 — function decorator extracted as call
+    src = _write_py("""
+        def deco(fn): return fn
+        @deco
+        def wrapped():
+            pass
+    """)
+    parser = PythonCodeParser()
+    parser.parse_file(src)
+    os.remove(src)
+    deco_edges = [(e.source_id, e.target_id) for e in parser.edges
+                  if e.edge_type == "calls" and e.target_id == "deco"]
+    check(len(deco_edges) >= 1, "T2x.8 decorator emits calls edge to deco")
+
+    # T2x.9 — class decorator extracted
+    src = _write_py("""
+        def datacls(cls): return cls
+        @datacls
+        class Foo:
+            pass
+    """)
+    parser = PythonCodeParser()
+    parser.parse_file(src)
+    os.remove(src)
+    cls_deco = [(e.source_id, e.target_id) for e in parser.edges
+                if e.edge_type == "calls" and e.target_id == "datacls"]
+    check(len(cls_deco) >= 1, "T2x.9 class decorator emits calls edge")
+
+    # T2x.10 — getattr dynamic dispatch
+    calls = calls_from("""
+        def dispatch(obj):
+            getattr(obj, 'dynamic_method')()
+    """)
+    targets = {t for _, t, _ in calls}
+    check("dynamic_method" in targets, "T2x.10 getattr resolves dynamic method")
+
+    # T2x.11 — eval / exec marked as dynamic_call
+    calls = calls_from("""
+        def run(code):
+            eval(code)
+            exec(code)
+    """)
+    dynamic = {(t, et) for _, t, et in calls}
+    check(("eval", "dynamic_call") in dynamic, "T2x.11 eval marked dynamic_call")
+    check(("exec", "dynamic_call") in dynamic, "T2x.12 exec marked dynamic_call")
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # T3 — SQLiteCodeGraph
 # ═════════════════════════════════════════════════════════════════════════════
@@ -896,6 +1003,7 @@ def main() -> None:
 
     test_dataclasses()
     test_parser()
+    test_parser_advanced_resolution()
     test_sqlite()
     test_bm25()
     test_hugegraph_mocked()

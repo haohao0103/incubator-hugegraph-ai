@@ -50,6 +50,7 @@ Run:
 from __future__ import annotations
 
 import ast
+import builtins
 import json
 import logging
 import os
@@ -59,7 +60,19 @@ import sys
 import time
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+# ── Built-ins to exclude from `calls` edges ──
+_BUILTINS: Set[str] = set(dir(builtins))
+# Common pseudo-builtins that are not in `builtins` but still not user code
+_BUILTINS.update({
+    "self", "cls", "super", "object", "type", "None", "True", "False",
+    "print", "input", "open", "range", "len", "str", "int", "float", "list",
+    "dict", "set", "tuple", "bool", "bytes", "bytearray", "enumerate", "zip",
+    "map", "filter", "sorted", "reversed", "sum", "min", "max", "abs", "round",
+    "isinstance", "issubclass", "hasattr", "getattr", "setattr", "delattr",
+    "staticmethod", "classmethod", "property",
+})
 
 logging.basicConfig(
     level=logging.INFO,
@@ -173,6 +186,123 @@ class PythonCodeParser:
                 self._visit_import(node, file_path)
         self._extract_top_level_calls(tree, mod_id, file_path)
 
+    # ── call extraction helpers ──────────────────────────────────────────────
+
+    @staticmethod
+    def _name_from_expr(expr: ast.AST) -> Optional[str]:
+        """Best-effort name extraction from an expression AST."""
+        if isinstance(expr, ast.Name):
+            return expr.id
+        if isinstance(expr, ast.Attribute):
+            return expr.attr
+        if isinstance(expr, ast.Call):
+            return PythonCodeParser._name_from_expr(expr.func)
+        return None
+
+    def _callee_names(
+        self,
+        call: ast.Call,
+        local_bindings: Dict[str, List[str]],
+    ) -> List[str]:
+        """Resolve a call site to one or more candidate callee names.
+
+        Handles:
+        - direct call: func()
+        - attribute call: obj.method()
+        - aliased call: a = func; a()  -> resolves to func
+        - tuple unpacking: a, b = func1, func2; a()
+        """
+        candidates: List[str] = []
+
+        if isinstance(call.func, ast.Name):
+            name = call.func.id
+            if name in local_bindings:
+                candidates.extend(local_bindings[name])
+            else:
+                candidates.append(name)
+        elif isinstance(call.func, ast.Attribute):
+            candidates.append(call.func.attr)
+        return candidates
+
+    def _dynamic_call_targets(
+        self,
+        call: ast.Call,
+    ) -> List[Tuple[str, str]]:
+        """Detect dynamic dispatch patterns and return (target_name, edge_type).
+
+        Patterns:
+        - getattr(obj, 'name')()  -> calls 'name'
+        - obj.__getattr__('name')() -> calls 'name'
+        - eval(code) / exec(code) -> dynamic_call 'eval' / 'exec'
+        - setattr(obj, 'name', value) -> writes_to 'name'
+        """
+        results: List[Tuple[str, str]] = []
+
+        # getattr(obj, "method")()
+        if isinstance(call.func, ast.Call) and isinstance(call.func.func, ast.Name):
+            if call.func.func.id == "getattr" and len(call.func.args) >= 2:
+                second = call.func.args[1]
+                if isinstance(second, ast.Constant) and isinstance(second.value, str):
+                    results.append((second.value, "calls"))
+
+        # eval / exec
+        if isinstance(call.func, ast.Name) and call.func.id in ("eval", "exec"):
+            results.append((call.func.id, "dynamic_call"))
+
+        # setattr(obj, "name", value)
+        if isinstance(call.func, ast.Name) and call.func.id == "setattr" and len(call.func.args) >= 2:
+            second = call.func.args[1]
+            if isinstance(second, ast.Constant) and isinstance(second.value, str):
+                results.append((second.value, "writes_to"))
+
+        return results
+
+    def _build_local_bindings(
+        self,
+        body: List[ast.stmt],
+    ) -> Dict[str, List[str]]:
+        """Scan function/module body for simple local aliases.
+
+        Supported:
+        - a = func_name
+        - a = obj.method
+        - a, b = func1, func2
+        - a = b = func_name  (chained assignment)
+        """
+        bindings: Dict[str, List[str]] = defaultdict(list)
+
+        def bind_targets(targets: List[ast.expr], value: ast.expr) -> None:
+            """Bind target name(s) to the name extracted from value."""
+            callee = self._name_from_expr(value)
+            if not callee:
+                return
+            for tgt in targets:
+                if isinstance(tgt, ast.Name):
+                    bindings[tgt.id].append(callee)
+                elif isinstance(tgt, ast.Tuple) or isinstance(tgt, ast.List):
+                    # tuple unpacking: a, b = func1(), func2()
+                    # heuristic: if value is a tuple of same length, pair-wise bind
+                    if isinstance(value, (ast.Tuple, ast.List)) and len(value.elts) == len(tgt.elts):
+                        for sub_tgt, sub_val in zip(tgt.elts, value.elts):
+                            if isinstance(sub_tgt, ast.Name):
+                                sub_name = self._name_from_expr(sub_val)
+                                if sub_name:
+                                    bindings[sub_tgt.id].append(sub_name)
+                    else:
+                        # fallback: bind every target to the whole value name
+                        for sub_tgt in tgt.elts:
+                            if isinstance(sub_tgt, ast.Name):
+                                bindings[sub_tgt.id].append(callee)
+
+        for stmt in body:
+            if isinstance(stmt, ast.Assign):
+                bind_targets(stmt.targets, stmt.value)
+            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # function-local function: bind name to itself for recursion detection
+                bindings[stmt.name].append(stmt.name)
+
+        return dict(bindings)
+
     def _extract_top_level_calls(
         self,
         tree: ast.Module,
@@ -180,21 +310,24 @@ class PythonCodeParser:
         file_path: str,
     ) -> None:
         """Extract calls that appear at module top level (e.g. PyCG snippets)."""
+        local_bindings = self._build_local_bindings(tree.body)
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 continue
             for child in ast.walk(node):
                 if isinstance(child, ast.Call):
-                    if isinstance(child.func, ast.Name):
-                        callee = child.func.id
-                    elif isinstance(child.func, ast.Attribute):
-                        callee = child.func.attr
-                    else:
-                        continue
-                    self.edges.append(CodeEdge(
-                        source_id=module_id, target_id=callee,
-                        edge_type="calls", file_path=file_path,
-                    ))
+                    for callee in self._callee_names(child, local_bindings):
+                        if callee not in _BUILTINS:
+                            self.edges.append(CodeEdge(
+                                source_id=module_id, target_id=callee,
+                                edge_type="calls", file_path=file_path,
+                            ))
+                    for target, etype in self._dynamic_call_targets(child):
+                        if target not in _BUILTINS:
+                            self.edges.append(CodeEdge(
+                                source_id=module_id, target_id=target,
+                                edge_type=etype, file_path=file_path,
+                            ))
 
     def _visit_function(
         self,
@@ -225,7 +358,18 @@ class PythonCodeParser:
                 source_id=cls_id, target_id=func_id,
                 edge_type="defines", file_path=file_path,
             ))
-        self._extract_calls(node, func_id, file_path)
+
+        # decorators: @decorator_name -> calls edge
+        for deco in node.decorator_list:
+            deco_name = self._name_from_expr(deco)
+            if deco_name and deco_name not in _BUILTINS:
+                self.edges.append(CodeEdge(
+                    source_id=func_id, target_id=deco_name,
+                    edge_type="calls", file_path=file_path,
+                ))
+
+        local_bindings = self._build_local_bindings(node.body)
+        self._extract_calls(node, func_id, file_path, local_bindings)
 
     def _visit_class(
         self,
@@ -250,6 +394,15 @@ class PythonCodeParser:
                 self.edges.append(CodeEdge(
                     source_id=cls_id, target_id=base.id,
                     edge_type="inherits", file_path=file_path,
+                ))
+
+        # decorators on classes: @dataclass -> calls edge
+        for deco in node.decorator_list:
+            deco_name = self._name_from_expr(deco)
+            if deco_name and deco_name not in _BUILTINS:
+                self.edges.append(CodeEdge(
+                    source_id=cls_id, target_id=deco_name,
+                    edge_type="calls", file_path=file_path,
                 ))
 
         old = self._current_class
@@ -277,19 +430,23 @@ class PythonCodeParser:
         node: ast.FunctionDef,
         caller_id: str,
         file_path: str,
+        local_bindings: Optional[Dict[str, List[str]]] = None,
     ) -> None:
+        local_bindings = local_bindings or {}
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Name):
-                    callee = child.func.id
-                elif isinstance(child.func, ast.Attribute):
-                    callee = child.func.attr
-                else:
-                    continue
-                self.edges.append(CodeEdge(
-                    source_id=caller_id, target_id=callee,
-                    edge_type="calls", file_path=file_path,
-                ))
+                for callee in self._callee_names(child, local_bindings):
+                    if callee not in _BUILTINS:
+                        self.edges.append(CodeEdge(
+                            source_id=caller_id, target_id=callee,
+                            edge_type="calls", file_path=file_path,
+                        ))
+                for target, etype in self._dynamic_call_targets(child):
+                    if target not in _BUILTINS:
+                        self.edges.append(CodeEdge(
+                            source_id=caller_id, target_id=target,
+                            edge_type=etype, file_path=file_path,
+                        ))
 
 
 # ─── SQLite Backend ───────────────────────────────────────────────────────────
