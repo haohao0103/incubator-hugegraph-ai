@@ -203,8 +203,8 @@ Respond with ONLY one word: GLOBAL or LOCAL."""
             # Try OpenAI-compatible API
             from openai import OpenAI
             client = OpenAI(
-                base_url="https://api.xiaomimimo.com/v1",
-                api_key="sk-cs5kqi80f6upqy2e3k3xi39jtizhpgf6dkdd3j9ysoupfw7p",
+                base_url=os.environ.get("LLM_BASE_URL", "https://api.xiaomimimo.com/v1"),
+                api_key=os.environ.get("LLM_API_KEY", ""),
             )
             response = client.chat.completions.create(
                 model="mimo-v2.5-pro",
