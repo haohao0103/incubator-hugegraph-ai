@@ -216,3 +216,20 @@ cython_debug/
 *.out
 *.zip
 *.tar.gz
+
+# Demo / benchmark runtime artifacts
+*.db
+*.db-shm
+*.db-wal
+memory_bm25/
+memory_faiss.index
+memory_faiss.index.meta.json
+memory_provenance.json
+hugegraph-llm/benchmark_data/*
+# Keep reproducibility datasets in repo
+!hugegraph-llm/benchmark_data/GraphRAG-Bench/
+!hugegraph-llm/benchmark_data/MemSim/
+
+# Benchmark intermediate artifacts (LightRAG workspace, etc.)
+**/poc_results/benchmark_cmp/lightrag_workspace/
+**/poc_results/benchmark_cmp/*.log
