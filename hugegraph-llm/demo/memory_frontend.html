@@ -140,7 +140,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="badge">LLM-Powered</div>
   <div class="badge">Ebbinghaus</div>
   <div class="badge">Graph Store</div>
-  <div class="badge" style="color: var(--text2); border: 1px solid var(--border);">SQLite (无需 HugeGraph)</div>
+  <div class="badge" style="color: var(--text2); border: 1px solid var(--border);">HugeGraph 1.7.0</div>
   <div class="status" id="serverStatus">
     <span class="dot offline" id="statusDot"></span>
     <span id="statusText">Connecting...</span>
@@ -390,7 +390,7 @@ async function processAdd(text, classifyInfo) {
       { name: 'LLM Entity Extraction', status: 'done', detail: `Extracted ${result.entities.length} entities via LLM` },
       { name: 'Relation Extraction', status: 'done', detail: `Found ${result.relationships.length} relationships` },
       { name: `Decision: ${result.action}`, status: 'done', detail: result.reason },
-      { name: 'Graph Storage', status: 'done', detail: `Saved to SQLite graph store` },
+      { name: 'Graph Storage', status: 'done', detail: `Saved to HugeGraph graph store` },
     ];
 
     const entityBadges = result.entities.map(e =>

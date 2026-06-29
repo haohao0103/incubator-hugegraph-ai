@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HugeGraph AI Memory · 运营 Dashboard</title>
+  <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --text: #1f2937;
+      --text2: #6b7280;
+      --primary: #2563eb;
+      --primary-light: #eff6ff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #e5e7eb;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg); color: var(--text); font-size: 14px;
+    }
+    header {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    header h1 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+    header .subtitle { color: var(--text2); font-size: 13px; margin-top: 4px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; background: var(--primary-light); color: var(--primary);
+    }
+    .container {
+      padding: 20px 24px; display: grid; grid-template-columns: 320px 1fr 360px; gap: 20px;
+    }
+    .card {
+      background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+      border: 1px solid var(--border); overflow: hidden; margin-bottom: 20px;
+    }
+    .card-header {
+      padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-body { padding: 16px; }
+    .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    .status-card {
+      background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
+      padding: 16px; box-shadow: var(--shadow);
+    }
+    .status-card .label { color: var(--text2); font-size: 12px; margin-bottom: 6px; }
+    .status-card .value { font-size: 22px; font-weight: 700; }
+    .status-card .value.small { font-size: 14px; }
+    .status-card .indicator {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
+    }
+    .ok { background: var(--success); }
+    .warn { background: var(--warning); }
+    .err { background: var(--danger); }
+    .form-row { margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+    input, textarea, select {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 13px; font-family: inherit;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    button {
+      background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 13px; font-weight: 600;
+    }
+    button:hover { opacity: 0.92; }
+    button.secondary { background: #f3f4f6; color: var(--text); border: 1px solid var(--border); }
+    button.danger { background: var(--danger); }
+    .memory-list { max-height: 320px; overflow-y: auto; }
+    .memory-item {
+      padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .memory-item:hover { background: var(--primary-light); }
+    .memory-item .content { font-size: 13px; line-height: 1.4; }
+    .memory-item .meta { font-size: 11px; color: var(--text2); margin-top: 4px; }
+    .result-panel {
+      background: #f9fafb; border: 1px dashed var(--border); border-radius: 6px; padding: 12px;
+      margin-top: 12px; min-height: 80px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;
+    }
+    .result-rank { display: flex; gap: 8px; margin-bottom: 6px; }
+    .rank-chip {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #e5e7eb; color: #374151;
+    }
+    #cy {
+      width: 100%; height: 420px; background: #fafafa; border-radius: 6px; border: 1px solid var(--border);
+    }
+    .tab-bar { display: flex; border-bottom: 1px solid var(--border); }
+    .tab-bar button {
+      flex: 1; background: transparent; color: var(--text2); border-radius: 0; border-bottom: 2px solid transparent;
+      padding: 10px; font-weight: 500;
+    }
+    .tab-bar button.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-light); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .empty { color: var(--text2); font-style: italic; text-align: center; padding: 20px; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: var(--primary);
+      border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .metric-box { background: #f9fafb; border-radius: 6px; padding: 10px; text-align: center; }
+    .metric-box .num { font-size: 20px; font-weight: 700; color: var(--primary); }
+    .metric-box .label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white;
+      padding: 10px 16px; border-radius: 6px; box-shadow: var(--shadow); z-index: 200; display: none;
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>
+        <span>🦊</span>
+        HugeGraph AI Memory · 运营 Dashboard
+      </h1>
+      <div class="subtitle">真实 HugeGraph + FAISS + BM25 + MiMo LLM · 记忆全生命周期管理</div>
+    </div>
+    <div class="badge" id="connBadge">
+      <span class="indicator ok" id="connDot"></span>
+      <span id="connText">HugeGraph 在线</span>
+    </div>
+  </header>
+
+  <div style="padding: 20px 24px 0;">
+    <div class="status-grid">
+      <div class="status-card">
+        <div class="label">记忆总数</div>
+        <div class="value" id="statMemories">-</div>
+      </div>
+      <div class="status-card">
+        <div class="label">图实体 / 关系</div>
+        <div class="value small" id="statGraph">- / -</div>
+      </div>
+      <div class="status-card">
+        <div class="label">FAISS 向量</div>
+        <div class="value" id="statVectors">-</div>
+      </div>
+      <div class="status-card">
+        <div class="label">平均检索延迟</div>
+        <div class="value small" id="statLatency">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 左侧：记忆管理 -->
+    <div>
+      <div class="card">
+        <div class="card-header">写入记忆</div>
+        <div class="card-body">
+          <div class="form-row">
+            <label>用户 ID</label>
+            <input type="text" id="userId" value="demo_user" placeholder="demo_user">
+          </div>
+          <div class="form-row">
+            <label>记忆内容</label>
+            <textarea id="memoryContent" placeholder="例如：我下周一要去上海参加 GraphRAG 技术沙龙，航班是 CA1835。"></textarea>
+          </div>
+          <button onclick="addMemory()">添加记忆</button>
+          <div id="addResult" class="result-panel" style="display:none"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          记忆列表
+          <button class="secondary" onclick="loadMemories()">刷新</button>
+        </div>
+        <div class="card-body">
+          <div class="memory-list" id="memoryList"><div class="empty">点击刷新加载</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中间：检索测试 + 图谱可视化 -->
+    <div>
+      <div class="card">
+        <div class="card-header">检索与问答测试</div>
+        <div class="card-body">
+          <div class="form-row">
+            <label>查询问题</label>
+            <input type="text" id="searchQuery" placeholder="例如：我下周要去哪里？">
+          </div>
+          <button onclick="searchMemory()">检索</button>
+          <button class="secondary" onclick="classifyQuery()">意图识别</button>
+          <div id="searchResult" class="result-panel" style="display:none"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">记忆图谱可视化</div>
+        <div class="card-body">
+          <div id="cy"></div>
+          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <button class="secondary" onclick="renderGraph()">刷新图谱</button>
+            <span style="font-size:12px;color:var(--text2)">节点=实体/记忆，边=关系/引用</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧：Persona / Experience / Skill / LOCOMO -->
+    <div>
+      <div class="card">
+        <div class="tab-bar">
+          <button class="active" onclick="switchTab('tabPersona', this)">Persona</button>
+          <button onclick="switchTab('tabExp', this)">Experience</button>
+          <button onclick="switchTab('tabSkill', this)">Skill</button>
+        </div>
+        <div class="card-body">
+          <div id="tabPersona" class="tab-panel active">
+            <div class="form-row">
+              <label>用户画像摘要</label>
+              <textarea id="personaSummary" placeholder="加载中..."></textarea>
+            </div>
+            <button onclick="updatePersona()">更新画像</button>
+            <button class="secondary" onclick="loadPersona()">刷新</button>
+          </div>
+          <div id="tabExp" class="tab-panel">
+            <button onclick="distillMemories()">蒸馏 Experience</button>
+            <button class="secondary" onclick="loadExperiences()">刷新</button>
+            <div id="expList" style="margin-top:12px;"><div class="empty">暂无 Experience</div></div>
+          </div>
+          <div id="tabSkill" class="tab-panel">
+            <button class="secondary" onclick="loadSkills()">刷新</button>
+            <div id="skillList" style="margin-top:12px;"><div class="empty">暂无 Skill</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">LOCOMO 基准结果</div>
+        <div class="card-body">
+          <div class="metrics-grid" id="locomoMetrics">
+            <div class="metric-box"><div class="num">-</div><div class="label">Accuracy</div></div>
+            <div class="metric-box"><div class="num">-</div><div class="label">Hit@5</div></div>
+            <div class="metric-box"><div class="num">-</div><div class="label">MRR</div></div>
+            <div class="metric-box"><div class="num">-</div><div class="label">Avg Latency</div></div>
+          </div>
+          <button class="secondary" onclick="loadLocomo()" style="margin-top:12px;width:100%">刷新结果</button>
+          <div id="locomoStatus" class="empty" style="margin-top:8px;font-size:12px;">未检测到结果文件</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = "";
+    let cy = null;
+
+    function showToast(msg, type="info") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.style.background = type === "error" ? "#ef4444" : "#1f2937";
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2500);
+    }
+
+    async function api(method, path, body) {
+      const opts = { method, headers: { "Content-Type": "application/json" } };
+      if (body) opts.body = JSON.stringify(body);
+      const r = await fetch(API + path, opts);
+      if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+      return r.json();
+    }
+
+    async function addMemory() {
+      const content = document.getElementById("memoryContent").value.trim();
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      if (!content) return showToast("请输入记忆内容", "error");
+      const resDiv = document.getElementById("addResult");
+      resDiv.style.display = "block";
+      resDiv.innerHTML = '<span class="spinner"></span>写入中...';
+      try {
+        const data = await api("POST", "/api/memory/add", { content, user_id: userId });
+        resDiv.textContent = JSON.stringify(data, null, 2);
+        showToast("记忆写入成功");
+        loadMemories(); loadStats(); renderGraph();
+      } catch (e) {
+        resDiv.textContent = "错误: " + e.message;
+        showToast(e.message, "error");
+      }
+    }
+
+    async function searchMemory() {
+      const query = document.getElementById("searchQuery").value.trim();
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      if (!query) return showToast("请输入查询", "error");
+      const resDiv = document.getElementById("searchResult");
+      resDiv.style.display = "block";
+      resDiv.innerHTML = '<span class="spinner"></span>检索中...';
+      try {
+        const t0 = performance.now();
+        const data = await api("POST", "/api/memory/search", { query, user_id: userId });
+        const latency = (performance.now() - t0).toFixed(0);
+        let html = `<div style="margin-bottom:8px;font-weight:600;color:var(--primary)">Answer: ${data.answer || "(无)"} <span style="color:var(--text2);font-weight:400">(${latency}ms)</span></div>`;
+        html += `<div class="result-rank"><span class="rank-chip">Vector</span><span class="rank-chip">BM25</span><span class="rank-chip">Graph</span><span class="rank-chip">RRF Fusion</span></div>`;
+        if (data.results && data.results.length) {
+          html += data.results.map((r, i) => `<div style="margin-bottom:6px;padding:8px;background:#fff;border-radius:4px;border:1px solid var(--border)">
+            <div style="font-weight:600">#${i+1} score=${r.score || r.rrf_score || 0}</div>
+            <div style="color:var(--text2);font-size:12px">${r.memory ? r.memory.content : JSON.stringify(r).slice(0, 200)}</div>
+          </div>`).join("");
+        } else {
+          html += "<div class='empty'>无召回结果</div>";
+        }
+        resDiv.innerHTML = html;
+      } catch (e) {
+        resDiv.textContent = "错误: " + e.message;
+        showToast(e.message, "error");
+      }
+    }
+
+    async function classifyQuery() {
+      const text = document.getElementById("searchQuery").value.trim();
+      if (!text) return showToast("请输入查询", "error");
+      const resDiv = document.getElementById("searchResult");
+      resDiv.style.display = "block";
+      try {
+        const data = await api("POST", "/api/memory/classify", { text });
+        resDiv.innerHTML = `<pre style="margin:0">${JSON.stringify(data, null, 2)}</pre>`;
+      } catch (e) {
+        resDiv.textContent = "错误: " + e.message;
+      }
+    }
+
+    async function loadMemories() {
+      const list = document.getElementById("memoryList");
+      list.innerHTML = '<div class="empty"><span class="spinner"></span>加载中...</div>';
+      try {
+        const data = await api("GET", "/api/memory/list");
+        if (!data.memories || !data.memories.length) {
+          list.innerHTML = '<div class="empty">暂无记忆</div>';
+          return;
+        }
+        list.innerHTML = data.memories.map(m => `<div class="memory-item" onclick="document.getElementById('searchQuery').value='${m.content.replace(/'/g, "\\'")}'">
+          <div class="content">${escapeHtml(m.content)}</div>
+          <div class="meta">user=${m.user_id || "-"} | ${fmtTime(m.created_at)} | score=${m.score || 0}</div>
+        </div>`).join("");
+      } catch (e) {
+        list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`;
+      }
+    }
+
+    async function loadStats() {
+      try {
+        const data = await api("GET", "/api/stats");
+        document.getElementById("statMemories").textContent = data.memories || 0;
+        document.getElementById("statGraph").textContent = `${data.entities || 0} / ${data.edges || 0}`;
+        document.getElementById("statVectors").textContent = data.vectors || 0;
+        document.getElementById("statLatency").textContent = data.avg_latency_ms ? `${data.avg_latency_ms} ms` : "-";
+        const ok = (data.hugegraph_connected !== false);
+        document.getElementById("connDot").className = "indicator " + (ok ? "ok" : "err");
+        document.getElementById("connText").textContent = ok ? `HugeGraph 在线 (${data.graph || "-"})` : "HugeGraph 离线";
+      } catch (e) {
+        document.getElementById("connDot").className = "indicator err";
+        document.getElementById("connText").textContent = "API 异常";
+      }
+    }
+
+    async function renderGraph() {
+      try {
+        const data = await api("GET", "/api/graph");
+        const nodes = (data.nodes || []).map(n => ({ data: { id: n.id, label: n.label || n.id, type: n.type || "entity" } }));
+        const edges = (data.edges || []).map(e => ({ data: { id: e.id || `${e.source}-${e.target}`, source: e.source, target: e.target, label: e.label || "" } }));
+        if (cy) cy.destroy();
+        cy = cytoscape({
+          container: document.getElementById("cy"),
+          elements: [...nodes, ...edges],
+          style: [
+            { selector: "node", style: { "background-color": "#60a5fa", "label": "data(label)", "width": 28, "height": 28, "font-size": 10, "text-valign": "bottom", "text-margin-y": 4, "color": "#374151" } },
+            { selector: "node[type='memory']", style: { "background-color": "#f59e0b" } },
+            { selector: "edge", style: { "width": 1.5, "line-color": "#cbd5e1", "target-arrow-color": "#cbd5e1", "target-arrow-shape": "triangle", "curve-style": "bezier", "font-size": 9, "label": "data(label)" } }
+          ],
+          layout: { name: "cose", padding: 10, animate: false, componentSpacing: 60 }
+        });
+      } catch (e) {
+        document.getElementById("cy").innerHTML = `<div class="empty">图谱加载失败: ${e.message}</div>`;
+      }
+    }
+
+    async function loadPersona() {
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      try {
+        const data = await api("GET", "/api/memory/persona?user_id=" + encodeURIComponent(userId));
+        document.getElementById("personaSummary").value = data.summary || "";
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    async function updatePersona() {
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      const summary = document.getElementById("personaSummary").value.trim();
+      try {
+        await api("POST", "/api/memory/persona", { user_id: userId, summary });
+        showToast("画像已更新");
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    async function distillMemories() {
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      try {
+        showToast("开始蒸馏...");
+        const data = await api("POST", "/api/memory/distill", { user_id: userId });
+        showToast(`蒸馏完成: ${data.experiences || 0} Experience, ${data.skills || 0} Skill`);
+        loadExperiences(); loadSkills();
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    async function loadExperiences() {
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      const list = document.getElementById("expList");
+      try {
+        const data = await api("POST", "/api/memory/experiences", { user_id: userId, top_k: 20 });
+        if (!data.experiences || !data.experiences.length) { list.innerHTML = '<div class="empty">暂无 Experience</div>'; return; }
+        list.innerHTML = data.experiences.map(x => `<div class="memory-item"><div class="content">${escapeHtml(x.content || x.text || JSON.stringify(x))}</div></div>`).join("");
+      } catch (e) { list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`; }
+    }
+
+    async function loadSkills() {
+      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      const list = document.getElementById("skillList");
+      try {
+        const data = await api("POST", "/api/memory/skills", { user_id: userId, top_k: 20 });
+        if (!data.skills || !data.skills.length) { list.innerHTML = '<div class="empty">暂无 Skill</div>'; return; }
+        list.innerHTML = data.skills.map(s => `<div class="memory-item"><div class="content">${escapeHtml(s.name || s.content || JSON.stringify(s))}</div></div>`).join("");
+      } catch (e) { list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`; }
+    }
+
+    async function loadLocomo() {
+      const status = document.getElementById("locomoStatus");
+      try {
+        const data = await api("GET", "/api/locomo");
+        if (data.status === "not_ready") {
+          status.textContent = "LOCOMO 全量基准正在后台运行，结果尚未生成";
+          return;
+        }
+        const m = data.metrics || {};
+        document.getElementById("locomoMetrics").innerHTML = `
+          <div class="metric-box"><div class="num">${((m.accuracy || 0) * 100).toFixed(1)}%</div><div class="label">Accuracy</div></div>
+          <div class="metric-box"><div class="num">${((m.hit_at_5 || 0) * 100).toFixed(1)}%</div><div class="label">Hit@5</div></div>
+          <div class="metric-box"><div class="num">${(m.mrr || 0).toFixed(3)}</div><div class="label">MRR</div></div>
+          <div class="metric-box"><div class="num">${m.avg_latency_ms || 0}ms</div><div class="label">Avg Latency</div></div>`;
+        status.textContent = `Sessions: ${m.sessions || 0} | Questions: ${m.total_questions || 0} | Token estimate: ${m.token_estimate || 0}`;
+      } catch (e) {
+        status.textContent = "读取结果失败: " + e.message;
+      }
+    }
+
+    function switchTab(id, btn) {
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+      document.querySelectorAll(".tab-bar button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (id === "tabExp") loadExperiences();
+      if (id === "tabSkill") loadSkills();
+    }
+
+    function escapeHtml(s) {
+      return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function fmtTime(ts) {
+      if (!ts) return "-";
+      try { return new Date(ts * 1000).toLocaleString("zh-CN"); } catch { return ts; }
+    }
+
+    window.onload = () => {
+      loadStats(); loadMemories(); renderGraph(); loadPersona(); loadLocomo();
+      setInterval(loadStats, 10000);
+    };
+  </script>
+</body>
+</html>
