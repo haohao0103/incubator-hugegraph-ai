@@ -643,6 +643,23 @@ class FaissMemoryIndex:
         self.index = faiss.IndexFlatIP(self.dim)
         self.metadata = []
 
+    def delete_memory(self, memory_id: str):
+        """Rebuild the index without the given memory_id."""
+        new_metadata = [m for m in self.metadata if m.get("memory_id") != memory_id]
+        if len(new_metadata) == len(self.metadata):
+            return
+        self.index = faiss.IndexFlatIP(self.dim)
+        self.metadata = []
+        for meta in new_metadata:
+            vec = self.embed_text(meta["content"]).reshape(1, -1).astype(np.float32)
+            self.index.add(vec)
+            self.metadata.append({
+                "memory_id": meta["memory_id"],
+                "content": meta["content"],
+                "created_at": meta.get("created_at", time.time()),
+                "index_pos": len(self.metadata),
+            })
+
 
 # ============================================================================
 # SQLite metadata store (for Ebbinghaus scores + memory content)
