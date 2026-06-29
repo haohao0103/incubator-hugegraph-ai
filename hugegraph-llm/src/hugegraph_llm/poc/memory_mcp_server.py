@@ -242,6 +242,97 @@ def get_skills(query: str = "", user_id: str = "demo_user", top_k: int = 5) -> s
         return _to_json({"error": str(e), "tool": "get_skills"})
 
 
+@mcp.tool(description="Get a memory by id.")
+def get_memory_by_id(memory_id: str, user_id: str = "demo_user") -> str:
+    """Get a single memory by id."""
+    try:
+        backend = _get_backend()
+        result = backend.get_memory_by_id(memory_id)
+        if result is None:
+            return _to_json({"error": "NOT_FOUND", "memory_id": memory_id})
+        return _to_json(result)
+    except Exception as e:
+        log.error("get_memory_by_id failed: %s", e)
+        return _to_json({"error": str(e), "tool": "get_memory_by_id"})
+
+
+@mcp.tool(description="List all memories for a user/agent.")
+def list_memories(user_id: str = "demo_user") -> str:
+    """List memories for a scope."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.list_memories(user_id=user_id))
+    except Exception as e:
+        log.error("list_memories failed: %s", e)
+        return _to_json({"error": str(e), "tool": "list_memories"})
+
+
+@mcp.tool(description="Update a memory by id.")
+def update_memory(memory_id: str, content: str, user_id: str = "demo_user") -> str:
+    """Update a memory's content."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.update_memory(memory_id=memory_id, content=content, user_id=user_id))
+    except Exception as e:
+        log.error("update_memory failed: %s", e)
+        return _to_json({"error": str(e), "tool": "update_memory"})
+
+
+@mcp.tool(description="Delete a memory by id.")
+def delete_memory(memory_id: str, user_id: str = "demo_user") -> str:
+    """Delete a memory by id."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.delete_memory(memory_id=memory_id, user_id=user_id))
+    except Exception as e:
+        log.error("delete_memory failed: %s", e)
+        return _to_json({"error": str(e), "tool": "delete_memory"})
+
+
+@mcp.tool(description="Add a procedural skill for a user/agent.")
+def add_skill(content: str, user_id: str = "demo_user") -> str:
+    """Add a skill/procedural memory."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.add_skill(content=content, user_id=user_id))
+    except Exception as e:
+        log.error("add_skill failed: %s", e)
+        return _to_json({"error": str(e), "tool": "add_skill"})
+
+
+@mcp.tool(description="Search skills for a user/agent.")
+def search_skills(query: str, user_id: str = "demo_user", top_k: int = 5) -> str:
+    """Search skills for a scope."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.search_skills(query=query, user_id=user_id, top_k=top_k))
+    except Exception as e:
+        log.error("search_skills failed: %s", e)
+        return _to_json({"error": str(e), "tool": "search_skills"})
+
+
+@mcp.tool(description="Get the user profile / persona for a user/agent.")
+def get_user_profile(user_id: str = "demo_user") -> str:
+    """Get the L3 persona / user profile."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.get_user_profile(user_id=user_id))
+    except Exception as e:
+        log.error("get_user_profile failed: %s", e)
+        return _to_json({"error": str(e), "tool": "get_user_profile"})
+
+
+@mcp.tool(description="Update the user profile / persona for a user/agent.")
+def update_user_profile(user_id: str = "demo_user", summary: str = "") -> str:
+    """Update the L3 persona / user profile."""
+    try:
+        backend = _get_backend()
+        return _to_json(backend.update_user_profile(user_id=user_id, summary=summary))
+    except Exception as e:
+        log.error("update_user_profile failed: %s", e)
+        return _to_json({"error": str(e), "tool": "update_user_profile"})
+
+
 def main():
     parser = argparse.ArgumentParser(description="HugeGraph-AI-Memory MCP Server")
     parser.add_argument(
