@@ -66,6 +66,7 @@ from hugegraph_llm.operators.graph_rag_enhancements.global_retriever import (
     RetrievedContext,
     GlobalSearchConfig,
 )
+from hugegraph_llm.operators.graph_rag_enhancements.cached_llm import CachedLLM
 
 __all__ = [
     # G2: LLM Cache
@@ -82,4 +83,6 @@ __all__ = [
     # G4: Global/DRIFT Retrieval
     "GlobalSearchRetriever", "DriftChainBuilder",
     "SearchResult", "RetrievedContext", "GlobalSearchConfig",
+    # Pipeline Integration
+    "CachedLLM",
 ]

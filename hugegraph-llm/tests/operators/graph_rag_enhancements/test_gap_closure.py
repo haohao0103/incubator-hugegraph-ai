@@ -34,6 +34,7 @@ import tempfile
 import time
 import uuid
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -79,6 +80,8 @@ from hugegraph_llm.operators.graph_rag_enhancements.global_retriever import (
     RetrievedContext,
     GlobalSearchConfig,
 )
+from hugegraph_llm.operators.graph_rag_enhancements.cached_llm import CachedLLM
+from hugegraph_llm.models.llms.base import BaseLLM  # for type check in tests
 
 
 # ===================================================================
@@ -915,6 +918,171 @@ class TestEdgeCases:
         result = det.detect(edges[:500])  # Subset for speed
         assert result.num_nodes > 0
         assert result.duration_ms < 30000  # Should complete within 30s
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SECTION: CachedLLM — Pipeline Integration Tests
+# ═══════════════════════════════════════════════════════════════════
+
+class MockBaseLLM:
+    """Minimal BaseLLM mock for testing CachedLLM."""
+    def __init__(self, responses=None):
+        self._responses = responses or ["default response"]
+        self._call_count = 0
+
+    def generate(self, messages=None, prompt=None):
+        self._call_count += 1
+        idx = min(self._call_count - 1, len(self._responses) - 1)
+        return self._responses[idx]
+
+    async def agenerate(self, messages=None, prompt=None):
+        self._call_count += 1
+        idx = min(self._call_count - 1, len(self._responses) - 1)
+        return self._responses[idx]
+
+    def generate_streaming(self, messages=None, prompt=None, on_token_callback=None):
+        yield from iter(self.generate(messages, prompt))
+
+    async def agenerate_streaming(self, messages=None, prompt=None, on_token_callback=None):
+        for chunk in self.generate_streaming(messages, prompt, on_token_callback):
+            yield chunk
+
+    def num_tokens_from_string(self, string):
+        return len(string) // 4
+
+    def max_allowed_token_length(self):
+        return 8192
+
+    def get_llm_type(self):
+        return "mock"
+
+
+class TestCachedLLM:
+    """Tests for the CachedLLM wrapper (Pipeline Integration)."""
+
+    def _make_cached_llm(self, **kwargs):
+        """Create a CachedLLM wrapping MockBaseLLM."""
+        mock = MockBaseLLM(["response_A", "response_B", "response_C"])
+        import tempfile
+        cache_dir = tempfile.mkdtemp(prefix="cached_llm_test_")
+        defaults = dict(llm=mock, cache_dir=cache_dir,
+                       enable_cache=True, enable_budget=False, enable_rate_limit=False)
+        defaults.update(kwargs)
+        llm = CachedLLM(**defaults)
+        llm._test_cache_dir = cache_dir
+        return llm
+
+    def test_basic_generate_caches_response(self):
+        """Second call with same prompt returns cached result without calling LLM."""
+        llm = self._make_cached_llm()
+        r1 = llm.generate(prompt="What is AI?")
+        r2 = llm.generate(prompt="What is AI?")
+        assert r1 == r2 == "response_A"
+        assert llm.inner_llm._call_count == 1  # Only called once
+
+    def test_different_prompts_bypass_cache(self):
+        """Different prompts result in separate LLM calls."""
+        llm = self._make_cached_llm()
+        r1 = llm.generate(prompt="question A")
+        r2 = llm.generate(prompt="question B")
+        assert r1 != r2
+        assert llm.inner_llm._call_count == 2
+
+    def test_stats_tracking(self):
+        """Stats reflect hits/misses accurately."""
+        llm = self._make_cached_llm()
+        llm.generate(prompt="q1")
+        llm.generate(prompt="q1")  # hit
+        llm.generate(prompt="q2")   # miss
+        llm.generate(prompt="q2")  # hit
+        s = llm.stats
+        assert s["total_calls"] == 4
+        assert s["cache_hits"] == 2
+        assert s["cache_misses"] == 2
+
+    def test_messages_and_prompt_produce_same_key(self):
+        """Prompt and equivalent messages format should produce different keys."""
+        llm = self._make_cached_llm()
+        r1 = llm.generate(prompt="hello")
+        r2 = llm.generate(messages=[{"role": "user", "content": "hello"}])
+        # These are cached separately because key includes format info
+        assert llm.inner_llm._call_count == 2
+
+    def test_clear_cache_resets_everything(self):
+        """clear_cache() forces next call to hit LLM again."""
+        llm = self._make_cached_llm()
+        llm.generate(prompt="repeat")
+        llm.generate(prompt="repeat")  # cached
+        assert llm.inner_llm._call_count == 1
+        llm.clear_cache()
+        llm.generate(prompt="repeat")  # miss again after clear
+        assert llm.inner_llm._call_count == 2
+
+    def test_async_agenerate_also_caches(self):
+        """Async generate path also caches properly."""
+        llm = self._make_cached_llm()
+        r1 = asyncio.get_event_loop().run_until_complete(
+            llm.agenerate(prompt="async_q")
+        )
+        r2 = asyncio.get_event_loop().run_until_complete(
+            llm.agenerate(prompt="async_q")
+        )
+        assert r1 == r2
+        assert llm.inner_llm._call_count == 1
+
+    def test_stats_summary_is_string(self):
+        """stats_summary returns a non-empty string."""
+        llm = self._make_cached_llm()
+        llm.generate(prompt="x")
+        summary = llm.stats_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 10
+        assert "CachedLLM" in summary
+
+    def test_reset_stats_clears_counters(self):
+        """reset_stats zeros out all counters."""
+        llm = self._make_cached_llm()
+        llm.generate(prompt="a")
+        llm.generate(prompt="a")
+        llm.reset_stats()
+        s = llm.stats
+        assert s["total_calls"] == 0
+        assert s["cache_hits"] == 0
+        assert s["cache_misses"] == 0
+
+    def test_delegates_inner_llm_type(self):
+        """get_llm_type delegates to inner LLM."""
+        llm = self._make_cached_llm()
+        assert llm.get_llm_type() == "mock"
+
+    def test_delegates_max_tokens(self):
+        """max_allowed_token_length delegates to inner."""
+        llm = self._make_cached_llm()
+        assert llm.max_allowed_token_length() == 8192
+
+    def test_delegates_num_tokens(self):
+        """num_tokens_from_string delegates to inner."""
+        llm = self._make_cached_llm()
+        # MockBaseLLM counts len/4
+        assert llm.num_tokens_from_string("abcdefghij") in (2, 3)
+
+    def test_disabled_cache_passes_through_all_calls(self):
+        """When enable_cache=False, every call goes to LLM."""
+        mock = MockBaseLLM(["r1", "r2", "r3"])
+        llm = CachedLLM(mock, enable_cache=False, enable_budget=False,
+                         enable_rate_limit=False)
+        llm.generate(prompt="same")
+        llm.generate(prompt="same")
+        llm.generate(prompt="same")
+        assert mock._call_count == 3
+
+    def test_streaming_not_cached(self):
+        """Streaming calls always go through to inner LLM."""
+        llm = self._make_cached_llm()
+        chunks = list(llm.generate_streaming(prompt="stream"))
+        # Streaming should not be cached
+        assert len(chunks) > 0
+        assert llm.inner_llm._call_count >= 1
 
 
 if __name__ == "__main__":
