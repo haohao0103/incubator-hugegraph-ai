@@ -1,0 +1,33 @@
+{
+  "note": "max_tokens=512 fix",
+  "results": {
+    "novel": {
+      "Complex Reasoning": {
+        "answer_correctness": 0.065
+      },
+      "Contextual Summarize": {
+        "answer_correctness": 0.0
+      },
+      "Creative Generation": {
+        "answer_correctness": 0.0
+      },
+      "Fact Retrieval": {
+        "answer_correctness": 0.35
+      }
+    },
+    "medical": {
+      "Complex Reasoning": {
+        "answer_correctness": 0.0
+      },
+      "Contextual Summarize": {
+        "answer_correctness": 0.22999999999999998
+      },
+      "Creative Generation": {
+        "answer_correctness": 0.33299999999999996
+      },
+      "Fact Retrieval": {
+        "answer_correctness": 0.23500000000000001
+      }
+    }
+  }
+}

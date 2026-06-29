@@ -1,0 +1,842 @@
+{
+  "timestamp": "2026-06-29T15:54:45.816929",
+  "benchmark": "GraphRAG-Bench (ICLR'26)",
+  "llm_query": "mimo-v2.5-pro",
+  "llm_eval": "mimo-v2.5-pro",
+  "embed_model": "all-MiniLM-L6-v2",
+  "matrix": {
+    "lightrag::Complex Reasoning::rouge_score": 0.0177,
+    "lightrag::Complex Reasoning::answer_correctness": 0.0,
+    "lightrag::Complex Reasoning::keyword_accuracy": 0.0194,
+    "lightrag::Contextual Summarize::answer_correctness": 0.1,
+    "lightrag::Contextual Summarize::coverage_score": 0.0733,
+    "lightrag::Contextual Summarize::keyword_accuracy": 0.0144,
+    "lightrag::Creative Generation::answer_correctness": 0.0,
+    "lightrag::Creative Generation::coverage_score": 0.0293,
+    "lightrag::Creative Generation::faithfulness": 0.0,
+    "lightrag::Creative Generation::keyword_accuracy": 0.0126,
+    "lightrag::Fact Retrieval::rouge_score": 0.0419,
+    "lightrag::Fact Retrieval::answer_correctness": 0.0,
+    "lightrag::Fact Retrieval::keyword_accuracy": 0.0206
+  },
+  "overall_ranking": [
+    {
+      "rank": 1,
+      "framework": "lightrag",
+      "avg_acc": 0.025,
+      "num_type_scores": 4
+    }
+  ],
+  "per_framework": {
+    "lightrag": {
+      "domains": {
+        "novel": {
+          "type_results": {
+            "Complex Reasoning": {
+              "rouge_score": 0.03194444444444444,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.034983766233766235,
+              "num_samples": 10
+            },
+            "Contextual Summarize": {
+              "answer_correctness": 0.0,
+              "coverage_score": 0.075,
+              "keyword_accuracy": 0.026492318169972183,
+              "num_samples": 10
+            },
+            "Creative Generation": {
+              "answer_correctness": 0.0,
+              "coverage_score": 0.03333333333333333,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.02048783184130001,
+              "num_samples": 10
+            },
+            "Fact Retrieval": {
+              "rouge_score": 0.016666666666666666,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.019532540547641676,
+              "num_samples": 10
+            }
+          },
+          "detailed": [
+            {
+              "id": "Novel-8ff5dd5a",
+              "question": "Within the context of Arthurian legend as discussed by the narrator in 'An Unsen",
+              "gt": "Sir Launcelot was a knight of King Arthur and was one of the Knights of the Roun",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-322bb52d",
+              "question": "According to the narrator's reflections in 'An Unsentimental Journey through Cor",
+              "gt": "King Arthur is associated with the Land of Lyonesse and was said to have sailed ",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0625,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0625
+            },
+            {
+              "id": "Novel-35fee661",
+              "question": "In 'An Unsentimental Journey through Cornwall', how does the narrator draw a com",
+              "gt": "King Arthur reminded the narrator of John Curgenven because King Arthur was desc",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-ade4b34a",
+              "question": "In the narrative of 'An Unsentimental Journey through Cornwall', what is King Ar",
+              "gt": "Tintagel is said to be the birthplace of King Arthur, and he is associated with ",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0625,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.07142857142857142
+            },
+            {
+              "id": "Novel-462ecc23",
+              "question": "In 'An Unsentimental Journey through Cornwall', what is the reason for Princess ",
+              "gt": "Because Princess Frederica of Hanover visited the St. Aubyns at St. Michael's Mo",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-4f5a8531",
+              "question": "How does the narrator in 'An Unsentimental Journey through Cornwall' compare Mon",
+              "gt": "Mont St. Michel is similar to St. Michael's Mount.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.1111111111111111,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.125
+            },
+            {
+              "id": "Novel-0e2be889",
+              "question": "What was Mary Mundy's relationship or attitude toward the Professor, as depicted",
+              "gt": "Mary Mundy admired the Professor and sends her duty to him.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-0d237b40",
+              "question": "In 'An Unsentimental Journey through Cornwall', what is Charles the driver's con",
+              "gt": "Charles would take others to Mullion.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-346b12e8",
+              "question": "How are St. Michael's Mount and Marazion geographically related?",
+              "gt": "St. Michael's Mount was opposite Marazion.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-302a626f",
+              "question": "What is John Curgenven's connection to the Lizard coast in 'An Unsentimental Jou",
+              "gt": "John Curgenven rows on the Lizard coast and is a Cornish boatman.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.08333333333333333,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.09090909090909091
+            },
+            {
+              "id": "Novel-ff793656",
+              "question": "In the narrative describing the group's visit to St. Michael's Mount in Cornwall",
+              "gt": "St. Michael's Mount is steeped in both legend and history, its rocky silhouette ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.009433962264150943
+            },
+            {
+              "id": "Novel-48edb564",
+              "question": "During the evening outing described in the novel, what significance does the sea",
+              "gt": "For Charles and the young people, the sea and the cove held a sense of boundless",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-296c7595",
+              "question": "According to the narrative's exploration of Cornish landmarks, what is the signi",
+              "gt": "Tintagel stands as a windswept, sea-battered landmark perched between legend and",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.25,
+              "keyword_accuracy": 0.02702702702702703
+            },
+            {
+              "id": "Novel-733f63f7",
+              "question": "Within the context of the group's travels along the Lizard coast in Cornwall, wh",
+              "gt": "John Curgenven is a stalwart Cornish boatman whose steady arm and honest, fearle",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.014285714285714285
+            },
+            {
+              "id": "Novel-2ab4a26d",
+              "question": "In the account of the group's journey through Cornwall, what is the significance",
+              "gt": "St. Michael's Mount is located in England, is similar to Mont St. Michel in Norm",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0625
+            },
+            {
+              "id": "Novel-f24f442f",
+              "question": "Based on the descriptions throughout the narrative, what are some of the cultura",
+              "gt": "Cornwall is steeped in unique cultural traditions and legends that set it apart ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.009259259259259259
+            },
+            {
+              "id": "Novel-3b90994e",
+              "question": "In the context of Arthurian legend as presented in the narrative, what connectio",
+              "gt": "Within the narrative, Sir Bedevere emerges as King Arthur’s last loyal companion",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.25,
+              "keyword_accuracy": 0.022727272727272728
+            },
+            {
+              "id": "Novel-613d4e81",
+              "question": "How does the narrative illustrate the interplay between Cornwall's geography—inc",
+              "gt": "Cornwall's geography—its windswept moors, haunting pools, and rugged coastlines ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.25,
+              "keyword_accuracy": 0.022727272727272728
+            },
+            {
+              "id": "Novel-69348684",
+              "question": "How is the scene depicted in which John Curgenven, while in a boat near the Liza",
+              "gt": "As John Curgenven guides the boat into the shadowy mouth of the cave near the Li",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-19dda12f",
+              "question": "How is the Cornish coast described as a setting within the narrative, specifical",
+              "gt": "The Cornish coast, particularly around the Lizard region, is depicted as a drama",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.012048192771084338
+            },
+            {
+              "id": "Novel-9d9b1ed1",
+              "question": "Imagine you are a fish living in the cave near Lizard. Write a diary entry about",
+              "gt": "Fish’s Diary: Today was most unusual. The tranquil green depths of our cave were",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-dca8ac49",
+              "question": "Imagine you are launce, a fish found at Lizard. Write a diary entry about the da",
+              "gt": "Launce’s Diary: The day was peaceful until a boat, with John Curgenven aboard, e",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-e89fa155",
+              "question": "Retell the scene of King Arthur’s comparison to John Curgenven and the explorati",
+              "gt": "Cornwall Chronicle — In a scene reminiscent of Arthurian legend, local fisherman",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.010638297872340425
+            },
+            {
+              "id": "Novel-6956692c",
+              "question": "Rewrite the journey of John Curgenven in his boat and his remarks on Lizard Ligh",
+              "gt": "The Lizard Gazette — Local seafarer John Curgenven was recently spotted expertly",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-27b6e451",
+              "question": "Imagine you are a visitor to Kynance Cove. Write a diary entry describing your i",
+              "gt": "Diary: Today I visited Kynance Cove, a place of wild beauty. The Devil’s Throat ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.022727272727272728
+            },
+            {
+              "id": "Novel-a940228b",
+              "question": "Retell the story of Corinna’s farewell to her parrot as if you are Corinna, writ",
+              "gt": "Diary Entry — Today sorrow has made its home in my heart. My beloved parrot, my ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-2e0ffce2",
+              "question": "Write a diary entry as the Parrot, describing your life with your mistress, the ",
+              "gt": "Diary Entry — My days with my mistress were filled with warmth and endless chatt",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.011627906976744186
+            },
+            {
+              "id": "Novel-4334e7fc",
+              "question": "Rewrite the events surrounding Hippolytus as a news report, including his mentio",
+              "gt": "Olympian Herald — The enigmatic Hippolytus, known for his tragic fate, is once a",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.02127659574468085
+            },
+            {
+              "id": "Novel-db4551ac",
+              "question": "Imagine you are Dipsas. Write a diary entry about your knowledge of magic arts a",
+              "gt": "Diary Entry — My reputation as a mistress of the magic arts and the charms of Ææ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.3333333333333333,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-a4a83818",
+              "question": "Rewrite the events surrounding Roxie's charge by Governor Morock as a news artic",
+              "gt": "Governor Morock has officially charged Roxie in connection with recent events, s",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.018518518518518517
+            },
+            {
+              "id": "Novel-73586ddc",
+              "question": "In the narrative of 'An Unsentimental Journey through Cornwall', which plant kno",
+              "gt": "Cornish heath",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-74440a6a",
+              "question": "Within the account of the royal visit to St. Michael's Mount in Cornwall, who is",
+              "gt": "Baron Von Pawel-Rammingen",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-f80cbf85",
+              "question": "According to the narrative's discussion of historic sites, in which region of Fr",
+              "gt": "Normandy",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-b3c430ef",
+              "question": "In the historical account relating to St. Michael's Mount, which individual is s",
+              "gt": "Henry de la Pomeroy",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-304b0354",
+              "question": "Within the Cornish legends described in the narrative, who was the figure doomed",
+              "gt": "Tregeagle",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-b1a95144",
+              "question": "In reference to the royal visit to St. Michael's Mount described in the narrativ",
+              "gt": "Princess Frederica of Hanover",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-e05d0922",
+              "question": "According to the description of Kynance Cove in Cornwall, which specific feature",
+              "gt": "Kynance Sands",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-dba48e64",
+              "question": "In the account of the travelers' visit to Kynance Cove, what natural landmarks a",
+              "gt": "Asparagus Island, Gull Rock, and Bellows",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Novel-ea3d4859",
+              "question": "During the travelers' exploration of the Cornish coastline in the narrative, wha",
+              "gt": "Penolver is located near Housel Cove.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.16666666666666666,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.16666666666666666
+            },
+            {
+              "id": "Novel-ba894e2c",
+              "question": "In the retelling of the Arthurian legend within the novel, who is the character ",
+              "gt": "Merlin produced King Arthur.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            }
+          ]
+        },
+        "medical": {
+          "type_results": {
+            "Complex Reasoning": {
+              "rouge_score": 0.017681159420289853,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.019358974358974358,
+              "num_samples": 10
+            },
+            "Contextual Summarize": {
+              "answer_correctness": 0.1,
+              "coverage_score": 0.07333333333333333,
+              "keyword_accuracy": 0.01439949450059744,
+              "num_samples": 10
+            },
+            "Creative Generation": {
+              "answer_correctness": 0.0,
+              "coverage_score": 0.02928321678321678,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.012585471603809266,
+              "num_samples": 10
+            },
+            "Fact Retrieval": {
+              "rouge_score": 0.041944444444444444,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.02064942116317441,
+              "num_samples": 10
+            }
+          },
+          "detailed": [
+            {
+              "id": "Medical-604c9d44",
+              "question": "Why is a patient with fair skin and a history of organ transplant at particularl",
+              "gt": "Because both fair skin and immune suppression from organ transplant are independ",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-df366063",
+              "question": "If a patient presents with a shiny bump on the face and has a history of tanning",
+              "gt": "A medical and family history, physical and skin exam, and biopsy should be perfo",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-0a90f1f2",
+              "question": "How does the management of recurrent basal cell carcinoma differ from initial tr",
+              "gt": "Management of recurrence depends on risk and recurrence site, with treatment opt",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-831bb1e6",
+              "question": "Which combination of risk factors should prompt earlier and more frequent skin e",
+              "gt": "A combination of older age, fair skin, and family history of skin cancer should ",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-01e3a9ea",
+              "question": "Why might a patient with a shiny bump and a history of radiation therapy require",
+              "gt": "Because radiation therapy is a risk factor for BCC and shiny bumps are a symptom",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.043478260869565216,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.05
+            },
+            {
+              "id": "Medical-c69c2732",
+              "question": "What follow-up strategy is recommended for a patient treated for BCC on the neck",
+              "gt": "Annual full skin exams are recommended to monitor for recurrence or new lesions.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-f034d77d",
+              "question": "How does UV radiation contribute to both the development and recurrence of basal",
+              "gt": "UV radiation is a primary risk factor for BCC and continued exposure increases r",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.06666666666666667,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.07692307692307693
+            },
+            {
+              "id": "Medical-1eab8fa2",
+              "question": "Why should a patient with a family history of skin cancer and light eye color be",
+              "gt": "Because both family history and light eye color are risk factors for BCC, increa",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-14016ce3",
+              "question": "What is the rationale for recommending surgery as the most common treatment for ",
+              "gt": "Because BCC most commonly develops on sun-exposed areas and surgery is the most ",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.06666666666666667,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.06666666666666667
+            },
+            {
+              "id": "Medical-5e530443",
+              "question": "Which symptoms and risk factors together would most strongly indicate the need f",
+              "gt": "A flat pale area on sun-exposed skin in a fair-skinned patient with a history of",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-5fd3c02d",
+              "question": "What are the main risk factors associated with the development of basal cell car",
+              "gt": "The main risk factors associated with the development of basal cell carcinoma in",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-b8b22d33",
+              "question": "Which anatomical locations and cell types are most commonly involved in basal ce",
+              "gt": "Basal cell carcinoma arises from basal cells in the lower part of the epidermis ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-9c85110b",
+              "question": "What are the typical symptoms and presentations of basal cell carcinoma?",
+              "gt": "Basal cell carcinoma (BCC) typically presents as skin lesions that may appear as",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 1.0,
+              "coverage_score": 0.3333333333333333,
+              "keyword_accuracy": 0.023809523809523808
+            },
+            {
+              "id": "Medical-fcf87025",
+              "question": "Which diagnostic methods are used to confirm basal cell carcinoma and what does ",
+              "gt": "Diagnosis of basal cell carcinoma involves a thorough process that includes taki",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.014285714285714285
+            },
+            {
+              "id": "Medical-6baf8bff",
+              "question": "What are the standard treatment options for basal cell carcinoma?",
+              "gt": "The standard treatment options for basal cell carcinoma (BCC) primarily include ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.4,
+              "keyword_accuracy": 0.025974025974025976
+            },
+            {
+              "id": "Medical-643b2b9d",
+              "question": "What constitutes recurrence in basal cell carcinoma and how is it managed?",
+              "gt": "Recurrence in basal cell carcinoma refers to the cancer returning to the origina",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-25f8ca5e",
+              "question": "What follow-up practices are recommended after treatment for basal cell carcinom",
+              "gt": "Follow-up after basal cell carcinoma includes a full skin exam with a doctor at ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-d961b796",
+              "question": "How does a patient’s medical and family history contribute to the diagnosis and ",
+              "gt": "A patient's medical and family history play a crucial role in both the diagnosis",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.014705882352941176
+            },
+            {
+              "id": "Medical-915df475",
+              "question": "What are the connections between risk factors, symptoms, and anatomical location",
+              "gt": "Basal cell carcinoma most often affects sun-exposed areas such as the face, head",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-e0e8fd6d",
+              "question": "What are the major risk factors and disease locations associated with primary CN",
+              "gt": "Primary CNS lymphoma is a rare and aggressive cancer that most often affects the",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "keyword_accuracy": 0.015625
+            },
+            {
+              "id": "Medical-fe3240a4",
+              "question": "Imagine you are a dermatology attending receiving a new patient referral for a s",
+              "gt": "Consult Note:\n\nA new patient was referred for evaluation of a suspicious lesion ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.125,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.01639344262295082
+            },
+            {
+              "id": "Medical-8f5233d5",
+              "question": "You are a general practitioner drafting a discharge summary for a patient treate",
+              "gt": "Discharge Summary:\n\nDiagnosis: Basal cell carcinoma (BCC) of the scalp\n\nSummary:",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.014705882352941176
+            },
+            {
+              "id": "Medical-c9c108e1",
+              "question": "Assume the role of a patient who has just been diagnosed with basal cell carcino",
+              "gt": "Dear Family,\n\nI wanted to let you know that I have been diagnosed with basal cel",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.006993006993006993
+            },
+            {
+              "id": "Medical-bf68d23e",
+              "question": "Rewrite the following scenario into a public health advisory: There has been an ",
+              "gt": "Public Health Advisory: Increased Basal Cell Carcinoma Cases in Our Community\n\nW",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-fd1b07be",
+              "question": "You are a dermatology intern preparing a referral letter to oncology for a patie",
+              "gt": "Referral Letter to Oncology:\n\nDear Colleague,\n\nI am referring a patient with a h",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.00909090909090909
+            },
+            {
+              "id": "Medical-ea29b9d8",
+              "question": "Imagine you are a neuro-oncology fellow. Write a detailed initial diagnostic wor",
+              "gt": "For a 62-year-old patient presenting with progressive leg weakness, memory probl",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.008620689655172414
+            },
+            {
+              "id": "Medical-c2658ea4",
+              "question": "As a hematologist, develop a comprehensive induction and consolidation treatment",
+              "gt": "For an immunocompetent adult with newly diagnosed primary CNS lymphoma confined ",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.07692307692307693,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.005319148936170213
+            },
+            {
+              "id": "Medical-e6da7d3c",
+              "question": "Rewrite the core recommendations for the diagnosis and management of primary CNS",
+              "gt": "Dear Neuro-Oncology Colleague,\n\nI am referring a 58-year-old patient with recent",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.09090909090909091,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.014814814814814815
+            },
+            {
+              "id": "Medical-96352a3c",
+              "question": "Transform the main points of the guideline into a discharge summary for a patien",
+              "gt": "Discharge Summary\n\nDiagnosis: Primary Central Nervous System Lymphoma (PCNSL)\n\nS",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.006493506493506494
+            },
+            {
+              "id": "Medical-3396b459",
+              "question": "Write a public health advisory summarizing risk factors, key symptoms, and the i",
+              "gt": "Public Health Advisory: Primary Central Nervous System Lymphoma (PCNSL)\n\nPrimary",
+              "ans": "ERROR: Embedder is not provided",
+              "answer_correctness": 0.0,
+              "coverage_score": 0.0,
+              "faithfulness": 0.0,
+              "keyword_accuracy": 0.007142857142857143
+            },
+            {
+              "id": "Medical-73586ddc",
+              "question": "What is the most common type of skin cancer?",
+              "gt": "Basal cell carcinoma (BCC) is the most common type of skin cancer.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.08333333333333333,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.08333333333333333
+            },
+            {
+              "id": "Medical-a8bad1cf",
+              "question": "From which cell type does basal cell carcinoma arise?",
+              "gt": "Basal cell carcinoma arises from basal cells in the lower part of the epidermis.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-422500d5",
+              "question": "Which anatomical locations are most commonly affected by basal cell carcinoma?",
+              "gt": "BCC most commonly develops in sun-exposed areas such as the face, head, and neck",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-6d2a190d",
+              "question": "What is the primary risk factor for basal cell carcinoma?",
+              "gt": "UV radiation exposure is a primary risk factor for BCC.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.1,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.1111111111111111
+            },
+            {
+              "id": "Medical-5ad931db",
+              "question": "How does fair skin affect the risk of developing BCC?",
+              "gt": "Fair skin increases the risk of BCC.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-6b0f8bc4",
+              "question": "Does older age influence the risk of basal cell carcinoma?",
+              "gt": "Older age is associated with higher risk of BCC.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.1111111111111111,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.1111111111111111
+            },
+            {
+              "id": "Medical-75c9949b",
+              "question": "How does family history impact the risk of basal cell carcinoma?",
+              "gt": "Family history of skin cancer increases risk of BCC.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-ec091b24",
+              "question": "Is immune suppression a risk factor for BCC?",
+              "gt": "Immune suppression is a risk factor for BCC.",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.125,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.14285714285714285
+            },
+            {
+              "id": "Medical-8d39da2e",
+              "question": "What are common symptoms of basal cell carcinoma?",
+              "gt": "BCC presents as flat, pale or yellow areas, red patches, shiny bumps, open sores",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            },
+            {
+              "id": "Medical-88c0b2ba",
+              "question": "Which diagnostic methods are used for BCC?",
+              "gt": "Diagnosis of BCC involves medical and family history, physical exam, skin exam, ",
+              "ans": "ERROR: Embedder is not provided",
+              "rouge_score": 0.0,
+              "answer_correctness": 0.0,
+              "keyword_accuracy": 0.0
+            }
+          ]
+        }
+      },
+      "predictions_paths": [
+        "lightrag_novel",
+        "lightrag_medical"
+      ]
+    }
+  }
+}
