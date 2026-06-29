@@ -78,6 +78,9 @@ repository = "https://github.com/apache/hugegraph-ai"
 documentation = "https://hugegraph.apache.org/docs/quickstart/hugegraph-ai/"
 bug_tracker = "https://github.com/apache/hugegraph-ai/issues"
 
+[project.scripts]
+hgmem = "hugegraph_llm.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

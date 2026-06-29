@@ -67,6 +67,7 @@ except ImportError:
 from hugegraph_llm.config.memory_config import memory_settings
 from hugegraph_llm.poc.memory_distillation import DistillationPipeline
 from hugegraph_llm.utils.log import log
+from hugegraph_llm.utils.audit_log import get_audit_logger
 from hugegraph_llm.engines.memory import (
     MemoryScope,
     PrivacyLevel,
@@ -74,6 +75,7 @@ from hugegraph_llm.engines.memory import (
     ImportanceEvaluator,
     EbbinghausDecay,
     EntityExtractor,
+    QueryRewriteEngine,
 )
 
 HUGEGRAPH_URL = memory_settings.hugegraph_url
@@ -876,6 +878,9 @@ class MemoryPipelineBackend:
         # Ensure metadata SQLite schema exists when used as a library.
         init_metadata_db()
 
+        # P0: Audit logging (PowerMem-style telemetry/audit)
+        self._audit = get_audit_logger()
+
     def _load_provenance(self):
         """Load provenance tracking data from disk."""
         try:
@@ -938,6 +943,13 @@ class MemoryPipelineBackend:
         except Exception as e:
             print(f"[LLM Extract error] {e}", file=sys.stderr, flush=True)
             return {"entities": [], "relationships": []}
+
+    def extract_entities_relationships(self, content: str) -> Dict[str, List[Dict[str, str]]]:
+        """
+        Public wrapper for the LLM entity/relation extraction step.
+        Useful for callers that want to parallelize extraction before storing.
+        """
+        return self._llm_extract(content)
 
     def _rule_classify_intent(self, text: str) -> Optional[str]:
         """Fast rule-based classification. Returns ADD/QUERY or None if uncertain."""
@@ -1240,13 +1252,14 @@ class MemoryPipelineBackend:
                 ),
             )
             self.faiss.add_memory(memory_id, content, now)
-            try:
-                self.faiss.save()
-            except Exception:
-                pass
+            if not skip_index_save:
+                try:
+                    self.faiss.save()
+                except Exception:
+                    pass
 
             # P0: BM25 fulltext indexing
-            if self._bm25 is not None:
+            if self._bm25 is not None and not skip_index_save:
                 try:
                     self._bm25.add_documents([content], [memory_id])
                     bm25_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1272,7 +1285,7 @@ class MemoryPipelineBackend:
                           "stored_edges": stored_edges,
                       }})
 
-        return {
+        result = {
             "memory_id": memory_id if action != "SKIP" else None,
             "action": action,
             "reason": conflict_reason or conflict_detail or
@@ -1283,6 +1296,22 @@ class MemoryPipelineBackend:
             "total_elapsed_ms": total_elapsed,
         }
 
+        # Audit log
+        try:
+            self._audit.log(
+                operation="add_memory",
+                user_id=user_id,
+                memory_id=result["memory_id"],
+                content=content[:2000] if content else None,
+                latency_ms=result["total_elapsed_ms"],
+                success=True,
+                metadata={"action": action, "entity_count": len(entities), "edge_count": len(stored_edges)},
+            )
+        except Exception:
+            pass
+
+        return result
+
     def add_memory_bypass_classify(
         self,
         content: str,
@@ -1292,11 +1321,18 @@ class MemoryPipelineBackend:
         scope: MemoryScope = MemoryScope.PRIVATE,
         privacy: PrivacyLevel = PrivacyLevel.STANDARD,
         metadata: Optional[Dict[str, Any]] = None,
+        entities: Optional[List[Dict[str, str]]] = None,
+        relationships: Optional[List[Dict[str, str]]] = None,
+        skip_index_save: bool = False,
     ) -> dict:
         """
         Same as add_memory but bypasses intent classification.
         Useful for benchmark ingestion where every input is known to be a fact
         to remember rather than a question to answer.
+
+        If ``entities`` and ``relationships`` are provided, the LLM extraction step
+        is skipped entirely. This is useful for benchmarking where extraction
+        can be parallelized outside the critical path.
         """
         start_time = time.time()
         db = get_metadata_db()
@@ -1308,9 +1344,12 @@ class MemoryPipelineBackend:
         importance = self._importance_evaluator.score(content)
         initial_score = max(importance, 0.3)
 
-        # Step 1: LLM Entity Extraction
+        # Step 1: LLM Entity Extraction (skip when pre-extracted entities/relations are provided)
         step_start = time.time()
-        extraction = self._llm_extract(content)
+        if entities is not None and relationships is not None:
+            extraction = {"entities": entities, "relationships": relationships}
+        else:
+            extraction = self._llm_extract(content)
         entities = extraction.get("entities", [])
         relationships = extraction.get("relationships", [])
         trace.append({"step": 1, "name": "LLM实体抽取",
@@ -1381,7 +1420,7 @@ class MemoryPipelineBackend:
 
         db.commit()
         db.close()
-        return {
+        result = {
             "memory_id": memory_id if action != "SKIP" else None,
             "action": action,
             "reason": conflict_reason or "新记忆，无冲突",
@@ -1389,6 +1428,22 @@ class MemoryPipelineBackend:
             "relationships": stored_edges,
             "total_elapsed_ms": round((time.time() - start_time) * 1000),
         }
+
+        # Audit log
+        try:
+            self._audit.log(
+                operation="add_memory_bypass_classify",
+                user_id=user_id,
+                memory_id=result["memory_id"],
+                content=content[:2000] if content else None,
+                latency_ms=result["total_elapsed_ms"],
+                success=True,
+                metadata={"action": action, "entity_count": len(entities), "edge_count": len(stored_edges)},
+            )
+        except Exception:
+            pass
+
+        return result
 
     def search_memory(
         self,
@@ -1399,6 +1454,7 @@ class MemoryPipelineBackend:
         agent_id: Optional[str] = None,
         run_id: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
+        update_access_count: bool = True,
     ) -> dict:
         """
         Search memories through the 4-step pipeline.
@@ -1443,6 +1499,17 @@ class MemoryPipelineBackend:
 
         if classify_result["action"] != "QUERY":
             db.close()
+            try:
+                self._audit.log(
+                    operation="search_memory",
+                    user_id=user_id,
+                    query=query[:1000] if query else None,
+                    latency_ms=round((time.time() - start_time) * 1000),
+                    success=True,
+                    metadata={"error": "NOT_A_QUERY", "method": classify_result.get("method")},
+                )
+            except Exception:
+                pass
             return {"query": query, "error": "NOT_A_QUERY",
                     "hint": "\u8bf7\u8f93\u5165\u7591\u95ee\u53e5\u6765\u67e5\u8be2\u8bb0\u5fc6",
                     "trace": trace}
@@ -1673,16 +1740,17 @@ class MemoryPipelineBackend:
             except Exception:
                 pass  # LLM rerank failure is non-critical
 
-        # Sort final results and reinforce accessed memories
+        # Sort final results and reinforce accessed memories (unless disabled for benchmarks)
         results.sort(key=lambda x: x["score"], reverse=True)
         results = results[:top_k]
-        for r in results:
-            mid = r["memory"]["id"]
-            if mid:
-                db.execute(
-                    "UPDATE memories SET access_count=access_count+1, last_accessed_at=? WHERE id=?",
-                    (now, mid),
-                )
+        if update_access_count:
+            for r in results:
+                mid = r["memory"]["id"]
+                if mid:
+                    db.execute(
+                        "UPDATE memories SET access_count=access_count+1, last_accessed_at=? WHERE id=?",
+                        (now, mid),
+                    )
 
         # Step 3: Graph Context Retrieval (from HugeGraph)
         step_start = time.time()
@@ -1700,10 +1768,22 @@ class MemoryPipelineBackend:
                           "elapsed_ms": 0})
             db.commit()
             db.close()
+            total_ms = round((time.time() - start_time) * 1000)
+            try:
+                self._audit.log(
+                    operation="search_memory",
+                    user_id=user_id,
+                    query=query[:1000] if query else None,
+                    latency_ms=total_ms,
+                    success=True,
+                    metadata={"mode": "fast_eval", "result_count": len(results)},
+                )
+            except Exception:
+                pass
             return {
                 "query": query, "action": "QUERY", "results": results,
                 "answer": answer, "graph_context": graph_ctx,
-                "trace": trace, "total_elapsed_ms": round((time.time() - start_time) * 1000),
+                "trace": trace, "total_elapsed_ms": total_ms,
             }
 
         # Step 4: LLM Answer Generation
@@ -1737,10 +1817,22 @@ class MemoryPipelineBackend:
                           "elapsed_ms": round((time.time()-step_start)*1000)})
             db.commit()
             db.close()
+            total_ms = round((time.time() - start_time) * 1000)
+            try:
+                self._audit.log(
+                    operation="search_memory",
+                    user_id=user_id,
+                    query=query[:1000] if query else None,
+                    latency_ms=total_ms,
+                    success=True,
+                    metadata={"mode": "not_found", "query_entities": list(query_names)},
+                )
+            except Exception:
+                pass
             return {
                 "query": query, "action": "QUERY", "results": results,
                 "answer": answer, "graph_context": graph_ctx,
-                "trace": trace, "total_elapsed_ms": round((time.time() - start_time) * 1000),
+                "trace": trace, "total_elapsed_ms": total_ms,
             }
 
         # Graph-based direct reasoning for common query patterns
@@ -1768,11 +1860,23 @@ class MemoryPipelineBackend:
                               "elapsed_ms": round((time.time()-step_start)*1000)})
                 db.commit()
                 db.close()
+                total_ms = round((time.time() - start_time) * 1000)
+                try:
+                    self._audit.log(
+                        operation="search_memory",
+                        user_id=user_id,
+                        query=query[:1000] if query else None,
+                        latency_ms=total_ms,
+                        success=True,
+                        metadata={"mode": "graph_direct", "answer_length": len(answer)},
+                    )
+                except Exception:
+                    pass
                 return {
                     "query": query, "action": "QUERY", "results": results,
                     "answer": answer, "graph_context": graph_ctx,
                     "provenance": graph_prov,
-                    "trace": trace, "total_elapsed_ms": round((time.time() - start_time) * 1000),
+                    "trace": trace, "total_elapsed_ms": total_ms,
                 }
 
         # Fallback: LLM answer generation
@@ -1804,6 +1908,18 @@ class MemoryPipelineBackend:
 
         db.commit()
         db.close()
+        total_ms = round((time.time() - start_time) * 1000)
+        try:
+            self._audit.log(
+                operation="search_memory",
+                user_id=user_id,
+                query=query[:1000] if query else None,
+                latency_ms=total_ms,
+                success=True,
+                metadata={"mode": "llm_answer", "answer_length": len(answer), "result_count": len(results)},
+            )
+        except Exception:
+            pass
 
         return {
             "query": query,
@@ -1813,7 +1929,7 @@ class MemoryPipelineBackend:
             "graph_context": graph_ctx,
             "provenance": provenance_info,
             "trace": trace,
-            "total_elapsed_ms": round((time.time() - start_time) * 1000),
+            "total_elapsed_ms": total_ms,
         }
 
     # ---- Helper Methods (aligned with PowerMem MemoryStore) ----
@@ -2480,6 +2596,19 @@ class MemoryPipelineBackend:
             self.faiss.save()
         except Exception:
             pass
+
+        try:
+            self._audit.log(
+                operation="update_memory",
+                user_id=user_id,
+                memory_id=memory_id,
+                content=content[:2000] if content else None,
+                latency_ms=0,
+                success=True,
+            )
+        except Exception:
+            pass
+
         return {"status": "ok", "memory_id": memory_id, "action": "updated"}
 
     def delete_memory(self, memory_id: str, user_id: str = "demo_user") -> Dict[str, Any]:
@@ -2507,7 +2636,32 @@ class MemoryPipelineBackend:
                 self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
             except Exception as e:
                 log.warning("BM25 delete error: %s", e)
+
+        try:
+            self._audit.log(
+                operation="delete_memory",
+                user_id=user_id,
+                memory_id=memory_id,
+                latency_ms=0,
+                success=True,
+            )
+        except Exception:
+            pass
+
         return {"status": "ok", "memory_id": memory_id, "action": "deleted"}
+
+    def save_index(self) -> None:
+        """Persist FAISS and BM25 indices to disk."""
+        try:
+            self.faiss.save()
+        except Exception:
+            pass
+        if self._bm25 is not None:
+            try:
+                bm25_dir = os.path.dirname(os.path.abspath(__file__))
+                self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
+            except Exception as e:
+                log.warning("BM25 save error: %s", e)
 
     def list_memories(self, user_id: str = "demo_user") -> list:
         """Alias of get_memories for SDK consistency."""
@@ -2521,6 +2675,18 @@ class MemoryPipelineBackend:
         """Alias of update_persona for SDK consistency."""
         self.update_persona(user_id=user_id, summary=summary)
         return self.get_persona(user_id=user_id)
+
+    def rewrite_query(
+        self,
+        query: str,
+        user_id: str = "demo_user",
+        aliases: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Rewrite a query for better retrieval using profile context and aliases."""
+        profile = self.get_user_profile(user_id)
+        profile_text = profile.get("summary", "") if isinstance(profile, dict) else ""
+        engine = QueryRewriteEngine(aliases=aliases, user_profile=profile_text)
+        return engine.expand_query(query)
 
     def add_skill(self, content: str, user_id: str = "demo_user") -> Dict[str, Any]:
         """Store a procedural/skill memory."""

@@ -1,0 +1,37 @@
+{
+  "metrics": {
+    "sessions": 1,
+    "total_questions": 2,
+    "correct": 0,
+    "accuracy": 0.0,
+    "hit_at_5": 0.0,
+    "mrr": 0.0,
+    "avg_latency_ms": 7180.77,
+    "p95_latency_ms": 7482.84,
+    "token_estimate": 429
+  },
+  "details": [
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline go to the LGBTQ support group?",
+      "answers": [
+        "7 May 2023"
+      ],
+      "prediction": "因此，由于记忆中没有关于Caroline去LGBTQ支持",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 7482.84
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie paint a sunrise?",
+      "answers": [
+        "2022"
+      ],
+      "prediction": "所以，答案应该是：记忆",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 6878.69
+    }
+  ]
+}

@@ -40,9 +40,16 @@ from hugegraph_llm.engines.memory.factory import (
     RerankerFactory,
     VectorStoreFactory,
     embedder_factory,
+    get_default_reranker,
+    get_default_vector_store,
     graph_store_factory,
     llm_factory,
     reranker_factory,
+    register_embedder,
+    register_graph_store,
+    register_llm,
+    register_reranker,
+    register_vector_store,
     vector_store_factory,
 )
 from hugegraph_llm.engines.memory.intelligence import (
@@ -51,6 +58,7 @@ from hugegraph_llm.engines.memory.intelligence import (
     ImportanceEvaluator,
     MemoryOptimizer,
 )
+from hugegraph_llm.engines.memory.query_rewrite import QueryRewriteEngine, rewrite_query
 
 __all__ = [
     "MemoryBase",
@@ -76,10 +84,19 @@ __all__ = [
     "vector_store_factory",
     "reranker_factory",
     "graph_store_factory",
+    "register_llm",
+    "register_embedder",
+    "register_vector_store",
+    "register_reranker",
+    "register_graph_store",
+    "get_default_vector_store",
+    "get_default_reranker",
     "ImportanceEvaluator",
     "EbbinghausDecay",
     "MemoryOptimizer",
     "EntityExtractor",
     "MemoryClient",
     "AsyncMemoryClient",
+    "QueryRewriteEngine",
+    "rewrite_query",
 ]

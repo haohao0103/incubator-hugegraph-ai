@@ -22,12 +22,16 @@ LOCOMO (Long Context Multi-session Open-domain Conversation) evaluates how well
 an agent remembers facts across many sessions. This runner feeds LOCOMO
 dialogue sessions into the HugeGraph memory pipeline and evaluates QA accuracy.
 
+The runner supports parallel entity extraction (during ingestion) and
+parallel QA evaluation (during scoring) to complete the ~1,990 QA benchmark
+in a reasonable time.
+
 Usage:
-    python locomo_benchmark.py --data-dir ./locomo_data --max-sessions 50
-    python locomo_benchmark.py --data-dir ./locomo_data --sample 20
+    python locomo_benchmark.py --data-dir ./locomo_data --max-sessions 10
+    python locomo_benchmark.py --data-dir ./locomo_data --workers 8
 
 Output:
-    locomo_result.json with R@1, R@5, MRR, latency, token usage estimates.
+    locomo_result.json with accuracy, Hit@5, MRR, latency, token usage estimates.
 """
 
 import argparse
@@ -35,6 +39,8 @@ import json
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -78,7 +84,7 @@ def load_locomo_sessions(data_file: str, max_sessions: int = None):
         log.warning("%s not found; using dummy data for smoke test", data_file)
         return _dummy_sessions()
 
-    with open(data_path, "r", encoding="utf-8") as f:
+    with open(data_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     sessions = []
@@ -177,6 +183,98 @@ def evaluate_answer(prediction: str, answers: List[str]) -> bool:
     return False
 
 
+def _extract_batch(args: tuple) -> Dict[str, Any]:
+    """Worker used by ThreadPoolExecutor to extract entities from one batch."""
+    text, backend = args
+    try:
+        return backend.extract_entities_relationships(text)
+    except Exception as e:
+        log.warning("Parallel extraction failed for batch: %s", e)
+        return {"entities": [], "relationships": []}
+
+
+def _extract_batches_in_parallel(
+    batches: List[str],
+    backend: MemoryPipelineBackend,
+    workers: int = 8,
+) -> List[Dict[str, Any]]:
+    """Extract entities/relationships for all memory batches in parallel."""
+    results = [None] * len(batches)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_idx = {
+            executor.submit(_extract_batch, (text, backend)): idx
+            for idx, text in enumerate(batches)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            results[idx] = future.result()
+    return results
+
+
+def _eval_qa_for_session(
+    graph_name: str,
+    user_id: str,
+    qa_items: List[Dict[str, Any]],
+    fast_eval: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Process-level QA worker. Each worker owns its own MemoryPipelineBackend to
+    avoid contention on FAISS/SQLite/HugeGraph connections.
+    """
+    hg_client = HugeGraphMemoryClient(graph=graph_name)
+    store = MemoryPipelineBackend(hg_client=hg_client)
+    results = []
+    for qa in qa_items:
+        question = qa["question"]
+        answers = qa.get("answers", [])
+        if not question or not answers:
+            continue
+
+        t0 = time.perf_counter()
+        try:
+            resp = store.search_memory(
+                question,
+                user_id=user_id,
+                top_k=5,
+                fast_eval=fast_eval,
+                update_access_count=False,
+            )
+        except Exception as e:
+            log.warning("search_memory failed for %s: %s", user_id, e)
+            continue
+        latency = time.perf_counter() - t0
+
+        prediction = resp.get("answer", "")
+
+        rank = None
+        for i, r in enumerate(resp.get("results", [])):
+            content = r.get("memory", {}).get("content", "")
+            if any(a.lower() in content.lower() for a in answers):
+                rank = i + 1
+                break
+
+        if fast_eval:
+            is_correct = rank == 1
+        else:
+            is_correct = evaluate_answer(prediction, answers)
+
+        results.append({
+            "question": question,
+            "answers": answers,
+            "prediction": prediction,
+            "correct": is_correct,
+            "rank": rank,
+            "latency_ms": round(latency * 1000, 2),
+        })
+    return results
+
+
+def _eval_session_worker(args: tuple) -> List[Dict[str, Any]]:
+    """Top-level wrapper for multiprocessing.Pool."""
+    graph_name, user_id, qa_items, fast_eval = args
+    return _eval_qa_for_session(graph_name, user_id, qa_items, fast_eval)
+
+
 def run_locomo(
     data_dir: str,
     max_sessions: int = None,
@@ -185,12 +283,16 @@ def run_locomo(
     graph_name: str = "hugegraph",
     backend: MemoryPipelineBackend = None,
     fast_eval: bool = False,
+    workers: int = 1,
+    extraction_workers: int = 8,
 ) -> Dict[str, Any]:
     """Run the full benchmark pipeline.
 
     Args:
         fast_eval: If True, use retrieval-only search (no LLM classify/rerank/answer)
                    for fast metrics. Accuracy is then approximated by rank==1.
+        workers: Number of parallel processes for QA evaluation.
+        extraction_workers: Number of threads for parallel entity extraction during ingestion.
     """
     data_file = download_locomo(data_dir)
     sessions = load_locomo_sessions(data_file, max_sessions=max_sessions)
@@ -202,83 +304,99 @@ def run_locomo(
     else:
         store = backend
 
+    # ------------------- ingestion -------------------
+    # Flatten all batches across all sessions and extract entities in parallel.
+    all_batches = []  # list of (user_id, text)
+    for session in sessions:
+        for text in session_to_memory_texts(session, batch_size=batch_size):
+            all_batches.append((session["user_id"], text))
+    log.info("Ingesting %d memory batches across %d sessions", len(all_batches), len(sessions))
+
+    if extraction_workers > 1 and len(all_batches) > 1:
+        extraction_results = _extract_batches_in_parallel(
+            [text for _, text in all_batches], store, workers=extraction_workers
+        )
+    else:
+        extraction_results = [
+            store.extract_entities_relationships(text) for _, text in all_batches
+        ]
+
+    # Store sequentially with pre-extracted entities (avoids per-call LLM overhead).
+    for (user_id, text), extraction in zip(all_batches, extraction_results):
+        try:
+            store.add_memory_bypass_classify(
+                text,
+                user_id=user_id,
+                entities=extraction.get("entities", []),
+                relationships=extraction.get("relationships", []),
+                skip_index_save=True,
+            )
+        except Exception as e:
+            log.warning("add_memory failed for %s: %s", user_id, e)
+
+    store.save_index()
+
+    # ------------------- QA evaluation -------------------
+    # Build QA evaluation units. Respect sample_qa per session.
+    session_qa_units = []
+    for session in sessions:
+        qa_pairs = session["qa"]
+        if sample_qa and len(qa_pairs) > sample_qa:
+            qa_pairs = qa_pairs[:sample_qa]
+        if qa_pairs:
+            session_qa_units.append((session["user_id"], qa_pairs, session["id"]))
+
     total_q = 0
     correct = 0
     rr_sum = 0.0
     hit_at_5 = 0
     latencies = []
     token_estimate = 0
-
     results_per_session = []
 
-    for session in sessions:
-        user_id = session["user_id"]
-        # Feed batched turns as memories (bypass intent classification: every
-        # batch is a fact to remember, not a question).
-        for text in session_to_memory_texts(session, batch_size=batch_size):
-            try:
-                store.add_memory_bypass_classify(text, user_id=user_id)
-            except Exception as e:
-                log.warning("add_memory failed for %s: %s", user_id, e)
+    if workers > 1 and len(session_qa_units) > 1:
+        worker_args = [
+            (graph_name, user_id, qa_items, fast_eval)
+            for user_id, qa_items, _ in session_qa_units
+        ]
+        with Pool(processes=min(workers, len(worker_args))) as pool:
+            session_results = pool.map(_eval_session_worker, worker_args)
+    else:
+        session_results = [
+            _eval_qa_for_session(graph_name, user_id, qa_items, fast_eval)
+            for user_id, qa_items, _ in session_qa_units
+        ]
 
-        qa_pairs = session["qa"]
-        if sample_qa and len(qa_pairs) > sample_qa:
-            qa_pairs = qa_pairs[:sample_qa]
+    for (user_id, qa_items, session_id), qa_results in zip(session_qa_units, session_results):
+        for res in qa_results:
+            total_q += 1
+            prediction = res["prediction"]
+            answers = res["answers"]
+            rank = res["rank"]
+            is_correct = res["correct"]
 
-        session_correct = 0
-        for qa in qa_pairs:
-            question = qa["question"]
-            answers = qa.get("answers", [])
-            if not question or not answers:
-                continue
-
-            t0 = time.perf_counter()
-            try:
-                resp = store.search_memory(question, user_id=user_id, top_k=5, fast_eval=fast_eval)
-            except Exception as e:
-                log.warning("search_memory failed for %s: %s", user_id, e)
-                continue
-            latency = time.perf_counter() - t0
-            latencies.append(latency)
-
-            prediction = resp.get("answer", "")
-            # Token estimate: input prompt + output (very rough); fast-eval uses no LLM calls
             if fast_eval:
-                token_estimate += len(question) // 4 + len(prediction) // 4
+                token_estimate += len(res["question"]) // 4 + len(prediction) // 4
             else:
-                token_estimate += len(question) // 4 + len(prediction) // 4 + 200
+                token_estimate += len(res["question"]) // 4 + len(prediction) // 4 + 200
 
-            rank = None
-            for i, r in enumerate(resp.get("results", [])):
-                content = r.get("memory", {}).get("content", "")
-                if any(a.lower() in content.lower() for a in answers):
-                    rank = i + 1
-                    break
-
-            # In fast-eval mode, accuracy is approximated by whether the gold answer
-            # appears in the top-1 retrieved memory (retrieval exact match).
-            if fast_eval:
-                is_correct = rank == 1
-            else:
-                is_correct = evaluate_answer(prediction, answers)
             if is_correct:
                 correct += 1
-                session_correct += 1
                 hit_at_5 += 1
                 rr_sum += 1.0
             elif rank is not None and rank <= 5:
                 hit_at_5 += 1
                 rr_sum += 1.0 / rank
 
-            total_q += 1
+            latencies.append(res["latency_ms"] / 1000.0)
             results_per_session.append({
-                "session_id": session["id"],
-                "question": question,
+                "session_id": session_id,
+                "question": res["question"],
                 "answers": answers,
                 "prediction": prediction,
                 "correct": is_correct,
                 "rank": rank,
-                "latency_ms": round(latency * 1000, 2),
+                "latency_ms": res["latency_ms"],
             })
 
     metrics = {
@@ -310,6 +428,10 @@ def main():
                         help="HugeGraph graph name to use")
     parser.add_argument("--fast-eval", action="store_true",
                         help="Retrieval-only fast evaluation (no LLM classify/rerank/answer)")
+    parser.add_argument("--workers", type=int, default=8,
+                        help="Parallel processes for QA evaluation")
+    parser.add_argument("--extraction-workers", type=int, default=8,
+                        help="Parallel threads for entity extraction during ingestion")
     parser.add_argument("--output", default="locomo_result.json", help="Result JSON path")
     args = parser.parse_args()
 
@@ -324,6 +446,8 @@ def main():
         batch_size=args.batch_size,
         graph_name=args.graph_name,
         fast_eval=args.fast_eval,
+        workers=args.workers,
+        extraction_workers=args.extraction_workers,
     )
 
     with open(output_path, "w", encoding="utf-8") as f:
