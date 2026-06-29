@@ -8,28 +8,152 @@
     "facts_loaded": 2000
   },
   "metrics": {
-    "PointQuery_RRF": {},
-    "RangeQuery": {},
-    "ConflictDetection": {},
-    "CommunityDetection": {},
-    "EdgeInvalidation": {
-      "SupersedesEdges": 58,
-      "InvalidatedFacts": 0,
-      "FactsWithValidUntil": 0,
-      "InvalidationRate": 0.0,
-      "TotalFacts": 2019
+    "PointQuery_RRF": {
+      "Recall@5": 0.75,
+      "MRR": 0.5458,
+      "Hit@1": 0.4,
+      "NDCG@5": 0.5977,
+      "AvgLatency_ms": 130.63,
+      "P95Latency_ms": 285.99,
+      "fusion_channels": 3
     },
-    "AgentScenario": {}
+    "RangeQuery": {
+      "TemporalAccuracy": 1.0,
+      "AvgJaccard": 0.3823,
+      "AvgLatency_ms": 99.11
+    },
+    "ConflictDetection": {
+      "ConflictAccuracy": 1.0,
+      "AvgLatency_ms": 84.9
+    },
+    "CommunityDetection": {
+      "CommunityCoverage": 1.0,
+      "TotalFacts": 4022,
+      "FactsWithCommunity": 4022,
+      "NumCommunities": 1286,
+      "LargestCommunitySize": 199
+    },
+    "EdgeInvalidation": {
+      "SupersedesEdges": 160,
+      "InvalidatedFacts": 102,
+      "FactsWithValidUntil": 102,
+      "InvalidationRate": 0.0254,
+      "TotalFacts": 4022
+    },
+    "AgentScenario": {
+      "scenarios": [
+        {
+          "query": "What diplomatic activities did China engage in during March 2014?",
+          "target_month": "2014-03",
+          "vector_hits": 10,
+          "temporal_hits": 315,
+          "sample_facts": [
+            {
+              "subject": "Japan",
+              "predicate": "Consult",
+              "object": "South Korea",
+              "timestamp": "2014-03-18",
+              "confidence": 0.95
+            },
+            {
+              "subject": "Iran",
+              "predicate": "Consult",
+              "object": "Catherine Ashton",
+              "timestamp": "2014-03-11",
+              "confidence": 0.95
+            },
+            {
+              "subject": "China",
+              "predicate": "Consult",
+              "object": "Foreign Affairs (Russia)",
+              "timestamp": "2014-03-03",
+              "confidence": 0.95
+            }
+          ],
+          "latency_ms": 298.59,
+          "quality_score": 0.55,
+          "scenario_pass": true
+        },
+        {
+          "query": "Which countries consulted with each other in January 2014?",
+          "target_month": "2014-01",
+          "vector_hits": 10,
+          "temporal_hits": 2047,
+          "sample_facts": [
+            {
+              "subject": "Entity_17",
+              "predicate": "Relation_0",
+              "object": "Entity_34",
+              "timestamp": "2014-01-01",
+              "confidence": 0.95
+            },
+            {
+              "subject": "Entity_130",
+              "predicate": "Relation_1",
+              "object": "Entity_1572",
+              "timestamp": "2014-01-01",
+              "confidence": 0.95
+            },
+            {
+              "subject": "Iran",
+              "predicate": "Consult",
+              "object": "Mohammad Javad Zarif",
+              "timestamp": "2014-01-31",
+              "confidence": 0.95
+            }
+          ],
+          "latency_ms": 269.0,
+          "quality_score": 0.7,
+          "scenario_pass": true
+        },
+        {
+          "query": "What protests or expressions of intent happened in early 2014?",
+          "target_month": "2014-02",
+          "vector_hits": 10,
+          "temporal_hits": 245,
+          "sample_facts": [
+            {
+              "subject": "China",
+              "predicate": "Consult",
+              "object": "Straits Exchange Foundation",
+              "timestamp": "2014-02-27",
+              "confidence": 0.95
+            },
+            {
+              "subject": "Iran",
+              "predicate": "Host a visit",
+              "object": "Qatar",
+              "timestamp": "2014-02-25",
+              "confidence": 0.95
+            },
+            {
+              "subject": "Japan",
+              "predicate": "Host a visit",
+              "object": "Barack Obama",
+              "timestamp": "2014-02-14",
+              "confidence": 0.95
+            }
+          ],
+          "latency_ms": 116.54,
+          "quality_score": 0.4,
+          "scenario_pass": true
+        }
+      ],
+      "avg_quality": 0.55,
+      "pass_count": 3,
+      "total_scenarios": 3,
+      "overall_pass": true
+    }
   },
   "summary": {
     "total_phases": 12,
     "passed": 12,
     "failed": 0,
     "pass_rate": 1.0,
-    "duration_s": 26.8
+    "duration_s": 43.8
   },
   "timing": {
-    "total_duration_s": 26.8,
+    "total_duration_s": 43.8,
     "phases": [
       {
         "n": "P0: Environment Check",
@@ -39,57 +163,57 @@
       {
         "n": "P1: Schema Creation (REST)",
         "ok": true,
-        "ms": 85.0
+        "ms": 165.0
       },
       {
         "n": "P2: Load Benchmark",
         "ok": true,
-        "ms": 0.0
+        "ms": 1.0
       },
       {
         "n": "P7: Write to HugeGraph (REST)",
         "ok": true,
-        "ms": 13251.0
+        "ms": 15989.0
       },
       {
         "n": "P8: Read-back Verify",
         "ok": true,
-        "ms": 77.0
+        "ms": 157.0
       },
       {
         "n": "P10: Point Query Eval (RRF 3-ch)",
         "ok": true,
-        "ms": 1547.0
+        "ms": 2704.0
       },
       {
         "n": "P11: Range Query Eval (decay)",
         "ok": true,
-        "ms": 421.0
+        "ms": 993.0
       },
       {
         "n": "P12: Conflict Detection Eval",
         "ok": true,
-        "ms": 398.0
+        "ms": 851.0
       },
       {
         "n": "P14: Community Detection Eval",
         "ok": true,
-        "ms": 40.0
+        "ms": 91.0
       },
       {
         "n": "P16: Run Edge Invalidation (+Synthetic)",
         "ok": true,
-        "ms": 10593.0
+        "ms": 21992.0
       },
       {
         "n": "P15: Edge Invalidation Evaluation",
         "ok": true,
-        "ms": 75.0
+        "ms": 175.0
       },
       {
         "n": "P17: Agent Memory Scenario (multi-turn)",
         "ok": true,
-        "ms": 341.0
+        "ms": 688.0
       }
     ]
   },

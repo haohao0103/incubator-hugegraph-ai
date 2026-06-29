@@ -11,27 +11,11 @@ Architecture (四层语义金字塔):
   L2 Scenario      — Scenario-aggregated knowledge graph, entity-relation network
   L3 Persona       — Long-term persona/preferences/goals, highest abstraction
 
-Inspiration:
-  - TencentDB Agent Memory: https://github.com/TencentCloud/tencentdb-agent-memory
-    (L0→L3 semantic pyramid, BM25+Vector+RRF, Token save 61.38%, Accuracy +59%)
-  - Mem0: Entity extraction + vector+graph parallel, 5 graph backends
-  - MemGPT: Hierarchical memory (recall archive + working context)
-  - ATOM (EACL 2026): Few-shot dynamic TKG construction
-
-Core Innovations over existing HugeGraph memory:
-  1. Four-layer architecture with independent storage/retrieval/compression per layer
-  2. Cross-layer query routing (auto-select optimal layers per query)
-  3. Token efficiency via "foldable-expandable" abstraction (TencentDB key insight)
-  4. Agentic RAG fusion: memory as retrieval-augmentation source
-  5. Professional dataset evaluation with Recall@K/MRR/Token metrics
-
 GraphRAG Base (铁律遵守):
-  - VECTOR_BACKEND=faiss  (real embedding via MiMo API or deterministic fallback)
+  - VECTOR_BACKEND=faiss  (real embedding via MiMo API)
   - FULLTEXT_BACKEND=bm25   (real BM25 via rank_bm25 + jieba CJK tokenizer)
-  - No char n-gram hash simulating embedding
-  - No keyword dict simulating fulltext search
-
-Author: Auto-generated PoC | Date: 2026-06-12
+  - GRAPH_BACKEND=hugegraph (real HugeGraph 1.7.0 via PyHugeClient)
+  - No deterministic fallback, no memory/SQLite simulation
 """
 
 import json
@@ -41,6 +25,7 @@ import sys
 import time
 import logging
 import hashlib
+import requests
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -62,9 +47,8 @@ NOW = datetime.now()
 RRF_K = 60
 HALF_LIFE_DAYS = 7.0  # time-decay half-life for L0
 
-# MiMo API config for real embeddings
-MIMO_API_BASE = os.environ.get("MIMO_API_BASE", "https://api.xiaomimimo.com/v1")
-MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "")
+# Embedding config: local sentence-transformers model (no external API required)
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "all-MiniLM-L6-v2")
 
 
 # ═════════════════════════════════════════
@@ -164,71 +148,33 @@ class LayerStats:
 # ═════════════════════════════════════════
 
 class EmbeddingBackend:
-    """Real embedding via MiMo OpenAI-compatible API + faiss-cpu."""
+    """Real embedding via local sentence-transformers model + faiss-cpu."""
 
-    def __init__(self):
+    _model = None
+
+    def __init__(self, model_name: str = EMBED_MODEL):
         self._index = None
         self._id_map: Dict[int, str] = {}
         self._next_idx = 0
-        self._embed_dim = 0
-        self._use_fallback = False
-        self._api_hits = 0
-        self._fallback_hits = 0
+        self._embed_dim = 384
+        self.model_name = model_name
+        self._load_model()
+
+    def _load_model(self):
+        if EmbeddingBackend._model is None:
+            from sentence_transformers import SentenceTransformer
+            EmbeddingBackend._model = SentenceTransformer(self.model_name)
 
     def _ensure_index(self):
         import faiss
         if self._index is None:
-            d = self._embed_dim or 384
-            self._index = faiss.IndexFlatIP(d)
+            self._index = faiss.IndexFlatIP(self._embed_dim)
 
     def encode(self, texts: List[str]) -> List[List[float]]:
-        embs = self._call_api(texts)
-        if embs is None and not self._use_fallback:
-            log.warning("[Embed] API unavailable, fallback mode")
-            self._use_fallback = True
-            embs = self._fallback_encode(texts)
-        elif embs is None:
-            embs = self._fallback_encode(texts)
-        return embs
-
-    def _call_api(self, texts: List[str]) -> Optional[List[List[float]]]:
-        from hugegraph_llm.utils.hg_http import hg_post
-        url = f"{MIMO_API_BASE.rstrip('/')}/embeddings"
-        headers = {"Authorization": f"Bearer {MIMO_API_KEY}"}
-        result = hg_post(
-            url,
-            body={"input": texts, "model": "text-embedding-ada-002"},
-            headers=headers,
-            auth=None,
-            timeout=15,
-        )
-        if "error" in result:
-            log.debug("[Embed] API error: %s", result["error"])
-            return None
-        data = sorted(result.get("data", []), key=lambda x: x.get("index", 0))
-        embs = [item["embedding"] for item in data]
-        if embs:
-            self._embed_dim = len(embs[0])
-            self._api_hits += len(texts)
-        return embs
-
-    def _fallback_encode(self, texts: List[str]) -> List[List[float]]:
-        """Deterministic content-based vectors (only when API unreachable)."""
-        import numpy as np
-        dim = self._embed_dim or 384
-        results = []
-        for text in texts:
-            h = hash(text) & 0xFFFFFFFF
-            vec = np.random.RandomState(h).randn(dim).astype(np.float32)
-            norm = np.linalg.norm(vec)
-            if norm > 0:
-                vec /= norm
-            results.append(vec.tolist())
-        if not self._embed_dim:
-            self._embed_dim = dim
-        self._fallback_hits += len(texts)
-        log.info("[Embed] Fallback: %d vectors dim=%d", len(results), dim)
-        return results
+        if not texts:
+            return []
+        embs = EmbeddingBackend._model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+        return embs.tolist()
 
     def add(self, ids: List[str], embs: List[List[float]]):
         import faiss, numpy as np
@@ -260,7 +206,7 @@ class EmbeddingBackend:
     @property
     def stats(self) -> Dict:
         return {"total_vectors": self._next_idx, "dim": self._embed_dim,
-                "api_hits": self._api_hits, "fallback_hits": self._fallback_hits}
+                "model": self.model_name}
 
 
 # ═════════════════════════════════════════
@@ -566,6 +512,7 @@ class AtomLayer:
                 entry.access_count += 1
                 entry.last_accessed = NOW.isoformat()
                 results.append({
+                    "entry_id": fid,
                     "entry": entry.to_dict(),
                     "rrf_score": round(rrf_sc, 6),
                     "channels": channels.get(fid, {}),
@@ -638,26 +585,56 @@ class ScenarioLayer:
     - Builds a graph from L1 atom clusters
     - Supports multi-hop traversal for complex queries
     - Each node = entity, each edge = relation between entities
-    - Simulated graph storage (ready to swap with PyHugeClient/HugeGraph REST)
+    - Backed by real HugeGraph 1.7.0 (no memory fallback)
     """
 
-    def __init__(self):
+    def __init__(self, graph: str = "hugegraph"):
+        self.graph = graph
         self.nodes: Dict[str, Dict] = {}   # entity_name -> {type, layer, count}
         self.edges: List[Dict] = []         # {from, relation, to, source_ids}
         self.scenarios: Dict[str, Dict] = {}  # scenario_id -> {name, nodes, edges}
-        self._adj: Dict[str, List[Tuple[str, str]]] = {}  # adj[node] = [(relation, neighbor)]
+        self._adj: Dict[str, List[Tuple[str, str]]] = {}  # local cache for fast lookup
+        self._entity_cache: Dict[str, Any] = {}  # name -> VertexData
+
+        # Connect to real HugeGraph; fail fast if unavailable
+        try:
+            from pyhugegraph.client import PyHugeClient
+            self.hg = PyHugeClient(
+                url=os.environ.get("HUGEGRAPH_URL", "http://127.0.0.1:8080"),
+                user=os.environ.get("HUGEGRAPH_USER", "admin"),
+                pwd=os.environ.get("HUGEGRAPH_PASS", "admin"),
+                graph=graph,
+            )
+            self.hg.schema().propertyKey("name").asText().ifNotExist().create()
+            self.hg.schema().propertyKey("type").asText().ifNotExist().create()
+            self.hg.schema().propertyKey("count").asInt().ifNotExist().create()
+            self.hg.schema().propertyKey("scenario_id").asText().ifNotExist().create()
+            self.hg.schema().vertexLabel("l2_entity").properties("name", "type", "count").usePrimaryKeyId().primaryKeys("name").ifNotExist().create()
+            self.hg.schema().edgeLabel("related_to").sourceLabel("l2_entity").targetLabel("l2_entity").ifNotExist().create()
+        except Exception as e:
+            raise RuntimeError(
+                f"L2 ScenarioLayer requires a running HugeGraph server, but connection failed: {e}. "
+                "Please start HugeGraph and retry."
+            ) from e
 
     def build_from_clusters(self, clusters: List[Dict]):
-        """Build scenario graph from L1 clusters."""
+        """Build scenario graph from L1 clusters and persist to HugeGraph."""
+        g = self.hg.graph()
         for cluster in clusters:
             sid = f"scene_{hashlib.md5(cluster['scenario_tag'].encode()).hexdigest()[:8]}"
             entities = cluster.get("entities", [])
             atom_ids = cluster.get("atom_ids", [])
 
-            # Register nodes
+            # Register nodes locally and in HugeGraph
             for ent in entities:
                 if ent not in self.nodes:
                     self.nodes[ent] = {"type": "entity", "count": 0}
+                    try:
+                        self._entity_cache[ent] = g.addVertex(
+                            "l2_entity", {"name": ent, "type": "entity", "count": 1}
+                        )
+                    except Exception as e:
+                        log.debug("[L2] addVertex %s: %s", ent, e)
                 self.nodes[ent]["count"] += 1
 
             # Build edges (co-occurrence in same cluster = related)
@@ -668,6 +645,13 @@ class ScenarioLayer:
                     self.edges.append(edge)
                     self._adj.setdefault(e1, []).append(("related_to", e2))
                     self._adj.setdefault(e2, []).append(("related_to", e1))
+                    v1 = self._entity_cache.get(e1)
+                    v2 = self._entity_cache.get(e2)
+                    if v1 and v2:
+                        try:
+                            g.addEdge("related_to", v1.id, v2.id, {})
+                        except Exception as e:
+                            log.debug("[L2] addEdge %s->%s: %s", e1, e2, e)
 
             self.scenarios[sid] = {
                 "name": cluster["scenario_tag"],
@@ -680,20 +664,64 @@ class ScenarioLayer:
                  len(self.nodes), len(self.edges), len(self.scenarios))
 
     def traverse(self, start: str, depth: int = 2) -> List[Dict]:
-        """BFS multi-hop traversal from an entity."""
-        visited = set()
-        queue = [(start, 0)]
-        paths = []
-        while queue:
-            node, d = queue.pop(0)
-            if node in visited or d > depth:
-                continue
-            visited.add(node)
-            for rel, neighbor in self._adj.get(node, []):
-                paths.append({"from": node, "relation": rel, "to": neighbor, "depth": d})
-                if neighbor not in visited:
-                    queue.append((neighbor, d + 1))
-        return paths
+        """Multi-hop traversal from an entity via HugeGraph customized paths API.
+
+        Note: HugeGraph 1.7.0 default distribution does not ship gremlin-groovy,
+        so we use the native /traversers/customizedpaths endpoint.
+        """
+        try:
+            g = self.hg.graph()
+            matches = g.getVertexByCondition(
+                label="l2_entity", properties={"name": start}, limit=1
+            )
+            if not matches:
+                return []
+            source_id = matches[0].id
+
+            steps = [{"direction": "OUT", "labels": ["related_to"], "properties": {}}] * depth
+            cfg = self.hg.cfg
+            if cfg.gs_supported and cfg.graphspace:
+                url = (
+                    f"{cfg.url}/graphspaces/{cfg.graphspace}/graphs/"
+                    f"{cfg.graph_name}/traversers/customizedpaths"
+                )
+            else:
+                url = f"{cfg.url}/graphs/{cfg.graph_name}/traversers/customizedpaths"
+            payload = {
+                "sources": {"ids": [source_id]},
+                "steps": steps,
+                "with_vertex": True,
+                "limit": 100,
+            }
+            resp = requests.post(url, json=payload, auth=(cfg.username, cfg.password), timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+
+            paths = []
+            seen = set()
+            for path in data.get("paths", []):
+                objs = path.get("objects", [])
+                entity_names = []
+                for obj in objs:
+                    if isinstance(obj, str):
+                        name = obj.split(":", 1)[1] if ":" in obj else obj
+                    else:
+                        name = obj.get("properties", {}).get("name", "")
+                    if name:
+                        entity_names.append(name)
+                for i in range(len(entity_names) - 1):
+                    key = (entity_names[i], entity_names[i + 1])
+                    if key not in seen:
+                        seen.add(key)
+                        paths.append({
+                            "from": entity_names[i],
+                            "relation": "related_to",
+                            "to": entity_names[i + 1],
+                            "depth": 1,
+                        })
+            return paths
+        except Exception as e:
+            raise RuntimeError(f"[L2] HugeGraph traverse failed for '{start}': {e}") from e
 
     def find_relevant_scenarios(self, query: str, top_k: int = 5) -> List[Dict]:
         """Find scenarios relevant to query by entity overlap."""
@@ -789,6 +817,7 @@ class PersonaLayer:
             entry = self.entries.get(r["entry_id"])
             if entry:
                 output.append({
+                    "entry_id": r["entry_id"],
                     "entry": entry.to_dict(),
                     "score": r["score"],
                     "key": entry.metadata.get("trait_key", ""),
@@ -995,13 +1024,24 @@ class L0L3AgentMemory:
                 if entry:
                     break
 
+            preview = "?"
+            layer_name = "unknown"
+            if entry:
+                preview = (entry.content[:80] + "...")
+                layer_name = entry.layer.value
+            elif "L2_Scenario" in all_channels.get(eid, {}):
+                scene = self.l2.scenarios.get(eid)
+                if scene:
+                    preview = f"[Scenario] {scene['name']}"
+                    layer_name = "L2_Scenario"
+
             final_results.append({
                 "entry_id": eid,
                 "fused_score": round(score, 6),
                 "layers_contributing": list(all_channels.get(eid, {}).keys()),
                 "channel_details": all_channels.get(eid, {}),
-                "entry_preview": (entry.content[:80] + "...") if entry else "?",
-                "layer": entry.layer.value if entry else "unknown",
+                "entry_preview": preview,
+                "layer": layer_name,
             })
 
         elapsed = round((time.time() - t0) * 1000, 1)
@@ -1566,25 +1606,25 @@ def run_assertions(mem: L0L3AgentMemory, evaluator: Evaluator) -> Dict[str, Any]
     eff = metrics["efficiency"]
     aq = metrics["answer_quality"]
 
-    # Assert minimum quality thresholds (adjusted for fallback embedding mode)
+    # Assert minimum quality thresholds
     checks = []
 
-    # Recall@5 should be > 10% for functional system with fallback embeddings
-    if rq["avg_recall@5"] > 0.10:
+    # Recall@5 should be > 30% with real sentence-transformers embeddings
+    if rq["avg_recall@5"] > 0.30:
         ok("Eval_Recall5",
-           f"Recall@5={rq['avg_recall@5']} > 0.10 threshold")
+           f"Recall@5={rq['avg_recall@5']} > 0.30 threshold")
         checks.append(True)
     else:
         fail("Eval_Recall5",
-             f"Recall@5={rq['avg_recall@5']} < 0.10 threshold")
+             f"Recall@5={rq['avg_recall@5']} < 0.30 threshold")
         checks.append(False)
 
-    # MRR should be > 0.10 with fallback embeddings
-    if rq["avg_mrr"] > 0.10:
-        ok("Eval_MRR", f"MRR={rq['avg_mrr']} > 0.10 threshold")
+    # MRR should be > 0.25 with real embeddings
+    if rq["avg_mrr"] > 0.25:
+        ok("Eval_MRR", f"MRR={rq['avg_mrr']} > 0.25 threshold")
         checks.append(True)
     else:
-        fail("Eval_MRR", f"MRR={rq['avg_mrr']} < 0.10 threshold")
+        fail("Eval_MRR", f"MRR={rq['avg_mrr']} < 0.25 threshold")
         checks.append(False)
 
     # Support rate should be > 80%
@@ -1597,24 +1637,24 @@ def run_assertions(mem: L0L3AgentMemory, evaluator: Evaluator) -> Dict[str, Any]
              f"Support Rate={eff['support_rate']} < 0.80 threshold")
         checks.append(False)
 
-    # Latency should be reasonable (<1000ms avg, adjusted for fallback embedding mode with API timeout)
+    # Latency should be reasonable (<1000ms avg)
     if eff["avg_latency_ms"] < 1000:
         ok("Eval_Latency",
-           f"Avg Latency={eff['avg_latency_ms']}ms < 1000ms threshold (fallback mode)")
+           f"Avg Latency={eff['avg_latency_ms']}ms < 1000ms threshold")
         checks.append(True)
     else:
         fail("Eval_Latency",
              f"Avg Latency={eff['avg_latency_ms']}ms >= 1000ms threshold")
         checks.append(False)
 
-    # ROUGE-L proxy >= 0 (fallback mode may have 0 overlap due to deterministic embeddings)
-    if aq["avg_rouge_l_proxy"] >= 0:
+    # ROUGE-L proxy >= 0.3
+    if aq["avg_rouge_l_proxy"] >= 0.30:
         ok("Eval_ROUGE",
-           f"ROUGE-L proxy={aq['avg_rouge_l_proxy']} (fallback mode, >= 0 threshold)")
+           f"ROUGE-L proxy={aq['avg_rouge_l_proxy']} >= 0.30 threshold")
         checks.append(True)
     else:
         fail("Eval_ROUGE",
-             f"ROUGE-L proxy={aq['avg_rouge_l_proxy']} < 0 (invalid)")
+             f"ROUGE-L proxy={aq['avg_rouge_l_proxy']} < 0.30 threshold")
         checks.append(False)
 
     # Layer effectiveness: multiple layers should have hits
@@ -1667,9 +1707,9 @@ def main():
         log.info("  %-18s : %d entries, %.0f tokens est",
                  layer_name, ls["total_entries"], ls.get("total_tokens_est", 0))
     log.info("  %-18s : %d total entries", "TOTAL", stats["total_entries"])
-    log.info("  %-18s : dim=%d api=%d/fallback=%d",
+    log.info("  %-18s : dim=%d model=%s",
              "Embedding", stats["embedding"]["dim"],
-             stats["embedding"]["api_hits"], stats["embedding"]["fallback_hits"])
+             stats["embedding"].get("model", "unknown"))
 
     # Phase 2: Run elevation
     log.info("\n[Phase 2] Running L0->L1->L2 elevation...")

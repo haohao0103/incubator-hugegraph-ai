@@ -31,49 +31,141 @@ Author: HugeGraph-AI PoC (2026-06-10)
 
 import json
 import os
+import re
 import time
 import hashlib
 import math
 import random
+import logging
+import requests
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Tuple, Any
 from enum import Enum
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("MAGMA")
+
 
 # ============================================================
-# 0. GraphRAG 底座集成
+# 0. GraphRAG 底座集成（本地真实模型，禁止模拟）
 # ============================================================
 
-def _create_vector_store(embed_dim: int = 32):
-    """通过 backend_factory 创建向量存储（支持 FAISS/Milvus/Qdrant/OceanBase）"""
-    from hugegraph_llm.indices.backend_factory import create_vector_store
-    return create_vector_store(embed_dim=embed_dim)
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "all-MiniLM-L6-v2")
+EMBED_DIM = 384
 
 
-def _create_fulltext_store():
-    """通过 backend_factory 创建全文检索（支持 BM25/OceanBase FTS）"""
-    from hugegraph_llm.indices.backend_factory import create_fulltext_store
-    return create_fulltext_store()
+class VectorBackend:
+    """FAISS + sentence-transformers 本地向量后端（无 API fallback）。"""
+
+    _model = None
+
+    def __init__(self, model_name: str = EMBED_MODEL):
+        self._index = None
+        self._id_map: Dict[int, str] = {}
+        self._next_idx = 0
+        self.model_name = model_name
+        self._load_model()
+
+    def _load_model(self):
+        if VectorBackend._model is None:
+            from sentence_transformers import SentenceTransformer
+            VectorBackend._model = SentenceTransformer(self.model_name)
+
+    def _ensure_index(self):
+        import faiss
+        if self._index is None:
+            self._index = faiss.IndexFlatIP(EMBED_DIM)
+
+    def encode(self, texts: List[str]) -> List[List[float]]:
+        if not texts:
+            return []
+        embs = VectorBackend._model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+        return embs.tolist()
+
+    def add(self, ids: List[str], embs: List[List[float]]):
+        import faiss
+        import numpy as np
+        self._ensure_index()
+        arr = np.array(embs, dtype=np.float32)
+        s = self._next_idx
+        self._index.add(arr)
+        for i, eid in enumerate(ids):
+            self._id_map[s + i] = eid
+        self._next_idx += len(ids)
+
+    def search(self, q_emb: List[float], top_k: int = 10) -> List[Tuple[str, float]]:
+        import faiss
+        import numpy as np
+        self._ensure_index()
+        if self._next_idx == 0:
+            return []
+        scores, idxs = self._index.search(
+            np.array([q_emb], dtype=np.float32), min(top_k, self._next_idx))
+        out = []
+        for sc, idx in zip(scores[0], idxs[0]):
+            if idx == -1:
+                continue
+            nid = self._id_map.get(int(idx), "")
+            if nid:
+                out.append((nid, float(sc)))
+        return out
+
+    @property
+    def count(self) -> int:
+        return self._next_idx
 
 
-def _try_hugegraph_client():
-    """尝试创建 HugeGraph 客户端（如果服务可用）"""
+class BM25Backend:
+    """本地 BM25 全文后端（jieba + rank_bm25）。"""
+
+    def __init__(self):
+        self._bm25 = None
+        self._docs: List[str] = []
+        self._ids: List[str] = []
+
+    def _tokenize(self, text: str) -> List[str]:
+        import jieba
+        return [t.strip().lower() for t in jieba.lcut(text)
+                if re.match(r"^[\w\u4e00-\u9fff]+$", t.strip())]
+
+    def add_documents(self, texts: List[str], ids: List[str], _metas: List[str] = None):
+        from rank_bm25 import BM25Okapi
+        self._docs.extend(texts)
+        self._ids.extend(ids)
+        tok = [self._tokenize(t) for t in self._docs]
+        self._bm25 = BM25Okapi(tok)
+
+    def search(self, query: str, top_k: int = 10, min_score: float = 0.0) -> List[Dict]:
+        if self._bm25 is None or not self._ids:
+            return []
+        scores = self._bm25.get_scores(self._tokenize(query))
+        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        return [{"id": self._ids[i], "score": float(scores[i])}
+                for i in ranked if scores[i] > min_score]
+
+
+def _create_hugegraph_client(graph: str = "hugegraph"):
+    """创建 HugeGraph 客户端；如果服务不可用则立即失败（禁止内存 fallback）。"""
+    from pyhugegraph.client import PyHugeClient
     try:
-        from hugegraph_llm.config import huge_settings
-        from hugegraph_llm.clients.hugegraph import PyHugeClient
         client = PyHugeClient(
-            url=huge_settings.graph_url,
-            graph=huge_settings.graph_name,
-            user=huge_settings.graph_user,
-            pwd=huge_settings.graph_pwd,
-            graphspace=huge_settings.graph_space,
+            url=os.environ.get("HUGEGRAPH_URL", "http://127.0.0.1:8080"),
+            graph=graph,
+            user=os.environ.get("HUGEGRAPH_USER", "admin"),
+            pwd=os.environ.get("HUGEGRAPH_PASS", "admin"),
         )
-        if client.schema().getVertexLabels():
-            return client
-    except Exception:
-        pass
-    return None
+        client.schema().getVertexLabels()
+        return client
+    except Exception as e:
+        raise RuntimeError(
+            f"MAGMA requires a running HugeGraph server, "
+            f"but connection failed: {e}. Please start HugeGraph and retry."
+        ) from e
 
 
 # ============================================================
@@ -148,37 +240,20 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
-def generate_embedding(text: str, dim: int = 32, seed: Optional[int] = None) -> List[float]:
-    """确定性嵌入生成（模拟 LLM Embedding，基于字符级 hash 保证语义相近内容相似度更高）"""
-    text_lower = text.lower().strip()
-    # 用字符级 n-gram hash 模拟语义嵌入
-    char_features = []
-    for i in range(len(text_lower)):
-        char_features.append(ord(text_lower[i]))
-        if i > 0:
-            char_features.append(ord(text_lower[i]) * 31 + ord(text_lower[i-1]))
-        if i > 1:
-            char_features.append(ord(text_lower[i]) * 31 * 31 + ord(text_lower[i-1]) * 31 + ord(text_lower[i-2]))
+_embedder = None
 
-    # 用关键词特征增强（共享关键词的内容向量更相似）
-    keywords = extract_keywords(text)
-    for kw in keywords:
-        for c in kw:
-            char_features.append(ord(c) * 127)
 
-    # 降维到目标维度
-    rng = random.Random(sum(char_features) % (2**32))
-    base = sum(char_features) & 0xFFFFFFFF
-    vec = []
-    for i in range(dim):
-        val = rng.gauss(0, 1)
-        # 混入文本特征保持确定性
-        feature_idx = (base + i * 7) % len(char_features) if char_features else 0
-        val += (char_features[feature_idx] / 128.0) * 0.5
-        vec.append(val)
+def _get_embedder() -> VectorBackend:
+    global _embedder
+    if _embedder is None:
+        _embedder = VectorBackend()
+    return _embedder
 
-    norm = math.sqrt(sum(v * v for v in vec))
-    return [v / norm for v in vec] if norm > 0 else vec
+
+def generate_embedding(text: str, dim: int = EMBED_DIM, seed: Optional[int] = None) -> List[float]:
+    """使用本地 sentence-transformers 模型生成真实嵌入（禁止确定性 hash）。"""
+    emb = _get_embedder().encode([text])
+    return emb[0] if emb else [0.0] * EMBED_DIM
 
 
 def extract_keywords(text: str) -> set:
@@ -224,30 +299,22 @@ class FourGraphMemoryStore:
             "entity_ref": [],
         }
 
-        # === GraphRAG 底座: 向量存储 ===
-        # 通过 VECTOR_BACKEND 环境变量切换: faiss|milvus|qdrant|oceanbase
-        self.vector_backend_name = os.environ.get("VECTOR_BACKEND", "faiss")
-        try:
-            self.vector_store = _create_vector_store(embed_dim=32)
-            self._use_vector_backend = True
-        except Exception as e:
-            # FAISS 不可用时优雅降级到内存向量列表
-            self.vector_index: List[Tuple[str, List[float]]] = []
-            self._use_vector_backend = False
+        # === GraphRAG 底座: 向量存储 (FAISS + sentence-transformers) ===
+        self.vector_backend_name = "faiss"
+        self.vector_store = VectorBackend()
+        self._use_vector_backend = True
 
-        # === GraphRAG 底座: 全文检索 ===
-        # 通过 FULLTEXT_BACKEND 环境变量切换: bm25|oceanbase
-        self.fulltext_backend_name = os.environ.get("FULLTEXT_BACKEND", "bm25")
-        try:
-            self.fulltext_store = _create_fulltext_store()
-            self._use_fulltext_backend = True
-        except Exception:
-            self.keyword_index: Dict[str, set] = {}
-            self._use_fulltext_backend = False
+        # === GraphRAG 底座: 全文检索 (BM25 + jieba) ===
+        self.fulltext_backend_name = "bm25"
+        self.fulltext_store = BM25Backend()
+        self._use_fulltext_backend = True
 
-        # === GraphRAG 底座: 图存储 ===
-        self.graph_client = _try_hugegraph_client()
-        self._use_graph_backend = self.graph_client is not None
+        # === GraphRAG 底座: 图存储 (HugeGraph) ===
+        self.graph_client = _create_hugegraph_client()
+        self._use_graph_backend = True
+        self._node_cache: Dict[str, Any] = {}
+        self._entity_cache: Dict[str, Any] = {}
+        self._init_hg_schema()
 
         # MAGMA 参数
         self.semantic_threshold = semantic_threshold
@@ -272,67 +339,62 @@ class FourGraphMemoryStore:
             "graph_backend": "hugegraph" if self._use_graph_backend else "memory",
         }
 
+    def _init_hg_schema(self):
+        """Initialize MAGMA schema in HugeGraph."""
+        s = self.graph_client.schema()
+        for pk in ["name", "content", "timestamp", "graph_type"]:
+            try:
+                s.propertyKey(pk).asText().ifNotExist().create()
+            except Exception:
+                pass
+        try:
+            s.vertexLabel("MAGMA_Node").properties(
+                "name", "content", "timestamp", "graph_type"
+            ).usePrimaryKeyId().primaryKeys("name").ifNotExist().create()
+        except Exception as e:
+            log.debug("[MAGMA] MAGMA_Node schema: %s", e)
+        try:
+            s.vertexLabel("MAGMA_Entity").properties(
+                "name", "content", "timestamp", "graph_type"
+            ).usePrimaryKeyId().primaryKeys("name").ifNotExist().create()
+        except Exception as e:
+            log.debug("[MAGMA] MAGMA_Entity schema: %s", e)
+        for el in ["semantic", "temporal", "causal"]:
+            try:
+                s.edgeLabel(el).sourceLabel("MAGMA_Node").targetLabel("MAGMA_Node").ifNotExist().create()
+            except Exception as e:
+                log.debug("[MAGMA] edge %s schema: %s", el, e)
+        try:
+            s.edgeLabel("entity_ref").sourceLabel("MAGMA_Node").targetLabel("MAGMA_Entity").ifNotExist().create()
+        except Exception as e:
+            log.debug("[MAGMA] entity_ref schema: %s", e)
+
     def _vector_add(self, node_id: str, vector: List[float]):
-        """写入向量存储（自动路由到 backend 或内存 fallback）"""
-        if self._use_vector_backend:
-            self.vector_store.add([vector], [node_id])
-        else:
-            self.vector_index.append((node_id, vector))
+        """写入向量存储（必须使用真实 backend）"""
+        self.vector_store.add([node_id], [vector])
 
     def _vector_search(self, query_vec: List[float], top_k: int = 10) -> List[Tuple[str, float]]:
         """向量检索（返回 [(node_id, similarity)]）"""
-        if self._use_vector_backend:
-            # FAISS search 返回 L2 distance, 转换为相似度: sim = 1/(1+dist)
-            dis_threshold = 2.0  # L2 distance threshold
-            results = self.vector_store.search(query_vec, top_k, dis_threshold)
-            scored = []
-            for prop in results:
-                nid = prop if isinstance(prop, str) else str(prop)
-                # 从 properties 中无法直接获取 L2 distance, 用向量重算相似度
-                if nid in self.nodes:
-                    node = self.nodes[nid]
-                    sim = cosine_similarity(query_vec, node.vector)
-                    if sim > 0.3:
-                        scored.append((nid, sim))
-            scored.sort(key=lambda x: -x[1])
-            return scored[:top_k]
-        else:
-            # 内存 fallback: 线性扫描
-            scored = []
-            for nid, vec in self.vector_index:
-                sim = cosine_similarity(query_vec, vec)
+        results = self.vector_store.search(query_vec, top_k)
+        scored = []
+        for nid, sim in results:
+            if nid in self.nodes:
+                node = self.nodes[nid]
+                # recompute cosine against the real vector
+                sim = cosine_similarity(query_vec, node.vector)
                 if sim > 0.3:
                     scored.append((nid, sim))
-            scored.sort(key=lambda x: -x[1])
-            return scored[:top_k]
+        scored.sort(key=lambda x: -x[1])
+        return scored[:top_k]
 
     def _fulltext_search(self, query: str, top_k: int = 5) -> Dict[str, float]:
         """全文检索（返回 {node_id: bm25_score}）"""
-        if self._use_fulltext_backend:
-            results = self.fulltext_store.search(query, top_k, min_score=0.0)
-            return {r["id"]: r["score"] for r in results}
-        else:
-            # 内存 fallback: 关键词匹配
-            query_kws = extract_keywords(query)
-            scores = {}
-            for kw in query_kws:
-                for nid in self.keyword_index.get(kw, set()):
-                    scores[nid] = scores.get(nid, 0) + 1
-            # 归一化
-            for nid in scores:
-                scores[nid] = scores[nid] / max(len(query_kws), 1)
-            return dict(sorted(scores.items(), key=lambda x: -x[1])[:top_k])
+        results = self.fulltext_store.search(query, top_k, min_score=0.0)
+        return {r["id"]: r["score"] for r in results}
 
     def _fulltext_add(self, node_id: str, text: str):
         """写入全文索引"""
-        if self._use_fulltext_backend:
-            self.fulltext_store.add_documents([text], [node_id], [text])
-        else:
-            kws = extract_keywords(text)
-            for kw in kws:
-                if kw not in self.keyword_index:
-                    self.keyword_index[kw] = set()
-                self.keyword_index[kw].add(node_id)
+        self.fulltext_store.add_documents([text], [node_id], [text])
 
     # --- Gremlin 查询翻译 ---
 
@@ -412,6 +474,18 @@ class FourGraphMemoryStore:
         # 写入节点
         self.nodes[node_id] = node
 
+        # GraphRAG 底座: 写入 HugeGraph
+        g = self.graph_client.graph()
+        try:
+            self._node_cache[node_id] = g.addVertex("MAGMA_Node", {
+                "name": node_id,
+                "content": content,
+                "timestamp": timestamp,
+                "graph_type": "memory",
+            })
+        except Exception as e:
+            log.debug("[MAGMA] addVertex %s: %s", node_id, e)
+
         # GraphRAG 底座: 写入向量存储
         self._vector_add(node_id, vector)
 
@@ -451,6 +525,14 @@ class FourGraphMemoryStore:
             self.edges["temporal"].append(edge)
             self.stats["temporal_edges"] += 1
             self.stats["total_edges"] += 1
+            try:
+                g = self.graph_client.graph()
+                src_v = self._node_cache.get(latest_id)
+                tgt_v = self._node_cache.get(node.node_id)
+                if src_v and tgt_v:
+                    g.addEdge("temporal", src_v.id, tgt_v.id, {})
+            except Exception as e:
+                log.debug("[MAGMA] temporal edge %s->%s: %s", latest_id, node.node_id, e)
 
     def _add_semantic_edges(self, node: MemoryNode):
         """添加语义相似度边（使用 GraphRAG 向量存储）"""
@@ -472,6 +554,14 @@ class FourGraphMemoryStore:
                     self.edges["semantic"].append(edge)
                     self.stats["semantic_edges"] += 1
                     self.stats["total_edges"] += 1
+                    try:
+                        g = self.graph_client.graph()
+                        src_v = self._node_cache.get(neighbor_id)
+                        tgt_v = self._node_cache.get(node.node_id)
+                        if src_v and tgt_v:
+                            g.addEdge("semantic", src_v.id, tgt_v.id, {})
+                    except Exception as e:
+                        log.debug("[MAGMA] semantic edge %s->%s: %s", neighbor_id, node.node_id, e)
 
     # --- Slow Path (异步巩固) ---
 
@@ -541,6 +631,15 @@ class FourGraphMemoryStore:
                 consolidation_result["causal_edges_added"] += 1
                 self.stats["causal_edges"] += 1
                 self.stats["total_edges"] += 1
+                # 写入 HugeGraph
+                try:
+                    g = self.graph_client.graph()
+                    src_v = self._node_cache.get(edge.source_id)
+                    tgt_v = self._node_cache.get(edge.target_id)
+                    if src_v and tgt_v:
+                        g.addEdge("causal", src_v.id, tgt_v.id, {})
+                except Exception as e:
+                    log.debug("[MAGMA] causal edge %s->%s: %s", edge.source_id, edge.target_id, e)
 
         # --- 模拟实体提取和实体边 ---
         # 实际场景: LLM 从内容中提取实体（人名/组织/概念等）
@@ -561,6 +660,17 @@ class FourGraphMemoryStore:
                 self.nodes[entity_id] = entity_node  # 共享存储
                 self.stats["entity_nodes"] += 1
                 self.stats["total_nodes"] += 1
+                # 写入 HugeGraph
+                try:
+                    g = self.graph_client.graph()
+                    self._entity_cache[entity_id] = g.addVertex("MAGMA_Entity", {
+                        "name": entity_id,
+                        "content": entity_name,
+                        "timestamp": node.timestamp,
+                        "graph_type": "entity",
+                    })
+                except Exception as e:
+                    log.debug("[MAGMA] addEntity %s: %s", entity_id, e)
 
             # 添加 entity_ref 边
             existing_ref = {(e.source_id, e.target_id)
@@ -578,6 +688,15 @@ class FourGraphMemoryStore:
                 self.stats["entity_ref_edges"] += 1
                 self.stats["total_edges"] += 1
                 consolidation_result["entities_discovered"].append(entity_name)
+                # 写入 HugeGraph
+                try:
+                    g = self.graph_client.graph()
+                    src_v = self._node_cache.get(node_id)
+                    tgt_v = self._entity_cache.get(entity_id)
+                    if src_v and tgt_v:
+                        g.addEdge("entity_ref", src_v.id, tgt_v.id, {})
+                except Exception as e:
+                    log.debug("[MAGMA] entity_ref edge %s->%s: %s", node_id, entity_id, e)
 
         self.stats["slow_path_writes"] += 1
         return consolidation_result

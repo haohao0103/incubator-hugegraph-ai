@@ -24,7 +24,7 @@ import warnings; warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger(__name__)
 
-MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "sk-cjs12vfbkxc9xz9ecwan6pwka09lt0wmeci3pucsy1ose26i")
+MIMO_API_KEY = os.environ.get("MIMO_API_KEY")
 MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"; MIMO_MODEL = "mimo-v2.5-pro"
 HG_HOST = "http://127.0.0.1:8080"; HG_GRAPH = "poc_temporal_kg_v21"
 HG_USER = "admin"; HG_PASS = "admin"
@@ -108,9 +108,10 @@ class HG:
         r=requests.get(f"{self.rb}/edges?limit={l}",auth=self.auth,timeout=20)
         return r.json().get("edges",[]) if r.status_code==200 else []
     def uv(self,vid,pr):
+        """Update vertex properties. v2.1 FIX: wrap ID in quotes, use action=append."""
         import urllib.parse
-        vid_encoded = urllib.parse.quote(str(vid), safe='')
-        r=requests.put(f"{self.rb}/vertices/{vid_encoded}",json={"properties":pr},auth=self.auth,timeout=15)
+        vid_encoded = urllib.parse.quote(f'"{vid}"', safe='')
+        r=requests.put(f"{self.rb}/vertices/{vid_encoded}?action=append",json={"properties":pr},auth=self.auth,timeout=15)
         if r.status_code != 200:
             log.info("  UV ERR status=%s vid=%s body=%s", r.status_code, vid[:30], r.text[:200])
         return r.status_code==200
@@ -462,23 +463,33 @@ def evaluate_range_queries(hg,bm):
     }
 
 def evaluate_conflict_queries(hg,bm):
-    """Conflict Detection: Accuracy"""
+    """Conflict Detection: Accuracy.
+
+    A conflict exists when the same subject has multiple different objects
+    for the same predicate within the query's time window.
+    """
     queries = bm['queries']['conflict'][:10]
     correct = 0; total = len(queries); latencies = []
 
     for qa in queries:
         t0 = time.perf_counter()
-        expected = qa['has_conflict']
+        expected = qa.get('has_conflict', False)
+        ts = qa['timestamp']
 
         all_v = hg.gav()
-        rels = []
+        # group objects by predicate for the queried subject at the queried time
+        pred_objs = defaultdict(list)
         for v in all_v:
             if v.get("label") == "TemporalFact":
-                p = v.get("properties",{})
-                if p.get("subject_name") == qa['subject'] and p.get("valid_from") == qa['timestamp']:
-                    rels.append(p.get("predicate_name",""))
+                p = v.get("properties", {})
+                if p.get("subject_name") != qa['subject']:
+                    continue
+                vf = p.get("valid_from", "")
+                vu = p.get("valid_until") or "9999-12-31"
+                if vf <= ts <= vu:
+                    pred_objs[p.get("predicate_name", "")].append(p.get("object_name", ""))
 
-        has_conflict = len(set(rels)) > 1 if rels else False
+        has_conflict = any(len(set(objs)) > 1 for objs in pred_objs.values())
         if has_conflict == expected:
             correct += 1
 

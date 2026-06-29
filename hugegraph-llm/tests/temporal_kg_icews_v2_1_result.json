@@ -8,29 +8,29 @@
   },
   "metrics": {
     "PointQuery": {
-      "Recall@5": 0.55,
-      "MRR": 0.35,
-      "Hit@1": 0.2,
-      "AvgLatency_ms": 78.47,
-      "P95Latency_ms": 191.32
+      "Recall@5": 0.6,
+      "MRR": 0.435,
+      "Hit@1": 0.35,
+      "AvgLatency_ms": 146.57,
+      "P95Latency_ms": 292.16
     },
     "RangeQuery": {
-      "TemporalAccuracy": 0.6,
-      "AvgLatency_ms": 45.9
+      "TemporalAccuracy": 0.4,
+      "AvgLatency_ms": 92.86
     },
     "ConflictDetection": {
-      "ConflictAccuracy": 0.2,
-      "AvgLatency_ms": 32.23
+      "ConflictAccuracy": 1.0,
+      "AvgLatency_ms": 100.47
     },
     "CommunityDetection": {
       "CommunityCoverage": 1.0,
-      "TotalFacts": 2000,
-      "FactsWithCommunity": 2000
+      "TotalFacts": 4000,
+      "FactsWithCommunity": 4000
     },
     "EdgeInvalidation": {
-      "SupersedesEdges": 58,
-      "InvalidatedFacts": 0,
-      "InvalidationRate": 0.0
+      "SupersedesEdges": 160,
+      "InvalidatedFacts": 102,
+      "InvalidationRate": 0.0255
     },
     "AgentScenario": {
       "query": "What did China do in March 2014?",
@@ -60,7 +60,7 @@
           "confidence": 0.95
         }
       ],
-      "latency_ms": 189.34,
+      "latency_ms": 2596.81,
       "scenario_pass": true
     }
   },
@@ -69,20 +69,20 @@
     "passed": 12,
     "failed": 0,
     "pass_rate": 1.0,
-    "duration_s": 17.7
+    "duration_s": 38.3
   },
   "timing": {
-    "total_duration_s": 17.7,
+    "total_duration_s": 38.3,
     "phases": [
       {
         "n": "P0: Environment Check",
         "ok": true,
-        "ms": 2.0
+        "ms": 3.0
       },
       {
         "n": "P1: Schema Creation (REST)",
         "ok": true,
-        "ms": 69.0
+        "ms": 146.0
       },
       {
         "n": "P2: Load Benchmark",
@@ -92,47 +92,47 @@
       {
         "n": "P7: Write to HugeGraph (REST)",
         "ok": true,
-        "ms": 11080.0
+        "ms": 15628.0
       },
       {
         "n": "P8: Read-back Verify",
         "ok": true,
-        "ms": 65.0
+        "ms": 149.0
       },
       {
         "n": "P10: Point Query Evaluation",
         "ok": true,
-        "ms": 1571.0
+        "ms": 2934.0
       },
       {
         "n": "P11: Range Query Evaluation",
         "ok": true,
-        "ms": 460.0
+        "ms": 931.0
       },
       {
         "n": "P12: Conflict Detection Evaluation",
         "ok": true,
-        "ms": 323.0
+        "ms": 1007.0
       },
       {
         "n": "P14: Community Detection Evaluation",
         "ok": true,
-        "ms": 31.0
+        "ms": 83.0
       },
       {
         "n": "P16: Run Edge Invalidation",
         "ok": true,
-        "ms": 3812.0
+        "ms": 14575.0
       },
       {
         "n": "P15: Edge Invalidation Evaluation",
         "ok": true,
-        "ms": 106.0
+        "ms": 212.0
       },
       {
         "n": "P17: Agent Memory Scenario",
         "ok": true,
-        "ms": 190.0
+        "ms": 2600.0
       }
     ]
   },

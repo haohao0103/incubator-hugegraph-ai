@@ -42,12 +42,12 @@ warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger(__name__)
 
-MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "sk-cjs12vfbkxc9xz9ecwan6pwka09lt0wmeci3pucsy1ose26i")
+MIMO_API_KEY = os.environ.get("MIMO_API_KEY")
 MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"
 MIMO_MODEL = "mimo-v2.5-pro"
 HG_HOST = "http://127.0.0.1:8080"
 HG_GREMLIN = "http://127.0.0.1:8182"  # Gremlin server endpoint
-HG_GRAPH = "poc_temporal_kg_v29"  # v2.2 FINAL: numeric string IDs (REST API compatible for PUT/DELETE)
+HG_GRAPH = "poc_temporal_kg_v29"  # v2.2: use existing graph (v30 not configured)
 HG_USER = "admin"
 HG_PASS = "admin"
 REST_BASE = f"{HG_HOST}/graphs/{HG_GRAPH}/graph"
@@ -187,15 +187,18 @@ class HG:
         return r.json().get("edges", []) if r.status_code == 200 else []
 
     def uv(self, vid, pr):
-        """Update vertex properties. v2.2 FINAL: numeric ID + properties-only body."""
+        """Update vertex properties via HugeGraph REST.
+        v2.2 FINAL FIX: CUSTOMIZE_STRING/PRIMARY_KEY IDs must be wrapped in
+        double quotes in the URL path; action=append overwrites single-valued props.
+        """
         import urllib.parse
-        vid_encoded = urllib.parse.quote(str(vid), safe='')
-        url = f"{self.rb}/vertices/{vid_encoded}?action=UPDATE"
+        vid_encoded = urllib.parse.quote(f'"{vid}"', safe='')
+        url = f"{self.rb}/vertices/{vid_encoded}?action=append"
         try:
             r = requests.put(url, json={"properties": pr}, auth=self.auth, timeout=15)
             if r.status_code != 200:
                 log.info("  UV FAIL status=%s vid=%s... url=%s body=%s",
-                         r.status_code, str(vid)[:40], url[:100], r.text[:300])
+                         r.status_code, str(vid)[:40], url[:120], r.text[:300])
                 return False
             return True
         except Exception as e:
@@ -261,7 +264,7 @@ class HG:
                 })
 
         # Step 3: Delete the old vertex (cascading deletes edges too)
-        vid_encoded = urllib.parse.quote(str(vid), safe='')
+        vid_encoded = urllib.parse.quote(f'"{vid}"', safe='')
         del_r = requests.delete(f"{self.rb}/vertices/{vid_encoded}", auth=self.auth, timeout=15)
         if del_r.status_code not in (200, 204):
             log.info("  DELREC: DELETE failed status=%s for vid=%s...", del_r.status_code, str(vid)[:40])
@@ -1113,12 +1116,12 @@ def p13():
     fl = total - ps
     dur = sum(r.ms for r in results) / 1000
 
-    point_m = next((r.data for r in results if r.n == "P10: Point Query Evaluation"), {})
-    range_m = next((r.data for r in results if r.n == "P11: Range Query Evaluation"), {})
-    conflict_m = next((r.data for r in results if r.n == "P12: Conflict Detection Evaluation"), {})
-    comm_m = next((r.data for r in results if r.n == "P14: Community Detection Evaluation"), {})
+    point_m = next((r.data for r in results if r.n == "P10: Point Query Eval (RRF 3-ch)"), {})
+    range_m = next((r.data for r in results if r.n == "P11: Range Query Eval (decay)"), {})
+    conflict_m = next((r.data for r in results if r.n == "P12: Conflict Detection Eval"), {})
+    comm_m = next((r.data for r in results if r.n == "P14: Community Detection Eval"), {})
     inv_m = next((r.data for r in results if r.n == "P15: Edge Invalidation Evaluation"), {})
-    agent_m = next((r.data for r in results if r.n == "P17: Agent Memory Scenario"), {})
+    agent_m = next((r.data for r in results if r.n == "P17: Agent Memory Scenario (multi-turn)"), {})
 
     report = {
         "status": "PASS" if fl == 0 else "PARTIAL",

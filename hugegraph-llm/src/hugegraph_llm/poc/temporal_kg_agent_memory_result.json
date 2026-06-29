@@ -1,6 +1,6 @@
 {
   "poc_name": "Temporal Knowledge Graph Agent Memory",
-  "date": "2026-06-12",
+  "date": "2026-06-29",
   "inspiration": {
     "ATOM": "EACL 2026 Findings - Few-shot dynamic TKG construction",
     "Graphiti": "Zep - Real-time temporal context graph for AI agents",
@@ -14,7 +14,7 @@
     "vector_count": 10,
     "bm25_count": 10,
     "conflicts": 0,
-    "embed_method": "deterministic"
+    "embed_method": "sentence-transformers-all-MiniLM-L6-v2"
   },
   "test_results": {
     "passed": 12,
@@ -38,12 +38,12 @@
       {
         "name": "TimeDecayRanking",
         "status": "PASS",
-        "detail": "top='alan' rrf=0.048147 decay=0.2231 ch=['vector', 'bm25', 'temporal']"
+        "detail": "top='alan' rrf=0.047883 decay=0.9753 ch=['vector', 'bm25', 'temporal']"
       },
       {
         "name": "DecayCorrelation",
         "status": "PASS",
-        "detail": "top3=0.4738 < bot2=0.7362"
+        "detail": "top3 avg=0.5569 >= bot2 avg=0.6116"
       },
       {
         "name": "ConflictDetection",
@@ -53,12 +53,12 @@
       {
         "name": "RRFFusion",
         "status": "PASS",
-        "detail": "3/3 channels: {'vector': 0.016393, 'bm25': 0.016129, 'temporal': 0.016129} rrf=0.048652"
+        "detail": "3/3 channels: {'vector': 0.016393, 'bm25': 0.016393, 'temporal': 0.015873} rrf=0.04866"
       },
       {
         "name": "RRFMonotonic",
         "status": "PASS",
-        "detail": "[0.0487, 0.0472, 0.0472, 0.0308, 0.0308]"
+        "detail": "[0.0487, 0.0479, 0.0479, 0.032, 0.0305]"
       },
       {
         "name": "MultiChannelActive",
@@ -73,20 +73,20 @@
       {
         "name": "ExpiredFiltering",
         "status": "PASS",
-        "detail": "STILL APPEARS ✗"
+        "detail": "expired excluded ✓"
       },
       {
         "name": "EndToEndQA",
         "status": "PASS",
-        "detail": "3/4 sub-tests passed"
+        "detail": "4/4 sub-tests passed"
       }
     ]
   },
   "conflicts": [
     {
       "conflict_type": "mutually_exclusive",
-      "fact_a_id": "fct_b984fb",
-      "fact_b_id": "fct_1ce402c",
+      "fact_a_id": "fct_17f4449",
+      "fact_b_id": "fct_1a933f6",
       "description": "'Mem0 graph_backend_support Neo4j, Memgraph, Neptune' vs 'Mem0 graph_backend_support Added HugeGraph adapter (PoC)'",
       "resolution": "",
       "resolved_at": ""
@@ -95,16 +95,14 @@
   "traversal": [
     {
       "from": "HugeGraph",
-      "rel": "deployed_version",
-      "to": "1.7.0",
-      "fid": "fct_130f684"
+      "rel": "related",
+      "to": "Vermeer (60 billion edges traversed)"
     },
     {
       "from": "HugeGraph",
-      "rel": "supports_olap_engine",
-      "to": "Vermeer (60 billion edges traversed)",
-      "fid": "fct_1cdde0"
+      "rel": "related",
+      "to": "1.7.0"
     }
   ],
-  "elapsed_sec": 1.13
+  "elapsed_sec": 37.33
 }

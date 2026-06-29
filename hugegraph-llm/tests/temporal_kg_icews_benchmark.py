@@ -19,7 +19,7 @@ import warnings; warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger(__name__)
 
-MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "sk-cjs12vfbkxc9xz9ecwan6pwka09lt0wmeci3pucsy1ose26i")
+MIMO_API_KEY = os.environ.get("MIMO_API_KEY")
 MIMO_BASE_URL = "https://api.xiaomimimo.com/v1"; MIMO_MODEL = "mimo-v2.5-pro"
 HG_HOST = "http://127.0.0.1:8080"; HG_GRAPH = "hugegraph"
 HG_USER = "admin"; HG_PASS = "admin"

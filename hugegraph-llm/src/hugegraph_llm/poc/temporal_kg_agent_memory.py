@@ -34,6 +34,8 @@ import math
 import os
 import sys
 import time
+
+import requests
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -51,11 +53,17 @@ RESULT_FILE = os.path.join(POC_DIR, "temporal_kg_agent_memory_result.json")
 TIME_DECAY_LAMBDA = 0.05   # half-life ~14 days
 RRF_K = 60
 NOW = datetime.now(timezone.utc)
+FAR_FUTURE = "9999-12-31T23:59:59+00:00"
 
-# Embedding config: MiMo OpenAI-compatible API
-MIMO_API_BASE = "https://api.xiaomimimo.com/v1"
-MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "")
+# Embedding config: local sentence-transformers model
 EMBED_DIM = 384
+
+
+def numeric_vid(text: str) -> str:
+    """Convert text to numeric string ID compatible with HugeGraph CUSTOMIZE_STRING."""
+    md5hex = hashlib.md5(text.encode()).hexdigest()
+    num = int(md5hex[:15], 16)
+    return str(num)
 
 
 # ─── Enums ────────────────────────────────
@@ -94,7 +102,7 @@ class TemporalFact:
 
     @property
     def is_valid_now(self) -> bool:
-        if self.valid_until is None:
+        if self.valid_until is None or self.valid_until == FAR_FUTURE:
             return True
         n = NOW.isoformat()
         return self.valid_from <= n <= self.valid_until
@@ -135,92 +143,42 @@ class ConflictRecord:
         return d
 
 
-# ─── Embedding Backend (MiMo API + FAISS) ─
+# ─── Embedding Backend (sentence-transformers + FAISS) ─
 
 class VectorBackend:
-    """FAISS vector store with MiMo API embeddings.
+    """FAISS vector store with real local embeddings (sentence-transformers).
 
-    Primary: OpenAI-compatible /v1/embeddings endpoint.
-    Fallback: Deterministic content-hash based vectors (when API unreachable).
-    Both produce REAL vectors in FAISS — never fake/hash-simulation for search.
+    Uses all-MiniLM-L6-v2 (384-dim) by default. No deterministic fallback.
     """
 
-    def __init__(self):
+    _model = None
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self._index = None
         self._id_map: Dict[int, str] = {}
         self._next_idx = 0
-        self._embed_dim = 0
-        self._api_ok: Optional[bool] = None  # None=not tried, True/False=cached
+        self._embed_dim = 384
+        self.model_name = model_name
+        self._load_model()
+
+    def _load_model(self):
+        if VectorBackend._model is None:
+            from sentence_transformers import SentenceTransformer
+            VectorBackend._model = SentenceTransformer(self.model_name)
 
     def _ensure_index(self):
         import faiss
         if self._index is None:
-            d = self._embed_dim or EMBED_DIM
-            self._index = faiss.IndexFlatIP(d)
+            self._index = faiss.IndexFlatIP(self._embed_dim)
 
     # ── Encoding ─────────────────────────
 
     def encode(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings: try API first, fallback to deterministic."""
-        if self._api_ok is not False:
-            result = self._api_encode(texts)
-            if result is not None:
-                self._api_ok = True
-                return result
-            self._api_ok = False
-            log.warning("[Vector] API unavailable, using deterministic fallback")
-
-        # Deterministic fallback — each text gets a unique content-derived vector
-        return self._det_encode(texts)
-
-    def _api_encode(self, texts: List[str]) -> Optional[List[List[float]]]:
-        """Call MiMo OpenAI-compatible /v1/embeddings."""
-        try:
-            from hugegraph_llm.utils.hg_http import hg_post
-            url = f"{MIMO_API_BASE.rstrip('/')}/embeddings"
-            headers = {"Authorization": f"Bearer {MIMO_API_KEY}"}
-            data = hg_post(
-                url,
-                body={"input": texts, "model": "text-embedding-ada-002"},
-                headers=headers,
-                auth=None,
-                timeout=15,
-            )
-            if "error" in data:
-                log.debug("[Vector] API error: %s", data["error"])
-                return None
-            emb_list = sorted(data.get("data", []), key=lambda x: x.get("index", 0))
-            embs = [e["embedding"] for e in emb_list]
-            if embs:
-                self._embed_dim = len(embs[0])
-            log.info("[Vector] API OK: %d vecs dim=%d", len(embs), self._embed_dim or 0)
-            return embs
-        except Exception as e:
-            log.debug("[Vector] API error: %s", e)
-            return None
-
-    def _det_encode(self, texts: List[str]) -> List[List[float]]:
-        """Deterministic fallback embedding.
-
-        Uses content-based seed → numpy PRNG → normalized vector.
-        Each unique text produces a consistent, unique vector.
-        Similarity between vectors reflects text similarity via shared hash features.
-        """
-        import numpy as np
-        dim = EMBED_DIM
-        results = []
-        for t in texts:
-            seed = int(hashlib.md5(t.encode()).hexdigest(), 16) & 0xFFFFFFFFFFFFFFFF
-            rng = __import__("numpy").random.RandomState(seed & 0xFFFFFFFF)
-            v = rng.randn(dim).astype(np.float32)
-            norm = __import__("numpy").linalg.norm(v)
-            if norm > 0:
-                v /= norm
-            results.append(v.tolist())
-        if not self._embed_dim:
-            self._embed_dim = dim
-        log.info("[Vector] Fallback: %d deterministic vecs dim=%d", len(results), dim)
-        return results
+        """Get embeddings from local sentence-transformers model."""
+        if not texts:
+            return []
+        embs = VectorBackend._model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+        return embs.tolist()
 
     # ── Index ops ─────────────────────────
 
@@ -256,7 +214,7 @@ class VectorBackend:
 
     @property
     def embed_method(self) -> str:
-        return "mimo_api" if self._api_ok else ("deterministic" if self._api_ok is False else "unknown")
+        return f"sentence-transformers-{self.model_name}"
 
 
 # ─── BM25 Fulltext Backend ────────────────
@@ -310,18 +268,57 @@ class TemporalKGMemory:
       3. Temporal                 — exponential time-decay scoring
     """
 
-    def __init__(self):
+    def __init__(self, graph: str = "hugegraph"):
         self.facts: Dict[str, TemporalFact] = {}
         self.vector = VectorBackend()
         self.bm25 = BM25Backend()
         self.conflicts: List[ConflictRecord] = []
         self._subj_idx: Dict[str, List[str]] = {}
         self._obj_idx: Dict[str, List[str]] = {}
+        self._entity_cache: Dict[str, Any] = {}
+
+        # Connect to real HugeGraph; fail fast if unavailable
+        try:
+            from pyhugegraph.client import PyHugeClient
+            self.hg = PyHugeClient(
+                url=os.environ.get("HUGEGRAPH_URL", "http://127.0.0.1:8080"),
+                user=os.environ.get("HUGEGRAPH_USER", "admin"),
+                pwd=os.environ.get("HUGEGRAPH_PASS", "admin"),
+                graph=graph,
+            )
+            self._init_hg_schema()
+        except Exception as e:
+            raise RuntimeError(
+                f"TemporalKGMemory requires a running HugeGraph server, but connection failed: {e}. "
+                "Please start HugeGraph and retry."
+            ) from e
+
+    def _init_hg_schema(self):
+        """Initialize TemporalFact + EntityIndex schema in HugeGraph."""
+        s = self.hg.schema()
+        for pk in ["name", "subject_name", "predicate_name", "object_name",
+                   "memory_type", "valid_from", "valid_until", "created_at",
+                   "fact_text", "confidence"]:
+            try:
+                s.propertyKey(pk).asText().ifNotExist().create()
+            except Exception:
+                pass
+        s.vertexLabel("TKGFact").properties(
+            "name", "subject_name", "predicate_name", "object_name",
+            "memory_type", "valid_from", "valid_until", "created_at",
+            "fact_text", "confidence"
+        ).usePrimaryKeyId().primaryKeys("name").ifNotExist().create()
+        try:
+            s.vertexLabel("TKGEntity").properties("name").usePrimaryKeyId().primaryKeys("name").ifNotExist().create()
+            s.edgeLabel("tkg_subject_of").sourceLabel("TKGEntity").targetLabel("TKGFact").ifNotExist().create()
+            s.edgeLabel("tkg_object_of").sourceLabel("TKGFact").targetLabel("TKGEntity").ifNotExist().create()
+        except Exception as e:
+            log.debug("[HG] EntityIndex schema init: %s", e)
 
     # ── Fact Management ─────────────────
 
     def add_facts(self, facts: List[TemporalFact]) -> List[str]:
-        """Batch add facts with incremental index updates."""
+        """Batch add facts with incremental index updates + HugeGraph persistence."""
         fids = [f.fact_id for f in facts]
         texts = [f.to_text() for f in facts]
         # Embedding
@@ -331,7 +328,19 @@ class TemporalKGMemory:
         self.vector.add(fids, embs)
         # BM25
         self.bm25.add_docs(fids, texts)
-        # Store + graph indexes
+        # Store + graph indexes + HugeGraph persistence
+        g = self.hg.graph()
+
+        # Pre-create all entity vertices to avoid duplicate-key errors
+        all_entities = {f.subject for f in facts} | {f.obj for f in facts}
+        for ent in all_entities:
+            if ent in self._entity_cache:
+                continue
+            try:
+                self._entity_cache[ent] = g.addVertex("TKGEntity", {"name": ent})
+            except Exception as e:
+                log.debug("[HG] create entity %s: %s", ent, e)
+
         for f in facts:
             self.facts[f.fact_id] = f
             si = self._subj_idx.setdefault(f.subject, [])
@@ -340,6 +349,31 @@ class TemporalKGMemory:
             oi = self._obj_idx.setdefault(f.obj, [])
             if f.fact_id not in oi:
                 oi.append(f.fact_id)
+            try:
+                if f.valid_until is None:
+                    f.valid_until = FAR_FUTURE
+                props = {
+                    "name": f.fact_id,
+                    "subject_name": f.subject,
+                    "predicate_name": f.predicate,
+                    "object_name": f.obj,
+                    "memory_type": f.memory_type.value,
+                    "valid_from": f.valid_from,
+                    "valid_until": f.valid_until,
+                    "created_at": f.created_at,
+                    "fact_text": f.to_text(),
+                    "confidence": str(f.confidence),
+                }
+                fact_v = g.addVertex("TKGFact", props)
+                fact_vid = fact_v.id if fact_v else None
+                subj_v = self._entity_cache.get(f.subject)
+                obj_v = self._entity_cache.get(f.obj)
+                if fact_vid and subj_v:
+                    g.addEdge("tkg_subject_of", subj_v.id, fact_vid, {})
+                if fact_vid and obj_v:
+                    g.addEdge("tkg_object_of", fact_vid, obj_v.id, {})
+            except Exception as e:
+                log.debug("[HG] addVertex/Edge %s: %s", f.fact_id, e)
         log.info("[BATCH-ADD] %d facts | vector=%d bm25=%d",
                  len(facts), self.vector.count, self.bm25.count)
         return fids
@@ -377,12 +411,16 @@ class TemporalKGMemory:
     def retrieve(self, query: str, top_k: int = 5,
                  mtype: Optional[MemoryType] = None,
                  time_point: Optional[str] = None) -> List[Dict]:
+        # Default to "now" so expired facts (valid_until < now) are filtered out.
+        if time_point is None:
+            time_point = NOW.isoformat()
         q_emb = self.vector.encode([query])[0]
         vec_r = self.vector.search(q_emb, top_k=top_k * 3)
         bm25_r = self.bm25.search(query, top_k=top_k * 3)
 
         # Temporal channel: candidates from vec+bm25, scored by decay
         cands = set(r["fact_id"] for r in vec_r) | set(r["fact_id"] for r in bm25_r)
+        valid_ids: set = set()
         temp_r = []
         for fid in cands:
             f = self.facts.get(fid)
@@ -390,20 +428,22 @@ class TemporalKGMemory:
                 continue
             if mtype and f.memory_type != mtype:
                 continue
-            if time_point:
-                vf = f.valid_from
-                vu = f.valid_until or "9999"
-                if not (vf <= time_point <= vu):
-                    continue
+            vf = f.valid_from
+            vu = f.valid_until or FAR_FUTURE
+            if not (vf <= time_point <= vu):
+                continue
+            valid_ids.add(fid)
             temp_r.append({"fact_id": fid, "score": round(f.time_decay_score(), 4)})
 
-        # RRF fusion
+        # RRF fusion (only facts valid at time_point participate)
         rrf: Dict[str, float] = {}
         contrib: Dict[str, Dict[str, float]] = {}
 
         for ch, results in [("vector", vec_r), ("bm25", bm25_r), ("temporal", temp_r)]:
             for rank, r in enumerate(results):
                 fid = r["fact_id"]
+                if fid not in valid_ids:
+                    continue
                 sc = 1.0 / (RRF_K + rank + 1)
                 rrf[fid] = rrf.get(fid, 0) + sc
                 contrib.setdefault(fid, {})[ch] = round(sc, 6)
@@ -419,18 +459,74 @@ class TemporalKGMemory:
     # ── Graph Traversal ──────────────────
 
     def traverse(self, subject: str, depth: int = 2) -> List[Dict]:
-        visited, queue, edges = set(), [(subject, 0)], []
-        while queue:
-            node, d = queue.pop(0)
-            if node in visited or d > depth:
-                continue
-            visited.add(node)
-            for fid in self._subj_idx.get(node, []):
-                f = self.facts.get(fid)
-                if f and f.obj not in visited:
-                    edges.append({"from": node, "rel": f.predicate, "to": f.obj, "fid": fid})
-                    queue.append((f.obj, d + 1))
-        return edges
+        """Multi-hop graph traversal via HugeGraph Traverser API.
+
+        HugeGraph 1.7.0 default distribution does not ship gremlin-groovy
+        script engine, so we use the native `/traversers/customizedpaths`
+        endpoint instead of Gremlin strings.
+        """
+        try:
+            # Resolve numeric vertex id for the subject entity
+            g = self.hg.graph()
+            matches = g.getVertexByCondition(label="TKGEntity", properties={"name": subject}, limit=10)
+            if not matches:
+                return []
+            source_id = matches[0].id
+
+            steps = []
+            for _ in range(depth):
+                steps.append({
+                    "direction": "OUT",
+                    "labels": ["tkg_subject_of"],
+                    "properties": {},
+                })
+                steps.append({
+                    "direction": "OUT",
+                    "labels": ["tkg_object_of"],
+                    "properties": {},
+                })
+
+            cfg = self.hg.cfg
+            if cfg.gs_supported and cfg.graphspace:
+                url = (
+                    f"{cfg.url}/graphspaces/{cfg.graphspace}/graphs/"
+                    f"{cfg.graph_name}/traversers/customizedpaths"
+                )
+            else:
+                url = f"{cfg.url}/graphs/{cfg.graph_name}/traversers/customizedpaths"
+            auth = (cfg.username, cfg.password)
+            payload = {
+                "sources": {"ids": [source_id]},
+                "steps": steps,
+                "with_vertex": True,
+                "limit": 100,
+            }
+            resp = requests.post(url, json=payload, auth=auth, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+
+            edges = []
+            seen = set()
+            for path in data.get("paths", []):
+                objs = path.get("objects", [])
+                # path objects alternate: TKGEntity -> TKGFact -> TKGEntity -> ...
+                entity_names = []
+                for i in range(0, len(objs), 2):
+                    ent = objs[i]
+                    if isinstance(ent, str):
+                        name = ent.split(":", 1)[1] if ":" in ent else ent
+                    else:
+                        name = ent.get("properties", {}).get("name", "")
+                    if name:
+                        entity_names.append(name)
+                for i in range(len(entity_names) - 1):
+                    key = (entity_names[i], entity_names[i + 1])
+                    if key not in seen:
+                        seen.add(key)
+                        edges.append({"from": entity_names[i], "rel": "related", "to": entity_names[i + 1]})
+            return edges
+        except Exception as e:
+            raise RuntimeError(f"[TemporalKG] HugeGraph traverse failed for '{subject}': {e}") from e
 
     @property
     def stat(self) -> Dict[str, Any]:
@@ -625,11 +721,14 @@ def run_assertions(mem: TemporalKGMemory) -> Dict[str, Any]:
         qa_pass += 1
 
     nr = mem.retrieve("LightRAG integration status", top_k=3)  # default=now
-    exp_ok = not any("Not yet integrated" in r["fact"]["obj"]
-                     and r["fact"]["valid_until"] for r in nr)
-    ok("ExpiredFiltering", "expired excluded ✓" if exp_ok else "STILL APPEARS ✗")
+    expired_hits = [r for r in nr if "Not yet integrated" in r["fact"]["obj"]
+                    and r["fact"]["valid_until"]]
+    exp_ok = len(expired_hits) == 0
     if exp_ok:
+        ok("ExpiredFiltering", "expired excluded ✓")
         qa_pass += 1
+    else:
+        fail("ExpiredFiltering", f"STILL APPEARS: {len(expired_hits)} expired results")
 
     ok("EndToEndQA", f"{qa_pass}/4 sub-tests passed")
 
@@ -662,8 +761,8 @@ def main():
 
     results = run_assertions(mem)
 
-    log.info("\n[Graph Demo] BFS from 'HugeGraph' (depth=2):")
-    for e in mem.traverse("HugeGraph", depth=2):
+    log.info("\n[Graph Demo] BFS from 'HugeGraph' (depth=1):")
+    for e in mem.traverse("HugeGraph", depth=1):
         log.info("  %s --[%s]--> %s", e["from"], e["rel"], e["to"])
 
     output = {
@@ -677,7 +776,7 @@ def main():
         "system_stats": st,
         "test_results": results,
         "conflicts": [c.to_dict() for c in mem.conflicts],
-        "traversal": mem.traverse("HugeGraph", depth=2),
+        "traversal": mem.traverse("HugeGraph", depth=1),
         "elapsed_sec": round(time.time() - t0, 2),
     }
     os.makedirs(os.path.dirname(RESULT_FILE), exist_ok=True)
