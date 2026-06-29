@@ -4,6 +4,20 @@
 *.pkl
 out/production/
 
+# HugeGraph-AI Memory runtime artifacts
+**/poc_data/
+**/memory_bm25/
+**/memory_faiss.index
+**/memory_faiss.index.meta.json
+**/memory_provenance.json
+**/memory_backend.db
+**/memory_backend.db-*
+
+# Third-party benchmark datasets (use tests/download_datasets.py)
+hugegraph-llm/tests/locomo_data/
+hugegraph-llm/tests/benchmark_data/
+benchmark_data/
+
 # Local PR review scratch artifacts
 .workflow/pr*-review/
 .workflow/code-scan/
