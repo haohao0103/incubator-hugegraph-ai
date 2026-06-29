@@ -1,0 +1,675 @@
+{
+  "metrics": {
+    "sessions": 2,
+    "total_questions": 60,
+    "correct": 2,
+    "accuracy": 0.0333,
+    "hit_at_5": 0.0333,
+    "mrr": 0.0333,
+    "avg_latency_ms": 111.18,
+    "p95_latency_ms": 273.69,
+    "token_estimate": 15549
+  },
+  "details": [
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline go to the LGBTQ support group?",
+      "answers": [
+        "7 May 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 1547.25
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie paint a sunrise?",
+      "answers": [
+        "2022"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 165.12
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What fields would Caroline be likely to pursue in her educaton?",
+      "answers": [
+        "Psychology, counseling certification"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 273.69
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What did Caroline research?",
+      "answers": [
+        "Adoption agencies"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 174.94
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What is Caroline's identity?",
+      "answers": [
+        "Transgender woman"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 40.24
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie run a charity race?",
+      "answers": [
+        "The sunday before 25 May 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 175.16
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When is Melanie planning on going camping?",
+      "answers": [
+        "June 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 39.56
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What is Caroline's relationship status?",
+      "answers": [
+        "Single"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 91.44
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline give a speech at a school?",
+      "answers": [
+        "The week before 9 June 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 199.81
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline meet up with her friends, family, and mentors?",
+      "answers": [
+        "The week before 9 June 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 175.79
+    },
+    {
+      "session_id": "conv-26",
+      "question": "How long has Caroline had her current group of friends for?",
+      "answers": [
+        "4 years"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 189.36
+    },
+    {
+      "session_id": "conv-26",
+      "question": "Where did Caroline move from 4 years ago?",
+      "answers": [
+        "Sweden"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 187.43
+    },
+    {
+      "session_id": "conv-26",
+      "question": "How long ago was Caroline's 18th birthday?",
+      "answers": [
+        "10 years ago"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 42.67
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What career path has Caroline decided to persue?",
+      "answers": [
+        "counseling or mental health for Transgender people"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 46.66
+    },
+    {
+      "session_id": "conv-26",
+      "question": "Would Caroline still want to pursue counseling as a career if she hadn't received support growing up?",
+      "answers": [
+        "Likely no"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 181.88
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What activities does Melanie partake in?",
+      "answers": [
+        "pottery, camping, painting, swimming"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.22
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie sign up for a pottery class?",
+      "answers": [
+        "2 July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.36
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When is Caroline going to the transgender conference?",
+      "answers": [
+        "July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 39.37
+    },
+    {
+      "session_id": "conv-26",
+      "question": "Where has Melanie camped?",
+      "answers": [
+        "beach, mountains, forest"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.79
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What do Melanie's kids like?",
+      "answers": [
+        "dinosaurs, nature"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.09
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie go to the museum?",
+      "answers": [
+        "5 July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.99
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline have a picnic?",
+      "answers": [
+        "The week before 6 July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 39.16
+    },
+    {
+      "session_id": "conv-26",
+      "question": "Would Caroline likely have Dr. Seuss books on her bookshelf?",
+      "answers": [
+        "Yes, since she collects classic children's books"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 41.29
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What books has Melanie read?",
+      "answers": [
+        "\"Nothing is Impossible\", \"Charlotte's Web\""
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 187.13
+    },
+    {
+      "session_id": "conv-26",
+      "question": "What does Melanie do to destress?",
+      "answers": [
+        "Running, pottery"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.68
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline go to the LGBTQ conference?",
+      "answers": [
+        "10 July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 36.91
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie read the book \"nothing is impossible\"?",
+      "answers": [
+        "2022"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.74
+    },
+    {
+      "session_id": "conv-26",
+      "question": "Would Caroline pursue writing as a career option?",
+      "answers": [
+        "LIkely no; though she likes reading, she wants to be a counselor"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.09
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Caroline go to the adoption meeting?",
+      "answers": [
+        "The friday before 15 July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.37
+    },
+    {
+      "session_id": "conv-26",
+      "question": "When did Melanie go to the pottery workshop?",
+      "answers": [
+        "The Friday before 15 July 2023"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.61
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When Jon has lost his job as a banker?",
+      "answers": [
+        "19 January, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 1021.73
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When Gina has lost her job at Door Dash?",
+      "answers": [
+        "January, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 41.02
+    },
+    {
+      "session_id": "conv-30",
+      "question": "How do Jon and Gina both like to destress?",
+      "answers": [
+        "by dancing"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.82
+    },
+    {
+      "session_id": "conv-30",
+      "question": "What do Jon and Gina both have in common?",
+      "answers": [
+        "They lost their jobs and decided to start their own businesses."
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.23
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Why did Jon decide to start his dance studio?",
+      "answers": [
+        "He lost his job and decided to start his own business to share his passion."
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.34
+    },
+    {
+      "session_id": "conv-30",
+      "question": "What Jon thinks the ideal dance studio should look like?",
+      "answers": [
+        "By the water, with natural light and Marley flooring"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.36
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When is Jon's group performing at a festival?",
+      "answers": [
+        "February, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 40.23
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina launch an ad campaign for her store?",
+      "answers": [
+        "29 January, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 40.15
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When was Jon in Paris?",
+      "answers": [
+        "28 January 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.39
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Which city have both Jean and John visited?",
+      "answers": [
+        "Rome"
+      ],
+      "prediction": "记忆中没有相关信息。",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.03
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina team up with a local artist for some cool designs?",
+      "answers": [
+        "February, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 40.99
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina get her tattoo?",
+      "answers": [
+        "A few years ago"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.76
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Jon start to go to the gym?",
+      "answers": [
+        "March, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 35.93
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina open her online clothing store?",
+      "answers": [
+        "16 March, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.61
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Jon start expanding his studio's social media presence?",
+      "answers": [
+        "April, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 172.0
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Jon host a dance competition?",
+      "answers": [
+        "May, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.7
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Jon go to a fair to get more exposure for his dance studio?",
+      "answers": [
+        "24 April, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 187.61
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Why did Gina decide to start her own clothing store?",
+      "answers": [
+        "She always loved fashion trends and finding unique pieces and she lost her job so decided it was time to start her own business."
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.13
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Do Jon and Gina start businesses out of what they love?",
+      "answers": [
+        "Yes"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": true,
+      "rank": 1,
+      "latency_ms": 39.07
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina interview for a design internship?",
+      "answers": [
+        "10 May, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 41.72
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina get accepted for the design internship?",
+      "answers": [
+        "27 May, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.41
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Jon start reading \"The Lean Startup\"?",
+      "answers": [
+        "May, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 36.8
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Gina develop a video presentation to teach how to style her fashion pieces? ",
+      "answers": [
+        "June, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 39.59
+    },
+    {
+      "session_id": "conv-30",
+      "question": "How did Gina promote her clothes store?",
+      "answers": [
+        "worked with an artist to make unique fashion pieces, made limited-edition sweatshirts, got some new offers and promotions for online store, developed a video presentation showing how to style her pieces"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 36.16
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Which events has Jon participated in to promote his business venture?",
+      "answers": [
+        "fair, networking events, dance competition"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 39.5
+    },
+    {
+      "session_id": "conv-30",
+      "question": "What does Jon's dance studio offer?",
+      "answers": [
+        "one-on-one metoring and training to dancers,  workshops and classes to local schools and centers"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 35.42
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When did Jon receive mentorship to promote his venture?",
+      "answers": [
+        "15 June, 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 38.69
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Did Jon and Gina both participate in dance competitions?",
+      "answers": [
+        "Yes"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": true,
+      "rank": 1,
+      "latency_ms": 36.06
+    },
+    {
+      "session_id": "conv-30",
+      "question": "When was Jon in Rome?",
+      "answers": [
+        "June 2023"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.41
+    },
+    {
+      "session_id": "conv-30",
+      "question": "Which cities has Jon visited?",
+      "answers": [
+        "Paris, Rome"
+      ],
+      "prediction": "Gina: Hey Jon! Good to see you. What's up? Anything new?\nJon: Hey Gina! Good to see you too. Lost my job as a banker yesterday, so I'm gonna take a shot at starting my own business.\nGina: Sorry about your job Jon, but starting your own business sounds awesome! Unfortunately, I also lost my job at Door Dash this month. What business are you thinking of?\nJon: Sorry to hear that! I'm starting a dance studio 'cause I'm passionate about dancing and it'd be great to share it with others.\nGina: That's cool, Jon! What got you into this biz?\nJon: I've been into dancing since I was a kid and it's been my passion and escape. I wanna start a dance studio so I can teach others the joy that dancing brings me.\nGina: Wow Jon, same here! Dance is pretty much my go-to for stress relief. Got any fave styles?\nJon: Cool, Gina! I love all dances, but contemporary is my top pick. It's so expressive and powerful! What's your fave?\nGina: Yeah, me too! Contemporary dance is so expressive and graceful - it really speaks to me.\nJon: Wow, great idea! Let's go to a dance class, it'll be so much fun!\nGina: Yeah! Let's explore some new dance moves. We should plan a dance session soon!\nJon: Yeah definitely! Wanna see my moves next Fri? Can't wait!\nGina: Sounds great, Jon! Next Friday works. Let's boogie!\nJon: Wow, I'm excited too! This is gonna be great!\nGina: Wow! What did you get?\nJon: Woah, that pic's from when my dance crew took home first in a local comp last year. It was amazing up on that stage! I'm super keen to spread that intensity with other peeps. Gina, you ever been in any dance comps or shows?\nGina: I used to compete in a few dance competitions and shows - my fav memory was when my team won first place at a regionals at age fifteen. It was an awesome feeling of accomplishment!\nJon: Wow! Winning first place is amazing! What dance were you doing?\nGina: Thanks! We just did a contemporary piece called \"Finding Freedom.\" It was really emotional and powerful.\nJon: Wow, that must've been great! Check my ideal dance studio by the water.",
+      "correct": false,
+      "rank": null,
+      "latency_ms": 37.13
+    }
+  ]
+}
