@@ -17,6 +17,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,8 +33,8 @@ DATA_DIR = BASE_DIR / "data"
 RESULTS_FILE = BASE_DIR / "llm_e2e_results.json"
 
 # MiMo API config
-LLM_BASE_URL = "https://api.xiaomimimo.com/v1"
-LLM_API_KEY = "sk-cs5kqi80f6upqy2e3k3xi39jtizhpgf6dkdd3j9ysoupfw7p"
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.xiaomimimo.com/v1")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = "mimo-v2.5-pro"
 
 

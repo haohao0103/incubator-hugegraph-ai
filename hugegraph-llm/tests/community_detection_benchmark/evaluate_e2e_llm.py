@@ -18,6 +18,7 @@ Usage:
     python evaluate_e2e_llm.py
 """
 
+import os
 import json
 import sys
 import time
@@ -37,8 +38,8 @@ DATA_DIR = BASE_DIR / "data"
 RESULTS_FILE = BASE_DIR / "e2e_llm_results.json"
 
 LLM_CLIENT = OpenAI(
-    base_url="https://api.xiaomimimo.com/v1",
-    api_key="sk-cs5kqi80f6upqy2e3k3xi39jtizhpgf6dkdd3j9ysoupfw7p",
+    base_url=os.environ.get("LLM_BASE_URL", "https://api.xiaomimimo.com/v1"),
+    api_key=os.environ.get("LLM_API_KEY", ""),
 )
 LLM_MODEL = "mimo-v2.5-pro"
 
