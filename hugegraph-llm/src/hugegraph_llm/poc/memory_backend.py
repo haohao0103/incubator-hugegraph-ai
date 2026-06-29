@@ -67,6 +67,14 @@ except ImportError:
 from hugegraph_llm.config.memory_config import memory_settings
 from hugegraph_llm.poc.memory_distillation import DistillationPipeline
 from hugegraph_llm.utils.log import log
+from hugegraph_llm.engines.memory import (
+    MemoryScope,
+    PrivacyLevel,
+    AccessPermission,
+    ImportanceEvaluator,
+    EbbinghausDecay,
+    EntityExtractor,
+)
 
 HUGEGRAPH_URL = memory_settings.hugegraph_url
 HUGEGRAPH_USER = memory_settings.hugegraph_user
@@ -659,7 +667,13 @@ def init_metadata_db():
             created_at REAL NOT NULL,
             last_accessed_at REAL NOT NULL,
             access_count INTEGER DEFAULT 0,
-            initial_score REAL DEFAULT 1.0
+            initial_score REAL DEFAULT 1.0,
+            agent_id TEXT,
+            run_id TEXT,
+            scope TEXT DEFAULT 'private',
+            privacy TEXT DEFAULT 'standard',
+            importance REAL DEFAULT 0.5,
+            metadata TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_mem_user ON memories(user_id);
 
@@ -669,6 +683,22 @@ def init_metadata_db():
             updated_at REAL NOT NULL DEFAULT 0
         );
     """)
+    # Schema migration: add new columns if upgrading an old DB file
+    existing = {row[1] for row in db.execute("PRAGMA table_info(memories)")}
+    migrations = [
+        ("agent_id", "ALTER TABLE memories ADD COLUMN agent_id TEXT"),
+        ("run_id", "ALTER TABLE memories ADD COLUMN run_id TEXT"),
+        ("scope", "ALTER TABLE memories ADD COLUMN scope TEXT DEFAULT 'private'"),
+        ("privacy", "ALTER TABLE memories ADD COLUMN privacy TEXT DEFAULT 'standard'"),
+        ("importance", "ALTER TABLE memories ADD COLUMN importance REAL DEFAULT 0.5"),
+        ("metadata", "ALTER TABLE memories ADD COLUMN metadata TEXT"),
+    ]
+    for col, sql in migrations:
+        if col not in existing:
+            try:
+                db.execute(sql)
+            except Exception as e:
+                log.warning("Metadata DB migration for %s failed: %s", col, e)
     db.commit()
     db.close()
 
@@ -820,6 +850,11 @@ class MemoryPipelineBackend:
 
         # P1: Experience + Skill distillation pipeline
         self._distillation = DistillationPipeline(llm_client=None)
+
+        # P2: Intelligence / lifecycle components (PowerMem-style)
+        self._importance_evaluator = ImportanceEvaluator()
+        self._ebbinghaus = EbbinghausDecay()
+        self._entity_extractor = EntityExtractor()
 
         # Ensure metadata SQLite schema exists when used as a library.
         init_metadata_db()
@@ -1013,7 +1048,16 @@ class MemoryPipelineBackend:
 
     # ---- ADD Pipeline (7 steps, aligned with PowerMem) ----
 
-    def add_memory(self, content: str, user_id: str = "demo_user") -> dict:
+    def add_memory(
+        self,
+        content: str,
+        user_id: str = "demo_user",
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        scope: MemoryScope = MemoryScope.PRIVATE,
+        privacy: PrivacyLevel = PrivacyLevel.STANDARD,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> dict:
         """
         Add a new memory through the full 7-step pipeline.
         Aligned with PowerMem MemoryStore.add_memory().
@@ -1033,6 +1077,10 @@ class MemoryPipelineBackend:
         now = time.time()
         memory_id = str(uuid.uuid4())[:8]
         trace = []  # pipeline execution trace for frontend display
+
+        # P2: importance scoring and Ebbinghaus retention (PowerMem-style)
+        importance = self._importance_evaluator.score(content)
+        initial_score = max(importance, 0.3)
 
         # Step 1: LLM Entity Extraction
         step_start = time.time()
@@ -1160,9 +1208,19 @@ class MemoryPipelineBackend:
         # 6c-6d. Only store memory metadata + vector when NOT SKIP
         if action != "SKIP":
             db.execute(
-                "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count)"
-                " VALUES (?,?,?,?,?,?)",
-                (memory_id, content, user_id, now, now, 1),
+                "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+                "initial_score,agent_id,run_id,scope,privacy,importance,metadata)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    memory_id, content, user_id, now, now, 1,
+                    initial_score,
+                    agent_id,
+                    run_id,
+                    scope.value,
+                    privacy.value,
+                    importance,
+                    json.dumps(metadata or {}, ensure_ascii=False),
+                ),
             )
             self.faiss.add_memory(memory_id, content, now)
             try:
@@ -1208,7 +1266,16 @@ class MemoryPipelineBackend:
             "total_elapsed_ms": total_elapsed,
         }
 
-    def add_memory_bypass_classify(self, content: str, user_id: str = "demo_user") -> dict:
+    def add_memory_bypass_classify(
+        self,
+        content: str,
+        user_id: str = "demo_user",
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        scope: MemoryScope = MemoryScope.PRIVATE,
+        privacy: PrivacyLevel = PrivacyLevel.STANDARD,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> dict:
         """
         Same as add_memory but bypasses intent classification.
         Useful for benchmark ingestion where every input is known to be a fact
@@ -1219,6 +1286,10 @@ class MemoryPipelineBackend:
         now = time.time()
         memory_id = str(uuid.uuid4())[:8]
         trace = []
+
+        # P2: importance scoring (PowerMem-style)
+        importance = self._importance_evaluator.score(content)
+        initial_score = max(importance, 0.3)
 
         # Step 1: LLM Entity Extraction
         step_start = time.time()
@@ -1263,9 +1334,19 @@ class MemoryPipelineBackend:
 
         if action != "SKIP":
             db.execute(
-                "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count)"
-                " VALUES (?,?,?,?,?,?)",
-                (memory_id, content, user_id, now, now, 1),
+                "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+                "initial_score,agent_id,run_id,scope,privacy,importance,metadata)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    memory_id, content, user_id, now, now, 1,
+                    initial_score,
+                    agent_id,
+                    run_id,
+                    scope.value,
+                    privacy.value,
+                    importance,
+                    json.dumps(metadata or {}, ensure_ascii=False),
+                ),
             )
             self.faiss.add_memory(memory_id, content, now)
             try:
@@ -1292,7 +1373,16 @@ class MemoryPipelineBackend:
             "total_elapsed_ms": round((time.time() - start_time) * 1000),
         }
 
-    def search_memory(self, query: str, user_id: str = "demo_user", top_k: int = 5, fast_eval: bool = False) -> dict:
+    def search_memory(
+        self,
+        query: str,
+        user_id: str = "demo_user",
+        top_k: int = 5,
+        fast_eval: bool = False,
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> dict:
         """
         Search memories through the 4-step pipeline.
         Aligned with PowerMem MemoryStore.search_memory().
@@ -1343,11 +1433,31 @@ class MemoryPipelineBackend:
         # Step 2: 3-Channel Retrieval + RRF Fusion (FAISS + BM25 + Graph)
         step_start = time.time()
 
-        # Get all memories for Ebbinghaus calculation
-        rows = db.execute(
-            "SELECT id,content,created_at,last_accessed_at,access_count,initial_score "
-            "FROM memories WHERE user_id=? ORDER BY created_at DESC", (user_id,)
-        ).fetchall()
+        # Get all memories for Ebbinghaus calculation (with optional scope/agent/run filters)
+        sql = (
+            "SELECT id,content,created_at,last_accessed_at,access_count,initial_score,"
+            "scope,privacy,importance "
+            "FROM memories WHERE user_id=?"
+        )
+        params: List[Any] = [user_id]
+        if agent_id is not None:
+            sql += " AND (agent_id=? OR agent_id IS NULL)"
+            params.append(agent_id)
+        if run_id is not None:
+            sql += " AND (run_id=? OR run_id IS NULL)"
+            params.append(run_id)
+        if filters:
+            if filters.get("scope"):
+                sql += " AND scope=?"
+                params.append(filters["scope"])
+            if filters.get("privacy"):
+                sql += " AND privacy=?"
+                params.append(filters["privacy"])
+            if filters.get("memory_type"):
+                sql += " AND (metadata LIKE ?)"
+                params.append(f'%"memory_type": "{filters["memory_type"]}"%')
+        sql += " ORDER BY created_at DESC"
+        rows = db.execute(sql, params).fetchall()
 
         # Compute Ebbinghaus weights
         eb_weights = {}
@@ -1391,11 +1501,13 @@ class MemoryPipelineBackend:
             all_vertices = self.hg.get_all_vertices()
             all_edges = self.hg.get_all_edges()
             # Score memories based on entity overlap with graph
-            query_entity_names = set()
+            extracted_entities = self._entity_extractor.extract(query)
+            query_entity_names = {e["name"] for e in extracted_entities}
+            # Fallback rule-based split for Chinese short tokens
             parts = re.split(r'[的了在是有和也都哪些多少几怎么如何谁什么哪里哪个有没有]', query)
             for part in parts:
                 part = part.strip()
-                if 2 <= len(part) <= 4 and re.match(r'^[\u4e00-\u9fa5]+$', part):
+                if 2 <= len(part) <= 8 and re.match(r'^[\u4e00-\u9fa5]+$', part):
                     query_entity_names.add(part)
 
             # For each memory, score based on how many graph entities it references
@@ -2174,7 +2286,8 @@ class MemoryPipelineBackend:
         now = time.time()
         memories = []
         for row in db.execute(
-            "SELECT id,content,created_at,last_accessed_at,access_count,initial_score "
+            "SELECT id,content,created_at,last_accessed_at,access_count,initial_score,"
+            "scope,privacy,importance,agent_id,run_id,metadata "
             "FROM memories WHERE user_id=? ORDER BY created_at DESC", (user_id,),
         ):
             elapsed_hours = (now - row["created_at"]) / 3600
@@ -2183,6 +2296,10 @@ class MemoryPipelineBackend:
             memories.append({
                 "id": row["id"], "content": row["content"],
                 "retention": round(ret, 4), "access_count": row["access_count"],
+                "scope": row["scope"], "privacy": row["privacy"],
+                "importance": row["importance"], "agent_id": row["agent_id"],
+                "run_id": row["run_id"],
+                "metadata": json.loads(row["metadata"] or "{}"),
             })
         db.close()
         return memories
@@ -2287,6 +2404,119 @@ class MemoryPipelineBackend:
         db.commit()
         db.close()
 
+    # ---------------------------------------------------------------------------
+    # P2: CRUD + profile helpers aligned with Mem0 / PowerMem SDK surface
+    # ---------------------------------------------------------------------------
+
+    def get_memory_by_id(self, memory_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single memory by id."""
+        db = get_metadata_db()
+        row = db.execute(
+            "SELECT id,content,created_at,last_accessed_at,access_count,initial_score,"
+            "scope,privacy,importance,agent_id,run_id,metadata "
+            "FROM memories WHERE id=?", (memory_id,)
+        ).fetchone()
+        db.close()
+        if not row:
+            return None
+        return {
+            "id": row["id"], "content": row["content"],
+            "created_at": row["created_at"], "last_accessed_at": row["last_accessed_at"],
+            "access_count": row["access_count"], "initial_score": row["initial_score"],
+            "scope": row["scope"], "privacy": row["privacy"], "importance": row["importance"],
+            "agent_id": row["agent_id"], "run_id": row["run_id"],
+            "metadata": json.loads(row["metadata"] or "{}"),
+        }
+
+    def update_memory(
+        self,
+        memory_id: str,
+        content: str,
+        user_id: str = "demo_user",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Update a memory's content and metadata. Re-indexes FAISS/BM25."""
+        db = get_metadata_db()
+        existing = db.execute(
+            "SELECT id FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
+        ).fetchone()
+        if not existing:
+            db.close()
+            return {"error": "NOT_FOUND", "memory_id": memory_id}
+
+        now = time.time()
+        merged_meta = json.dumps(metadata or {}, ensure_ascii=False)
+        db.execute(
+            "UPDATE memories SET content=?, last_accessed_at=?, metadata=? WHERE id=?",
+            (content, now, merged_meta, memory_id),
+        )
+        db.commit()
+        db.close()
+
+        # Re-index vector store (best-effort: remove + add)
+        try:
+            self.faiss.delete_memory(memory_id)
+        except Exception:
+            pass
+        self.faiss.add_memory(memory_id, content, now)
+        try:
+            self.faiss.save()
+        except Exception:
+            pass
+        return {"status": "ok", "memory_id": memory_id, "action": "updated"}
+
+    def delete_memory(self, memory_id: str, user_id: str = "demo_user") -> Dict[str, Any]:
+        """Delete a memory from SQLite, FAISS and BM25. Graph provenance is kept."""
+        db = get_metadata_db()
+        row = db.execute(
+            "SELECT id FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
+        ).fetchone()
+        if not row:
+            db.close()
+            return {"error": "NOT_FOUND", "memory_id": memory_id}
+        db.execute("DELETE FROM memories WHERE id=?", (memory_id,))
+        db.commit()
+        db.close()
+
+        try:
+            self.faiss.delete_memory(memory_id)
+            self.faiss.save()
+        except Exception:
+            pass
+        if self._bm25 is not None:
+            try:
+                self._bm25.delete_document(memory_id)
+                bm25_dir = os.path.dirname(os.path.abspath(__file__))
+                self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
+            except Exception as e:
+                log.warning("BM25 delete error: %s", e)
+        return {"status": "ok", "memory_id": memory_id, "action": "deleted"}
+
+    def list_memories(self, user_id: str = "demo_user") -> list:
+        """Alias of get_memories for SDK consistency."""
+        return self.get_memories(user_id=user_id)
+
+    def get_user_profile(self, user_id: str = "demo_user") -> Dict[str, Any]:
+        """Alias of get_persona for SDK consistency."""
+        return self.get_persona(user_id=user_id)
+
+    def update_user_profile(self, user_id: str = "demo_user", summary: str = "") -> Dict[str, Any]:
+        """Alias of update_persona for SDK consistency."""
+        self.update_persona(user_id=user_id, summary=summary)
+        return self.get_persona(user_id=user_id)
+
+    def add_skill(self, content: str, user_id: str = "demo_user") -> Dict[str, Any]:
+        """Store a procedural/skill memory."""
+        return self.add_memory(
+            content=content,
+            user_id=user_id,
+            metadata={"memory_type": "procedural"},
+        )
+
+    def search_skills(self, query: str, user_id: str = "demo_user", top_k: int = 5) -> list:
+        """Search procedural/skilled memories via the skill store."""
+        return self.get_skills(query=query, user_id=user_id, top_k=top_k)
+
 
 # ============================================================================
 # Flask App Factory
@@ -2304,7 +2534,15 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         user_id = data.get("user_id", "demo_user")
         if not content:
             return jsonify({"error": "content is required"}), 400
-        result = store.add_memory(content, user_id)
+        result = store.add_memory(
+            content=content,
+            user_id=user_id,
+            agent_id=data.get("agent_id"),
+            run_id=data.get("run_id"),
+            scope=MemoryScope(data.get("scope", "private")),
+            privacy=PrivacyLevel(data.get("privacy", "standard")),
+            metadata=data.get("metadata"),
+        )
         return jsonify(result)
 
     @app.route("/api/memory/search", methods=["POST"])
@@ -2314,8 +2552,49 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         user_id = data.get("user_id", "demo_user")
         if not query:
             return jsonify({"error": "query is required"}), 400
-        result = store.search_memory(query, user_id)
+        result = store.search_memory(
+            query=query,
+            user_id=user_id,
+            top_k=int(data.get("top_k", 5)),
+            agent_id=data.get("agent_id"),
+            run_id=data.get("run_id"),
+            filters=data.get("filters"),
+        )
         return jsonify(result)
+
+    @app.route("/api/memory/get", methods=["GET"])
+    def api_get_memory():
+        memory_id = request.args.get("id")
+        if not memory_id:
+            return jsonify({"error": "id is required"}), 400
+        result = store.get_memory_by_id(memory_id)
+        if result is None:
+            return jsonify({"error": "not found"}), 404
+        return jsonify(result)
+
+    @app.route("/api/memory/update", methods=["POST"])
+    def api_update_memory():
+        data = request.json or {}
+        memory_id = data.get("id")
+        content = data.get("content", "").strip()
+        user_id = data.get("user_id", "demo_user")
+        if not memory_id or not content:
+            return jsonify({"error": "id and content are required"}), 400
+        return jsonify(store.update_memory(
+            memory_id=memory_id,
+            content=content,
+            user_id=user_id,
+            metadata=data.get("metadata"),
+        ))
+
+    @app.route("/api/memory/delete", methods=["POST"])
+    def api_delete_memory():
+        data = request.json or {}
+        memory_id = data.get("id")
+        user_id = data.get("user_id", "demo_user")
+        if not memory_id:
+            return jsonify({"error": "id is required"}), 400
+        return jsonify(store.delete_memory(memory_id=memory_id, user_id=user_id))
 
     @app.route("/api/memory/classify", methods=["POST"])
     def api_classify():
@@ -2333,7 +2612,7 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
 
     @app.route("/api/memory/list", methods=["GET"])
     def api_list_memories():
-        return jsonify(store.get_memories())
+        return jsonify(store.get_memories(user_id=request.args.get("user_id", "demo_user")))
 
     @app.route("/api/stats", methods=["GET"])
     def api_stats():
