@@ -18,6 +18,10 @@ hugegraph-llm/tests/locomo_data/
 hugegraph-llm/tests/benchmark_data/
 benchmark_data/
 
+# Third-party reference source code (cloned for local gap analysis)
+hugegraph-llm/third_party/mem0/
+hugegraph-llm/third_party/powermem/
+
 # Local PR review scratch artifacts
 .workflow/pr*-review/
 .workflow/code-scan/
