@@ -50,6 +50,7 @@ from openai import OpenAI
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 try:
     from hugegraph_llm.indices.fulltext.bm25_fulltext import BM25FullTextBackend
+    from hugegraph_llm.indices.rerank_index import get_reranker
     from hugegraph_llm.operators.graph_op.rrf_fusion import (
         ReciprocalRankFusion, fuse_results_with_scores
     )
@@ -60,27 +61,28 @@ except ImportError:
           file=sys.stderr, flush=True)
 
 # ============================================================================
-# Config
+# Config (unified via memory_config)
 # ============================================================================
 
-HUGEGRAPH_URL = os.environ.get("HUGEGRAPH_URL", "http://127.0.0.1:8080")
-HUGEGRAPH_USER = os.environ.get("HUGEGRAPH_USER", "admin")
-HUGEGRAPH_PASS = os.environ.get("HUGEGRAPH_PASS", "admin")
-HUGEGRAPH_GRAPH = os.environ.get("HUGEGRAPH_GRAPH", "hugegraph")
+from hugegraph_llm.config.memory_config import memory_settings
+from hugegraph_llm.poc.memory_distillation import DistillationPipeline
+from hugegraph_llm.utils.log import log
 
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.xiaomimimo.com/v1")
-LLM_MODEL = os.environ.get("LLM_MODEL", "mimo-v2.5-pro")
-LLM_API_KEY = os.environ.get(
-    "LLM_API_KEY",
-    "sk-cs5kqi80f6upqy2e3k3xi39jtizhpgf6dkdd3j9ysoupfw7p",
-)
+HUGEGRAPH_URL = memory_settings.hugegraph_url
+HUGEGRAPH_USER = memory_settings.hugegraph_user
+HUGEGRAPH_PASS = memory_settings.hugegraph_pwd
+HUGEGRAPH_GRAPH = memory_settings.hugegraph_graph
+
+LLM_BASE_URL = memory_settings.llm_base_url
+LLM_MODEL = memory_settings.llm_model
+LLM_API_KEY = memory_settings.llm_api_key
 
 # Ebbinghaus constants (same as PowerMem)
-EBBINGHAUS_K = 0.821
-EBBINGHAUS_REINFORCE = 0.3
+EBBINGHAUS_K = memory_settings.ebbinghaus_k
+EBBINGHAUS_REINFORCE = memory_settings.ebbinghaus_reinforce
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory_backend.db")
-FAISS_INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory_faiss.index")
+DB_PATH = memory_settings.resolve_db_path()
+FAISS_INDEX_PATH = memory_settings.resolve_faiss_path()
 
 # Vertex / Edge labels for Memory graph schema
 VERTEX_LABELS = ["person", "organization", "location", "skill", "concept"]
@@ -204,6 +206,7 @@ class HugeGraphMemoryClient:
         # Cache: which (edge_label, src_label, tgt_label) combos have been ensured
         self._edge_cache = {}   # (edge_label, src, tgt) -> actual_label_used
         self._vl_cache = set()  # vertex labels already ensured
+        self._entity_cache = {}  # (label, name) -> vertex_id
 
     def init_schema(self):
         """Initialize property keys and base vertex labels. Edge labels are created on-demand."""
@@ -234,7 +237,7 @@ class HugeGraphMemoryClient:
             return True
         s = self.client.schema()
         try:
-            s.vertexLabel(label).properties("name", "type").useCustomizeStringId().ifNotExist().create()
+            s.vertexLabel(label).properties("name", "type").usePrimaryKeyId().primaryKeys("name").ifNotExist().create()
             self._vl_cache.add(label)
             return True
         except Exception as e:
@@ -266,58 +269,66 @@ class HugeGraphMemoryClient:
 
         s = self.client.schema()
 
-        # Step 1: Try direct creation with ifNotExist()
-        try:
-            s.edgeLabel(edge_label).sourceLabel(src_label).targetLabel(tgt_label).ifNotExist().create()
-            self._edge_cache[cache_key] = edge_label
-            return edge_label
-        except Exception as e1:
-            print(f"[Schema] Step1 failed for '{edge_label}' ({src_label}->{tgt_label}): {e1}", file=sys.stderr)
+        def _existing_labels():
+            """Return (src_labels, tgt_labels) for the given edge label if it exists."""
+            try:
+                existing = s.getEdgeLabel(edge_label)
+                if existing is None:
+                    return None
+                srcs = existing.sourceLabel if hasattr(existing, "sourceLabel") else existing.get("source_label", [])
+                tgts = existing.targetLabel if hasattr(existing, "targetLabel") else existing.get("target_label", [])
+                if isinstance(srcs, str):
+                    srcs = [srcs]
+                if isinstance(tgts, str):
+                    tgts = [tgts]
+                return srcs, tgts
+            except Exception as e2:
+                print(f"[Schema] getEdgeLabel check failed for '{edge_label}': {e2}", file=sys.stderr)
+                return None
 
-        # Step 2: Check if the label already exists and is compatible
-        try:
-            existing = s.getEdgeLabel(edge_label)
-            srcs = existing.get("source_label", [])
-            tgts = existing.get("target_label", [])
-            if isinstance(srcs, str):
-                srcs = [srcs]
-            if isinstance(tgts, str):
-                tgts = [tgts]
-            # If our src/tgt pair is already covered, reuse this label
+        # Step 1: Check if the label already exists and is compatible.
+        existing = _existing_labels()
+        if existing:
+            srcs, tgts = existing
             if src_label in srcs and tgt_label in tgts:
                 self._edge_cache[cache_key] = edge_label
                 return edge_label
-            else:
-                print(f"[Schema] Step2: '{edge_label}' exists but incompatible "
-                      f"(has {srcs}->{tgts}, need {src_label}->{tgt_label})", file=sys.stderr)
-        except Exception as e2:
-            print(f"[Schema] Step2 check failed: {e2}", file=sys.stderr)
+            print(f"[Schema] Edge label '{edge_label}' exists but incompatible "
+                  f"(has {srcs}->{tgts}, need {src_label}->{tgt_label})", file=sys.stderr)
+        else:
+            print(f"[Schema] Edge label '{edge_label}' not found, creating new", file=sys.stderr)
 
-        # Step 3: Label exists with different source/target — create a variant
-        print(f"[Schema] Step3: Creating variant for '{edge_label}' ({src_label}->{tgt_label})", file=sys.stderr)
-        for i in range(2, 10):
-            candidate = f"{edge_label}_v{i}"
+        # Step 2: Try to create the label directly (or a variant if incompatible).
+        candidates = [edge_label] if existing is None else [f"{edge_label}_v{i}" for i in range(2, 10)]
+        for candidate in candidates:
             try:
                 s.edgeLabel(candidate).sourceLabel(src_label).targetLabel(tgt_label).ifNotExist().create()
                 self._edge_cache[cache_key] = candidate
-                print(f"[HugeGraph] Edge label '{edge_label}' conflicts, using variant '{candidate}' "
-                      f"({src_label}->{tgt_label})", file=sys.stderr)
+                if candidate != edge_label:
+                    print(f"[HugeGraph] Edge label '{edge_label}' conflicts, using variant '{candidate}' "
+                          f"({src_label}->{tgt_label})", file=sys.stderr)
                 return candidate
             except Exception as e3:
-                print(f"[Schema] Step3 candidate '{candidate}' failed: {e3}", file=sys.stderr)
+                print(f"[Schema] Candidate '{candidate}' failed: {e3}", file=sys.stderr)
                 continue
 
-        # Step 4: All variants failed — use the original and hope for the best
+        # Step 3: All attempts failed — fall back to original and let addEdge report the error.
         self._edge_cache[cache_key] = edge_label
         return edge_label
 
     def add_vertex(self, label: str, name: str, properties: dict = None) -> Optional[str]:
-        """Add a vertex, return its ID. Upsert by name. Creates label on-demand."""
-        # Ensure vertex label exists (dynamic creation)
-        self._ensure_vertex_label(label)
+        """Add a vertex, return its ID. Upsert by name. Creates label on-demand.
+
+        Uses PRIMARY_KEY strategy on 'name'; do NOT pass an explicit id.
+        """
+        if not self._ensure_vertex_label(label):
+            return None
+
+        cache_key = (label, name)
+        if cache_key in self._entity_cache:
+            return self._entity_cache[cache_key]
 
         g = self.client.graph()
-        custom_id = f"{label}:{name}"
         props = {"name": name, "type": label}
         if properties:
             props.update(properties)
@@ -325,29 +336,31 @@ class HugeGraphMemoryClient:
         # Check if exists by name
         existing = self.get_vertex_by_name(name)
         if existing:
+            self._entity_cache[cache_key] = existing["id"]
             return existing["id"]
 
         try:
-            v = g.addVertex(label, props, id=custom_id)
-            return v.id if v else None
+            v = g.addVertex(label, props)
+            if v:
+                self._entity_cache[cache_key] = v.id
+                return v.id
         except Exception as e:
             print(f"[HugeGraph] add_vertex error: {e} (label={label}, name={name})", file=sys.stderr)
-            return None
+        return None
 
     def get_vertex_by_name(self, name: str) -> Optional[dict]:
-        """Get a vertex by its 'name' property."""
+        """Get a vertex by its 'name' property via REST (no Gremlin fallback)."""
         g = self.client.graph()
-        vertices = g.getVertexByCondition(limit=100)
-        if vertices:
-            for v in vertices:
-                if getattr(v, 'properties', {}).get('name') == name or \
-                   getattr(v, 'property', {}).get('name') == name:
-                    return {"id": v.id, "label": v.label,
-                            "properties": getattr(v, 'properties', {})}
-        # Fallback: use gremlin
-        result = self.exec_gremlin(f"g.V().has(\"name\",\"{name}\")")
-        if result and len(result) > 0:
-            return {"id": result[0]["id"], "label": result[0].get("label", "?")}
+        for label in VERTEX_LABELS:
+            try:
+                vertices = g.getVertexByCondition(label=label, limit=200)
+            except Exception:
+                vertices = None
+            if vertices:
+                for v in vertices:
+                    props = getattr(v, 'properties', {}) or getattr(v, 'property', {})
+                    if isinstance(props, dict) and props.get('name') == name:
+                        return {"id": v.id, "label": v.label, "properties": props}
         return None
 
     def add_edge(self, edge_label: str, src_name: str, tgt_name: str,
@@ -372,17 +385,9 @@ class HugeGraphMemoryClient:
         # Dynamically ensure the edge label exists for this source/target pair
         actual_label = self._ensure_edge_label(edge_label, src_label, tgt_label)
 
-        # Check for duplicate edge
-        try:
-            existing = self.exec_gremlin(
-                f'g.E().hasLabel("{actual_label}")'
-                f'.where(outV().has("name","{src_name}"))'
-                f'.where(inV().has("name","{tgt_name}"))'
-            )
-            if existing and len(existing) > 0:
-                return existing[0].get("id") if isinstance(existing[0], dict) else str(existing[0])
-        except Exception:
-            pass
+        # Skip duplicate-edge check to avoid Gremlin dependency on HugeGraph 1.7.0.
+        # The graph will tolerate multiple edges; deduplication can be done at
+        # retrieval time if needed.
 
         # Create the edge
         g = self.client.graph()
@@ -412,13 +417,13 @@ class HugeGraphMemoryClient:
             print(f"[Gremlin error] {e}", file=sys.stderr, flush=True)
             return []
 
-    def get_all_vertices(self) -> list:
+    def get_all_vertices(self, limit: int = 500) -> list:
         """Get all vertices for visualization using REST API directly."""
         vertices = []
         try:
             g = self.client.graph()
             session = g._sess
-            resp = session.request("graph/vertices?limit=500&page")
+            resp = session.request(f"graph/vertices?limit={limit}&page")
             if resp and "vertices" in resp:
                 for v in resp["vertices"]:
                     props = v.get("properties", {}) or {}
@@ -512,49 +517,32 @@ class HugeGraphMemoryClient:
 # ============================================================================
 
 class FaissMemoryIndex:
-    """FAISS-based vector index for semantic memory search."""
+    """FAISS-based vector index for semantic memory search.
 
-    def __init__(self, dim: int = 1536, index_path: str = FAISS_INDEX_PATH):
+    Uses local sentence-transformers model for real embeddings.
+    """
+
+    _model = None
+
+    def __init__(self, dim: int = 384, index_path: str = FAISS_INDEX_PATH,
+                 model_name: str = "all-MiniLM-L6-v2"):
         self.dim = dim
         self.index_path = index_path
+        self.model_name = model_name
         # Use Inner Product (cosine similarity friendly) or L2
         self.index = faiss.IndexFlatIP(dim)  # Inner Product for cosine sim
         self.metadata = []  # list of {memory_id, content, created_at}
-        self.embedding_client = None
+        self._load_model()
 
-    def _get_embedding_client(self):
-        """Lazy-init OpenAI-compatible embedding client."""
-        if self.embedding_client is None:
-            self.embedding_client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
-        return self.embedding_client
+    def _load_model(self):
+        if FaissMemoryIndex._model is None:
+            from sentence_transformers import SentenceTransformer
+            FaissMemoryIndex._model = SentenceTransformer(self.model_name)
 
     def embed_text(self, text: str) -> np.ndarray:
-        """Get embedding vector for text using MiMo API."""
-        try:
-            client = self._get_embedding_client()
-            # Use a simple approach: call chat completions and extract features
-            # For production, use proper embedding endpoint
-            response = client.embeddings.create(
-                model="text-embedding-ada-002",
-                input=text[:800],
-            )
-            return np.array(response.data[0].embedding, dtype=np.float32)
-        except Exception as e:
-            # Fallback: deterministic hash-based pseudo-embedding
-            print(f"[FAISS] Embedding API error ({e}), using fallback", file=sys.stderr, flush=True)
-            return self._fallback_embedding(text)
-
-    def _fallback_embedding(self, text: str) -> np.ndarray:
-        """Deterministic hash-based pseudo-embedding when API unavailable."""
-        # Create a sparse-like but fixed-dim vector from text hash
-        vec = np.zeros(self.dim, dtype=np.float32)
-        for i, ch in enumerate(text[:self.dim]):
-            vec[i % self.dim] += ord(ch) * 0.01
-        # Normalize
-        norm = np.linalg.norm(vec)
-        if norm > 0:
-            vec = vec / norm
-        return vec
+        """Get embedding vector for text using local sentence-transformers model."""
+        emb = FaissMemoryIndex._model.encode(text, convert_to_numpy=True, show_progress_bar=False)
+        return emb.astype(np.float32)
 
     def add_memory(self, memory_id: str, content: str, created_at: float = None):
         """Add a memory to the FAISS index."""
@@ -661,7 +649,7 @@ def get_metadata_db():
 
 
 def init_metadata_db():
-    """Initialize metadata database schema."""
+    """Initialize metadata database schema (memories + persona)."""
     db = get_metadata_db()
     db.executescript("""
         CREATE TABLE IF NOT EXISTS memories (
@@ -674,6 +662,12 @@ def init_metadata_db():
             initial_score REAL DEFAULT 1.0
         );
         CREATE INDEX IF NOT EXISTS idx_mem_user ON memories(user_id);
+
+        CREATE TABLE IF NOT EXISTS personas (
+            user_id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL DEFAULT '',
+            updated_at REAL NOT NULL DEFAULT 0
+        );
     """)
     db.commit()
     db.close()
@@ -792,6 +786,8 @@ class MemoryPipelineBackend:
         self.llm_base_url = LLM_BASE_URL
         self.llm_model = LLM_MODEL
         self.llm_api_key = LLM_API_KEY
+        if not self.llm_api_key:
+            raise ValueError("LLM_API_KEY environment variable is required. Please set it before running memory_backend.")
 
         # P0: BM25 fulltext index (GraphRAG component)
         self._bm25 = None
@@ -813,11 +809,20 @@ class MemoryPipelineBackend:
         # P0: RRF fusion operator
         self._rrf = ReciprocalRankFusion(k=60, min_score=0.0) if HAS_GRAPHRAG_OPS else None
 
+        # P0: Optional cross-encoder / API reranker
+        self._reranker = get_reranker() if HAS_GRAPHRAG_OPS else None
+
         # P1: Provenance tracking (memory_id → [{entity, relation}])
         self._provenance: Dict[str, List[Dict[str, str]]] = {}
         self._provenance_db_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "memory_provenance.json")
         self._load_provenance()
+
+        # P1: Experience + Skill distillation pipeline
+        self._distillation = DistillationPipeline(llm_client=None)
+
+        # Ensure metadata SQLite schema exists when used as a library.
+        init_metadata_db()
 
     def _load_provenance(self):
         """Load provenance tracking data from disk."""
@@ -1203,12 +1208,98 @@ class MemoryPipelineBackend:
             "total_elapsed_ms": total_elapsed,
         }
 
-    # ---- QUERY Pipeline (4 steps, aligned with PowerMem) ----
+    def add_memory_bypass_classify(self, content: str, user_id: str = "demo_user") -> dict:
+        """
+        Same as add_memory but bypasses intent classification.
+        Useful for benchmark ingestion where every input is known to be a fact
+        to remember rather than a question to answer.
+        """
+        start_time = time.time()
+        db = get_metadata_db()
+        now = time.time()
+        memory_id = str(uuid.uuid4())[:8]
+        trace = []
 
-    def search_memory(self, query: str, user_id: str = "demo_user", top_k: int = 5) -> dict:
+        # Step 1: LLM Entity Extraction
+        step_start = time.time()
+        extraction = self._llm_extract(content)
+        entities = extraction.get("entities", [])
+        relationships = extraction.get("relationships", [])
+        trace.append({"step": 1, "name": "LLM实体抽取",
+                      "detail": f"{len(entities)} entities, {len(relationships)} relations",
+                      "elapsed_ms": round((time.time()-step_start)*1000),
+                      "data": {"entities": entities, "relationships": relationships}})
+
+        # Conflict detection (lightweight literal duplicate only)
+        action = "ADD"
+        conflict_reason = ""
+        existing_rows = db.execute(
+            "SELECT id, content FROM memories WHERE user_id=? ORDER BY created_at DESC",
+            (user_id,)
+        ).fetchall()
+        for ex in existing_rows:
+            cc = sum(1 for ch in content if ch in ex["content"])
+            s2 = cc / min(len(content), len(ex["content"])) if min(len(content), len(ex["content"])) > 0 else 0
+            if s2 > 0.9:
+                action = "SKIP"
+                conflict_reason = f"文本几乎相同{round(s2*100)}%"
+                break
+
+        # Dedup + missing relations
+        entities, relationships = self._dedup_entities(entities, relationships)
+        relationships = self._extract_missing_rels(content, entities, relationships)
+
+        # Store to HugeGraph + FAISS + SQLite
+        stored_nodes = []
+        stored_edges = []
+        for ent in entities:
+            vid = self.hg.add_vertex(ent["type"], ent["name"])
+            if vid:
+                stored_nodes.append({"name": ent["name"], "type": ent["type"], "id": vid})
+        for rel in relationships:
+            eid = self.hg.add_edge(rel["relationship"], rel["source"], rel["target"], {})
+            if eid:
+                stored_edges.append({**rel, "edge_id": eid})
+
+        if action != "SKIP":
+            db.execute(
+                "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count)"
+                " VALUES (?,?,?,?,?,?)",
+                (memory_id, content, user_id, now, now, 1),
+            )
+            self.faiss.add_memory(memory_id, content, now)
+            try:
+                self.faiss.save()
+            except Exception:
+                pass
+            if self._bm25 is not None:
+                try:
+                    self._bm25.add_documents([content], [memory_id])
+                    bm25_dir = os.path.dirname(os.path.abspath(__file__))
+                    self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
+                except Exception as e:
+                    print(f"[BM25] Add error: {e}", file=sys.stderr, flush=True)
+            self._track_provenance(memory_id, entities, relationships)
+
+        db.commit()
+        db.close()
+        return {
+            "memory_id": memory_id if action != "SKIP" else None,
+            "action": action,
+            "reason": conflict_reason or "新记忆，无冲突",
+            "entities": entities,
+            "relationships": stored_edges,
+            "total_elapsed_ms": round((time.time() - start_time) * 1000),
+        }
+
+    def search_memory(self, query: str, user_id: str = "demo_user", top_k: int = 5, fast_eval: bool = False) -> dict:
         """
         Search memories through the 4-step pipeline.
         Aligned with PowerMem MemoryStore.search_memory().
+
+        Args:
+            fast_eval: If True, skip all LLM calls (classify / rerank / answer)
+                       and return retrieval-only results. Used for fast benchmarks.
         """
         start_time = time.time()
         db = get_metadata_db()
@@ -1217,27 +1308,31 @@ class MemoryPipelineBackend:
 
         # Step 1: Intent Classification (LLM primary + regex fallback)
         step_start = time.time()
-        classify_result = self._llm_classify_intent(query)
-        if not classify_result:
-            # Regex fallback (broader patterns)
-            has_qmark = bool(re.search(r'[？?]', query))
-            starts_q = bool(re.match(r'^(谁|什么|哪里|哪个|哪些|多少|几|怎么|如何)', query))
-            starts_my = bool(re.match(
-                r'^(我|我的)(的?|们?)(同事|朋友|认识|有哪些|有谁|叫什么|在哪)',
-                query))
-            has_query_pattern = bool(re.search(
-                r'(有谁|有哪些|有多少|是什么|在哪里|是什么职位|叫什么|帮我回忆|帮我查)',
-                query))
-            is_query = has_qmark or starts_q or starts_my or has_query_pattern
-            classify_result = {"action": "QUERY" if is_query else "ADD",
-                             "method": "regex", "reason": "Fallback classification"}
+        if fast_eval:
+            classify_result = {"action": "QUERY", "method": "fast_eval",
+                               "reason": "Benchmark fast-eval: bypass LLM classify"}
+        else:
+            classify_result = self._llm_classify_intent(query)
+            if not classify_result:
+                # Regex fallback (broader patterns)
+                has_qmark = bool(re.search(r'[？?]', query))
+                starts_q = bool(re.match(r'^(谁|什么|哪里|哪个|哪些|多少|几|怎么|如何)', query))
+                starts_my = bool(re.match(
+                    r'^(我|我的)(的?|们?)(同事|朋友|认识|有哪些|有谁|叫什么|在哪)',
+                    query))
+                has_query_pattern = bool(re.search(
+                    r'(有谁|有哪些|有多少|是什么|在哪里|是什么职位|叫什么|帮我回忆|帮我查)',
+                    query))
+                is_query = has_qmark or starts_q or starts_my or has_query_pattern
+                classify_result = {"action": "QUERY" if is_query else "ADD",
+                                 "method": "regex", "reason": "Fallback classification"}
 
-            ca = classify_result["action"]
-            cm = classify_result.get("method","llm")
-            trace.append({"step": 1, "name": "\u610f\u56fe\u5206\u7c7b",
-                      "detail": f"{ca} ({cm})",
-                      "elapsed_ms": round((time.time()-step_start)*1000),
-                      "data": classify_result})
+        ca = classify_result["action"]
+        cm = classify_result.get("method", "llm")
+        trace.append({"step": 1, "name": "\u610f\u56fe\u5206\u7c7b",
+                  "detail": f"{ca} ({cm})",
+                  "elapsed_ms": round((time.time()-step_start)*1000),
+                  "data": classify_result})
 
         if classify_result["action"] != "QUERY":
             db.close()
@@ -1403,10 +1498,40 @@ class MemoryPipelineBackend:
                           "detail": f"Top-{len(results)} (BM25/RRF\u4e0d\u53ef\u7528)",
                           "elapsed_ms": round((time.time()-step_start)*1000)})
 
+        # Cross-encoder rerank (optional) before LLM rerank
+        if self._reranker is not None and results and not fast_eval:
+            try:
+                step_start = time.time()
+                candidates = [
+                    {
+                        "id": r["memory"]["id"],
+                        "text": r["memory"]["content"],
+                        "memory": r["memory"],
+                        "source": r.get("source", ""),
+                    }
+                    for r in results
+                ]
+                reranked = self._reranker.rerank(query, candidates, top_k=top_k * 2)
+                results = [
+                    {
+                        "memory": r["memory"],
+                        "score": r["rerank_score"],
+                        "source": (r.get("source", "") + "+rerank").lstrip("+"),
+                    }
+                    for r in reranked
+                ]
+                trace.append({
+                    "step": 2.5, "name": "Cross-encoder rerank",
+                    "detail": f"Top-{len(results)}",
+                    "elapsed_ms": round((time.time() - step_start) * 1000),
+                })
+            except Exception as e:
+                print(f"[Rerank] Error: {e}", file=sys.stderr, flush=True)
+
         # LLM reranking with graph context (only for top candidates)
         graph_ctx = self._build_graph_context()
         top_candidates = results[:top_k]
-        if top_candidates and len(top_candidates) > 1:
+        if not fast_eval and top_candidates and len(top_candidates) > 1:
             try:
                 llm_ranks = self._llm_rank_memories(query, top_candidates, graph_ctx)
                 llm_score_map = {r.get("memory_id"): r.get("score", 0.5) for r in llm_ranks}
@@ -1437,6 +1562,20 @@ class MemoryPipelineBackend:
                       "detail": f"{len(graph_ctx.split(chr(10)))} edges retrieved"
                       if graph_ctx else "\u56fe\u8c31\u4e3a\u7a7a",
                       "elapsed_ms": round((time.time()-step_start)*1000)})
+
+        # Fast-eval: bypass Step 4 LLM answer generation and return retrieval-only results
+        if fast_eval:
+            answer = results[0]["memory"]["content"] if results else "\u8bb0\u5fc6\u4e2d\u6ca1\u6709\u76f8\u5173\u4fe1\u606f\u3002"
+            trace.append({"step": 4, "name": "Fast-eval retrieval-only",
+                          "detail": f"Top-{len(results)} result returned, no LLM answer",
+                          "elapsed_ms": 0})
+            db.commit()
+            db.close()
+            return {
+                "query": query, "action": "QUERY", "results": results,
+                "answer": answer, "graph_context": graph_ctx,
+                "trace": trace, "total_elapsed_ms": round((time.time() - start_time) * 1000),
+            }
 
         # Step 4: LLM Answer Generation
         step_start = time.time()
@@ -1988,7 +2127,28 @@ class MemoryPipelineBackend:
         db.close()
         faiss_stats = self.faiss.get_stats()
 
+        # Probe HugeGraph connectivity
+        hg_connected = False
+        try:
+            _ = self.hg.get_all_vertices(limit=1)
+            hg_connected = True
+        except Exception:
+            pass
+
+        graph_name = HUGEGRAPH_GRAPH
+        try:
+            graph_name = self.hg.client.cfg.graph_name
+        except Exception:
+            pass
+
         return {
+            "memories": mem_count,
+            "entities": len(hg_verts),
+            "edges": len(hg_edges),
+            "vectors": faiss_stats.get("total_vectors", 0),
+            "avg_latency_ms": 0,
+            "hugegraph_connected": hg_connected,
+            "graph": graph_name,
             "total_memories": mem_count,
             "total_nodes": len(hg_verts),
             "total_edges": len(hg_edges),
@@ -2027,28 +2187,105 @@ class MemoryPipelineBackend:
         db.close()
         return memories
 
-    def clear_all(self, user_id: str = "demo_user"):
+    def distill_user_memories(
+        self, user_id: str = "demo_user", threshold: int = None
+    ) -> dict:
+        """Run Experience + Skill distillation for all memories of a user."""
+        memories = self.get_memories(user_id=user_id)
+        # DistillationPipeline expects id/content/created_at
+        atomics = [
+            {"id": m["id"], "content": m["content"], "created_at": time.time()}
+            for m in memories
+        ]
+        result = self._distillation.distill_all(
+            atomics, user_id=user_id, threshold=threshold
+        )
+        return result
+
+    def get_experiences(self, query: str = "", user_id: str = "demo_user", top_k: int = 5) -> list:
+        """Retrieve distilled experiences for a user."""
+        return self._distillation.exp_store.retrieve(query, user_id=user_id, top_k=top_k)
+
+    def get_skills(self, query: str = "", user_id: str = "demo_user", top_k: int = 5) -> list:
+        """Retrieve distilled skills for a user."""
+        return self._distillation.skill_store.retrieve(query, user_id=user_id, top_k=top_k)
+        """Legacy alias; prefer forget_user() for scoped deletion."""
+        return self.forget_user(user_id=user_id)
+
+    def forget_user(self, user_id: str = "demo_user"):
+        """Delete all memories for a user and rebuild FAISS/BM25 without them.
+
+        Graph vertices/edges are intentionally retained as global knowledge,
+        matching the PowerMem semantics where graph structure is shared.
+        """
         db = get_metadata_db()
         db.execute("DELETE FROM memories WHERE user_id=?", (user_id,))
         db.commit()
-        db.close()
-        self.hg.clear_graph()
+
+        # Rebuild FAISS from remaining memories
         self.faiss.clear()
+        for row in db.execute(
+            "SELECT id, content, created_at FROM memories ORDER BY created_at ASC"
+        ):
+            self.faiss.add_memory(row["id"], row["content"], row["created_at"])
         try:
             self.faiss.save()
         except Exception:
             pass
-        # Clear BM25 index
+
+        # Rebuild BM25 from remaining memories
         if self._bm25 is not None:
             try:
+                self._bm25 = BM25FullTextBackend()
+                docs, ids = [], []
+                for row in db.execute("SELECT id, content FROM memories ORDER BY created_at ASC"):
+                    docs.append(row["content"])
+                    ids.append(row["id"])
+                if docs:
+                    self._bm25.add_documents(docs, ids)
                 bm25_dir = os.path.dirname(os.path.abspath(__file__))
-                self._bm25 = BM25FullTextBackend()  # fresh empty index
                 self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
-            except Exception:
-                pass
-        # Clear provenance
-        self._provenance = {}
+            except Exception as e:
+                print(f"[BM25] Rebuild error: {e}", file=sys.stderr, flush=True)
+
+        db.close()
+
+        # Remove provenance entries tied to this user (best-effort)
+        mem_ids = set()
+        db2 = get_metadata_db()
+        for row in db2.execute("SELECT id FROM memories WHERE user_id=?", (user_id,)):
+            mem_ids.add(row["id"])
+        db2.close()
+        for mid in list(self._provenance.keys()):
+            if mid not in mem_ids:
+                self._provenance.pop(mid, None)
         self._save_provenance()
+
+    def get_persona(self, user_id: str = "demo_user") -> dict:
+        """Retrieve the L3 persona / user profile for a scope."""
+        db = get_metadata_db()
+        row = db.execute(
+            "SELECT summary, updated_at FROM personas WHERE user_id=?", (user_id,)
+        ).fetchone()
+        db.close()
+        if row:
+            return {
+                "user_id": user_id,
+                "summary": row["summary"],
+                "updated_at": row["updated_at"],
+            }
+        return {"user_id": user_id, "summary": "", "updated_at": 0}
+
+    def update_persona(self, user_id: str = "demo_user", summary: str = ""):
+        """Update the L3 persona / user profile for a scope."""
+        db = get_metadata_db()
+        db.execute(
+            "INSERT INTO personas(user_id, summary, updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET summary=excluded.summary, updated_at=excluded.updated_at",
+            (user_id, summary, time.time()),
+        )
+        db.commit()
+        db.close()
 
 
 # ============================================================================
@@ -2106,11 +2343,70 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     def api_graph():
         return jsonify(store.get_graph_data())
 
+    @app.route("/api/locomo", methods=["GET"])
+    def api_locomo():
+        """Serve cached LOCOMO benchmark result if available."""
+        import glob
+        candidates = [
+            "locomo_result_full.json",
+            "tests/locomo_result_full.json",
+            "../tests/locomo_result_full.json",
+            "locomo_result_sample.json",
+            "tests/locomo_result_sample.json",
+            "../tests/locomo_result_sample.json",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                try:
+                    with open(c, "r", encoding="utf-8") as f:
+                        return jsonify(json.load(f))
+                except Exception as e:
+                    return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "not_ready", "metrics": {}})
+
     @app.route("/api/clear", methods=["POST"])
     def api_clear():
         data = request.json or {}
         store.clear_all(data.get("user_id", "demo_user"))
         return jsonify({"status": "cleared"})
+
+    @app.route("/api/memory/distill", methods=["POST"])
+    def api_distill():
+        data = request.json or {}
+        user_id = data.get("user_id", "demo_user")
+        threshold = data.get("threshold")
+        if threshold is not None:
+            threshold = int(threshold)
+        return jsonify(store.distill_user_memories(user_id=user_id, threshold=threshold))
+
+    @app.route("/api/memory/experiences", methods=["POST"])
+    def api_experiences():
+        data = request.json or {}
+        return jsonify(store.get_experiences(
+            query=data.get("query", ""),
+            user_id=data.get("user_id", "demo_user"),
+            top_k=int(data.get("top_k", 5)),
+        ))
+
+    @app.route("/api/memory/skills", methods=["POST"])
+    def api_skills():
+        data = request.json or {}
+        return jsonify(store.get_skills(
+            query=data.get("query", ""),
+            user_id=data.get("user_id", "demo_user"),
+            top_k=int(data.get("top_k", 5)),
+        ))
+
+    @app.route("/api/memory/persona", methods=["GET", "POST"])
+    def api_persona():
+        if request.method == "GET":
+            return jsonify(store.get_persona(request.args.get("user_id", "demo_user")))
+        data = request.json or {}
+        store.update_persona(
+            user_id=data.get("user_id", "demo_user"),
+            summary=data.get("summary", ""),
+        )
+        return jsonify(store.get_persona(data.get("user_id", "demo_user")))
 
     return app
 
