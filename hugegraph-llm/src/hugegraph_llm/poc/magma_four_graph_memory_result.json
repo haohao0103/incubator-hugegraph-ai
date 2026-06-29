@@ -1,0 +1,90 @@
+{
+  "poc_name": "MAGMA Four-Graph Agent Memory",
+  "date": "2026-06-10",
+  "paper": "MAGMA: A Multi-Graph based Agentic Memory (ACL 2026)",
+  "arxiv": "https://arxiv.org/abs/2601.03236",
+  "tests": [
+    {
+      "name": "Fast Path Write",
+      "passed": true,
+      "detail": "Wrote 10 events, 27 total nodes"
+    },
+    {
+      "name": "Four Graph Edges",
+      "passed": true,
+      "detail": "S:4 T:9 C:4 E:26"
+    },
+    {
+      "name": "Intent Routing",
+      "passed": true,
+      "detail": "4/5 correct intent classifications"
+    },
+    {
+      "name": "Beam Search Query",
+      "passed": true,
+      "detail": "8 results in 55.3ms"
+    },
+    {
+      "name": "Cross-Graph Traversal",
+      "passed": true,
+      "detail": "Semantic neighbors: 2, Entities: 17"
+    },
+    {
+      "name": "Gremlin Translation",
+      "passed": true,
+      "detail": "5 Gremlin query patterns mapped"
+    },
+    {
+      "name": "MAGMA vs Single-Graph",
+      "passed": true,
+      "detail": "Causal graph contribution detected: True"
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "pass_rate": "7/7"
+  },
+  "store_stats": {
+    "total_nodes": 27,
+    "total_edges": 43,
+    "semantic_edges": 4,
+    "temporal_edges": 9,
+    "causal_edges": 4,
+    "entity_ref_edges": 26,
+    "entity_nodes": 17,
+    "fast_path_writes": 10,
+    "slow_path_writes": 10,
+    "vector_backend": "faiss",
+    "fulltext_backend": "bm25",
+    "graph_backend": "hugegraph"
+  },
+  "gremlin_patterns": {
+    "semantic_neighbors": {
+      "description": "查询语义邻居节点",
+      "gremlin": "g.V(nodeId).outE('semantic').has('weight', gt(threshold)).inV().values('content')",
+      "hugegraph_advantage": "HugeGraph OLAP traverser 可并行处理大规模语义邻域查询"
+    },
+    "temporal_chain": {
+      "description": "时间链后继查询",
+      "gremlin": "g.V(nodeId).out('temporal').until(has('timestamp', gt(targetTime))).repeat(out('temporal')).emit().values('content')",
+      "hugegraph_advantage": "时间链天然有序，HugeGraph 可支持亿级时间序列节点的快速遍历"
+    },
+    "causal_chain": {
+      "description": "因果链推理",
+      "gremlin": "g.V(nodeId).repeat(outE('causal').order().by('weight', desc).inV()).until(loops().is(gt(maxDepth))).path().by('content')",
+      "hugegraph_advantage": "Vermeer OLAP 引擎支持因果链的批量并行分析，适合供应链风险传导场景"
+    },
+    "entity_events": {
+      "description": "实体关联事件查询",
+      "gremlin": "g.V('entity', 'name', entityName).in('entity_ref').order().by('timestamp', desc).limit(k).values('content')",
+      "hugegraph_advantage": "实体事件查询可复用 HugeGraph 的 vertex-centric index，毫秒级响应"
+    },
+    "multi_hop_traversal": {
+      "description": "跨图多跳遍历（MAGMA核心能力）",
+      "gremlin": "g.V(anchorId).repeat(both().simplePath()).until(has(label, within('semantic','causal','temporal','entity_ref'))).times(k).dedup()",
+      "hugegraph_advantage": "60亿点边生产验证，跨类型边的多跳遍历是 HugeGraph 核心差异化能力"
+    }
+  }
+}

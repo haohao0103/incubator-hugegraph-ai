@@ -1,0 +1,117 @@
+{
+  "evaluation_name": "GraphRAG-Bench P0-v5 (FAISS + BM25 + Graph via PyHugeClient)",
+  "timestamp": "2026-06-26T16:08:17.016150",
+  "llm_model": "mimo-v2.5-pro",
+  "embed_model": "all-MiniLM-L6-v2",
+  "chunk_size": 1500,
+  "chunk_overlap": 200,
+  "total_vertices_in_hg": 9185,
+  "rag_evaluation": {
+    "novel/Fact Retrieval": {
+      "avg_accuracy": 0.6034920634920635,
+      "avg_rouge_l": 0.3101587301587302,
+      "avg_f1": 0.34231067347772154,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 11.2,
+      "avg_graph_hits": 11.2,
+      "questions_with_graph_hits": 4,
+      "avg_latency": 9.795483716328938,
+      "num_questions": 15
+    },
+    "novel/Complex Reasoning": {
+      "avg_accuracy": 0.656423853923854,
+      "avg_rouge_l": 0.48480038480038484,
+      "avg_f1": 0.3105991228844136,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 16.8,
+      "avg_graph_hits": 16.8,
+      "questions_with_graph_hits": 6,
+      "avg_latency": 11.913077052434286,
+      "num_questions": 15
+    },
+    "novel/Contextual Summarize": {
+      "avg_accuracy": 0.32596243452937546,
+      "avg_rouge_l": 0.21453499952471067,
+      "avg_f1": 0.3025330446856556,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 5.6,
+      "avg_graph_hits": 5.6,
+      "questions_with_graph_hits": 2,
+      "avg_latency": 16.33124237060547,
+      "num_questions": 15
+    },
+    "novel/Creative Generation": {
+      "avg_accuracy": 0.3559524505415024,
+      "avg_rouge_l": 0.22935661080808475,
+      "avg_f1": 0.23053815191020466,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 8.4,
+      "avg_graph_hits": 8.4,
+      "questions_with_graph_hits": 2,
+      "avg_latency": 22.66187629699707,
+      "num_questions": 15
+    },
+    "medical/Fact Retrieval": {
+      "avg_accuracy": 0.644423558897243,
+      "avg_rouge_l": 0.5230720151308386,
+      "avg_f1": 0.40901938078781713,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 0.0,
+      "avg_graph_hits": 0.0,
+      "questions_with_graph_hits": 0,
+      "avg_latency": 9.002448272705077,
+      "num_questions": 15
+    },
+    "medical/Complex Reasoning": {
+      "avg_accuracy": 0.6156327006327006,
+      "avg_rouge_l": 0.38121092331786904,
+      "avg_f1": 0.26736043629766876,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 0.0,
+      "avg_graph_hits": 0.0,
+      "questions_with_graph_hits": 0,
+      "avg_latency": 13.908780193328857,
+      "num_questions": 15
+    },
+    "medical/Contextual Summarize": {
+      "avg_accuracy": 0.4384835754312977,
+      "avg_rouge_l": 0.23347910607699682,
+      "avg_f1": 0.41600710893963,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 0.0,
+      "avg_graph_hits": 0.0,
+      "questions_with_graph_hits": 0,
+      "avg_latency": 12.562726322809855,
+      "num_questions": 15
+    },
+    "medical/Creative Generation": {
+      "avg_accuracy": 0.5070400537546661,
+      "avg_rouge_l": 0.2278204989963877,
+      "avg_f1": 0.4087994067192061,
+      "avg_vector_hits": 10.0,
+      "avg_bm25_hits": 10.0,
+      "graph_context_hits": 0.0,
+      "avg_graph_hits": 0.0,
+      "questions_with_graph_hits": 0,
+      "avg_latency": 25.867479753494262,
+      "num_questions": 15
+    }
+  },
+  "summary": {
+    "novel_avg_accuracy": 0.48545770062169885,
+    "medical_avg_accuracy": 0.5513949721789768,
+    "overall_avg_accuracy": 0.5184263364003379,
+    "novel_avg_graph_hits": 10.5,
+    "medical_avg_graph_hits": 0.0,
+    "total_questions_with_graph_hits": 14,
+    "total_questions": 120
+  },
+  "elapsed_seconds": 1976.0864362716675
+}
