@@ -32,6 +32,7 @@ from hugegraph_llm.engines.memory.base import (
     RerankerBase,
     VectorStoreBase,
 )
+from hugegraph_llm.engines.memory.graph_store import HugeGraphGraphStore
 from hugegraph_llm.utils.log import log
 
 
@@ -84,6 +85,9 @@ embedder_factory = EmbedderFactory()
 vector_store_factory = VectorStoreFactory()
 reranker_factory = RerankerFactory()
 graph_store_factory = GraphStoreFactory()
+
+# Register HugeGraphGraphStore as the default graph store backend
+graph_store_factory.register("hugegraph", HugeGraphGraphStore)
 
 
 def register_llm(name: str) -> Callable[[Type], Type]:

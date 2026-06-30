@@ -58,6 +58,21 @@ from hugegraph_llm.engines.memory.intelligence import (
     ImportanceEvaluator,
     MemoryOptimizer,
 )
+from hugegraph_llm.engines.memory.graph_store import HugeGraphGraphStore
+from hugegraph_llm.engines.memory.additive_extraction import (
+    AdditiveExtractionPipeline,
+    ADDITIVE_EXTRACTION_PROMPT,
+    batch_dedup,
+    content_hash_md5,
+)
+from hugegraph_llm.engines.memory.memory_history import MemoryHistoryTracker, HistoryEvent
+from hugegraph_llm.engines.memory.hybrid_scoring import (
+    compute_entity_boosts,
+    extract_query_entities_simple,
+    get_bm25_params,
+    normalize_bm25,
+    score_and_rank,
+)
 from hugegraph_llm.engines.memory.query_rewrite import QueryRewriteEngine, rewrite_query
 
 __all__ = [
@@ -99,4 +114,16 @@ __all__ = [
     "AsyncMemoryClient",
     "QueryRewriteEngine",
     "rewrite_query",
+    "HugeGraphGraphStore",
+    "AdditiveExtractionPipeline",
+    "ADDITIVE_EXTRACTION_PROMPT",
+    "batch_dedup",
+    "content_hash_md5",
+    "MemoryHistoryTracker",
+    "HistoryEvent",
+    "compute_entity_boosts",
+    "extract_query_entities_simple",
+    "get_bm25_params",
+    "normalize_bm25",
+    "score_and_rank",
 ]

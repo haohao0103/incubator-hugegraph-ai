@@ -285,6 +285,7 @@ def run_locomo(
     fast_eval: bool = False,
     workers: int = 1,
     extraction_workers: int = 8,
+    skip_ingestion: bool = False,
 ) -> Dict[str, Any]:
     """Run the full benchmark pipeline.
 
@@ -293,6 +294,9 @@ def run_locomo(
                    for fast metrics. Accuracy is then approximated by rank==1.
         workers: Number of parallel processes for QA evaluation.
         extraction_workers: Number of threads for parallel entity extraction during ingestion.
+        skip_ingestion: If True, assume the graph already contains the LOCOMO data and
+                        skip extraction + write. Useful for re-running only the QA
+                        generation/evaluation phase after an LLM-balance interruption.
     """
     data_file = download_locomo(data_dir)
     sessions = load_locomo_sessions(data_file, max_sessions=max_sessions)
@@ -306,35 +310,38 @@ def run_locomo(
 
     # ------------------- ingestion -------------------
     # Flatten all batches across all sessions and extract entities in parallel.
-    all_batches = []  # list of (user_id, text)
-    for session in sessions:
-        for text in session_to_memory_texts(session, batch_size=batch_size):
-            all_batches.append((session["user_id"], text))
-    log.info("Ingesting %d memory batches across %d sessions", len(all_batches), len(sessions))
+    if not skip_ingestion:
+        all_batches = []  # list of (user_id, text)
+        for session in sessions:
+            for text in session_to_memory_texts(session, batch_size=batch_size):
+                all_batches.append((session["user_id"], text))
+        log.info("Ingesting %d memory batches across %d sessions", len(all_batches), len(sessions))
 
-    if extraction_workers > 1 and len(all_batches) > 1:
-        extraction_results = _extract_batches_in_parallel(
-            [text for _, text in all_batches], store, workers=extraction_workers
-        )
-    else:
-        extraction_results = [
-            store.extract_entities_relationships(text) for _, text in all_batches
-        ]
-
-    # Store sequentially with pre-extracted entities (avoids per-call LLM overhead).
-    for (user_id, text), extraction in zip(all_batches, extraction_results):
-        try:
-            store.add_memory_bypass_classify(
-                text,
-                user_id=user_id,
-                entities=extraction.get("entities", []),
-                relationships=extraction.get("relationships", []),
-                skip_index_save=True,
+        if extraction_workers > 1 and len(all_batches) > 1:
+            extraction_results = _extract_batches_in_parallel(
+                [text for _, text in all_batches], store, workers=extraction_workers
             )
-        except Exception as e:
-            log.warning("add_memory failed for %s: %s", user_id, e)
+        else:
+            extraction_results = [
+                store.extract_entities_relationships(text) for _, text in all_batches
+            ]
 
-    store.save_index()
+        # Store sequentially with pre-extracted entities (avoids per-call LLM overhead).
+        for (user_id, text), extraction in zip(all_batches, extraction_results):
+            try:
+                store.add_memory_bypass_classify(
+                    text,
+                    user_id=user_id,
+                    entities=extraction.get("entities", []),
+                    relationships=extraction.get("relationships", []),
+                    skip_index_save=True,
+                )
+            except Exception as e:
+                log.warning("add_memory failed for %s: %s", user_id, e)
+
+        store.save_index()
+    else:
+        log.info("Skipping ingestion (--skip-ingestion); using existing graph data")
 
     # ------------------- QA evaluation -------------------
     # Build QA evaluation units. Respect sample_qa per session.
@@ -432,6 +439,8 @@ def main():
                         help="Parallel processes for QA evaluation")
     parser.add_argument("--extraction-workers", type=int, default=8,
                         help="Parallel threads for entity extraction during ingestion")
+    parser.add_argument("--skip-ingestion", action="store_true",
+                        help="Skip ingestion and reuse existing graph data (only run QA evaluation)")
     parser.add_argument("--output", default="locomo_result.json", help="Result JSON path")
     args = parser.parse_args()
 
@@ -448,6 +457,7 @@ def main():
         fast_eval=args.fast_eval,
         workers=args.workers,
         extraction_workers=args.extraction_workers,
+        skip_ingestion=args.skip_ingestion,
     )
 
     with open(output_path, "w", encoding="utf-8") as f:

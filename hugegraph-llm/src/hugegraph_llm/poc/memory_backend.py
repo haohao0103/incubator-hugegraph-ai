@@ -807,6 +807,8 @@ def _normalize_keys(result: dict) -> dict:
 
 
 def _get_llm_text(response) -> str:
+    if not response.choices:
+        return ""
     msg = response.choices[0].message
     return (msg.content or "").strip() or (msg.reasoning_content or "").strip()
 
