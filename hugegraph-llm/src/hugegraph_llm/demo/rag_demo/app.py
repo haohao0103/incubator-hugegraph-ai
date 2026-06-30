@@ -53,6 +53,9 @@ from hugegraph_llm.demo.rag_demo.text2gremlin_block import (
     gremlin_generate_selective,
 )
 from hugegraph_llm.demo.rag_demo.vector_graph_block import create_vector_graph_block
+from hugegraph_llm.demo.rag_demo.graphrag_enhancement_block import (
+    create_graphrag_enhancement_block,
+)
 from hugegraph_llm.resources.demo.css import CSS
 from hugegraph_llm.utils.log import log
 
@@ -122,6 +125,8 @@ def init_rag_ui() -> gr.Interface:
             create_admin_block()
         with gr.Tab(label="7. Advanced GraphRAG 🚀"):
             create_advanced_graphrag_block()
+        with gr.Tab(label="8. GraphRAG Enhancement 🧪"):
+            create_graphrag_enhancement_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
