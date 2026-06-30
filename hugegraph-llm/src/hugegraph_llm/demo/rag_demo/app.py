@@ -38,6 +38,7 @@ from hugegraph_llm.demo.rag_demo.agent_handlers import (
     global_search,
     graph_rag_search,
 )
+from hugegraph_llm.demo.rag_demo.capability_map_block import create_capability_map_block
 from hugegraph_llm.demo.rag_demo.configs_block import (
     apply_embedding_config,
     apply_graph_config,
@@ -128,6 +129,8 @@ def init_rag_ui() -> gr.Interface:
             create_advanced_graphrag_block()
         with gr.Tab(label="8. GraphRAG Enhancement 🧪"):
             create_graphrag_enhancement_block()
+        with gr.Tab(label="9. Capability Map 🗺️"):
+            create_capability_map_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
