@@ -18,7 +18,7 @@ import json
 from pycgraph import CStatus
 
 from hugegraph_llm.config import llm_settings
-from hugegraph_llm.models.llms.init_llm import get_chat_llm
+from hugegraph_llm.models.llms.init_llm import get_extract_llm
 from hugegraph_llm.nodes.base_node import BaseNode
 from hugegraph_llm.operators.llm_op.schema_build import SchemaBuilder
 from hugegraph_llm.state.ai_state import WkFlowInput, WkFlowState
@@ -31,7 +31,7 @@ class SchemaBuildNode(BaseNode):
     wk_input: WkFlowInput = None
 
     def node_init(self):
-        llm = get_chat_llm(llm_settings)
+        llm = get_extract_llm(llm_settings)
         self.schema_builder = SchemaBuilder(llm)
 
         # texts -> raw_texts
@@ -42,21 +42,20 @@ class SchemaBuildNode(BaseNode):
             elif isinstance(self.wk_input.texts, str):
                 raw_texts = [self.wk_input.texts]
 
-        # query_examples: already parsed list[dict] or raw JSON string
+        # query_examples: list of strings or list of dicts with description/gremlin
         query_examples = []
         qe_src = self.wk_input.query_examples if self.wk_input.query_examples else None
         if qe_src:
             try:
-                parsed_examples = json.loads(qe_src)
-                # Validate and retain the description and gremlin fields
-                query_examples = [
-                    {
-                        "description": ex.get("description", ""),
-                        "gremlin": ex.get("gremlin", ""),
-                    }
-                    for ex in parsed_examples
-                    if isinstance(ex, dict) and "description" in ex and "gremlin" in ex
-                ]
+                parsed_examples = json.loads(qe_src) if isinstance(qe_src, str) else qe_src
+                for ex in parsed_examples:
+                    if isinstance(ex, str):
+                        query_examples.append({"description": ex, "gremlin": ""})
+                    elif isinstance(ex, dict):
+                        query_examples.append({
+                            "description": ex.get("description", ""),
+                            "gremlin": ex.get("gremlin", ""),
+                        })
             except json.JSONDecodeError as e:
                 return CStatus(-1, f"Query Examples is not in a valid JSON format: {e}")
 

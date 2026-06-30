@@ -334,6 +334,96 @@ class GraphQueryNode(BaseNode):
             knowledge.add(node_str)
         return knowledge
 
+    def _rest_vertex_query(self, vids: List[str]) -> List[Dict[str, Any]]:
+        """Fetch vertices by ID via REST API (replaces Gremlin g.V(vids))."""
+        results = []
+        for vid in vids:
+            try:
+                v = self._client.graph().getVertexById(vid)
+                if v and v.id:
+                    results.append({"id": v.id, "label": v.label, "properties": v.properties})
+            except Exception:
+                continue
+        return results
+
+    def _rest_neighbor_traversal(self, seed_vid: str, edge_labels: List[str],
+                                  edge_limit: int, max_deep: int) -> List[Dict[str, Any]]:
+        """BFS multi-hop neighbor traversal via REST API (replaces Gremlin repeat(bothE().otherV())).
+
+        Returns paths in the same format as Gremlin's path().by(project(...)):
+        [{"objects": [vertex, edge, vertex, edge, vertex, ...]}, ...]
+        where vertex = {"label": str, "id": str, "props": dict}
+              edge   = {"label": str, "inV": str, "outV": str, "props": dict}
+        """
+        paths = []
+        seed_vertex = None
+        try:
+            v = self._client.graph().getVertexById(seed_vid)
+            if v:
+                seed_vertex = {"label": v.label, "id": v.id, "props": dict(v.properties)}
+        except Exception:
+            return paths
+
+        if not seed_vertex:
+            return paths
+
+        # BFS: each entry is (current_vid, path_so_far, visited_ids)
+        queue = [(seed_vid, [seed_vertex], {seed_vid})]
+
+        for depth in range(max_deep):
+            next_queue = []
+            for current_vid, path, visited in queue:
+                try:
+                    edges, _ = self._client.graph().getEdgeByPage(
+                        vertex_id=current_vid, direction="BOTH", limit=edge_limit
+                    )
+                except Exception:
+                    continue
+
+                edge_count = 0
+                for edge in edges:
+                    if edge_count >= edge_limit:
+                        break
+                    if edge.label not in edge_labels:
+                        continue
+
+                    neighbor_vid = edge.inV if edge.outV == current_vid else edge.outV
+                    if neighbor_vid in visited:
+                        continue
+
+                    try:
+                        nv = self._client.graph().getVertexById(neighbor_vid)
+                        if not nv:
+                            continue
+                    except Exception:
+                        continue
+
+                    edge_item = {
+                        "label": edge.label,
+                        "inV": edge.inV,
+                        "outV": edge.outV,
+                        "props": dict(edge.properties) if edge.properties else {},
+                    }
+                    vertex_item = {
+                        "label": nv.label,
+                        "id": nv.id,
+                        "props": dict(nv.properties),
+                    }
+
+                    new_path = path + [edge_item, vertex_item]
+                    new_visited = visited | {neighbor_vid}
+                    paths.append({"objects": list(new_path)})
+
+                    if depth + 1 < max_deep:
+                        next_queue.append((neighbor_vid, new_path, new_visited))
+                    edge_count += 1
+
+            queue = next_queue
+            if not queue:
+                break
+
+        return paths[:self._max_items]
+
     def _subgraph_query(self, context: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Extract params from context
         matched_vids = context.get("match_vids")
@@ -346,8 +436,6 @@ class GraphQueryNode(BaseNode):
 
         # 2. Extract edge_labels from graph schema
         _, edge_labels = self._extract_labels_from_schema()
-        edge_labels_str = ",".join("'" + label + "'" for label in edge_labels)
-        # TODO: enhance the limit logic later
         edge_limit_amount = len(edge_labels) * huge_settings.edge_limit_pre_label
 
         use_id_to_match = self._prop_to_match is None
@@ -355,31 +443,30 @@ class GraphQueryNode(BaseNode):
             if not matched_vids:
                 return context
 
-            gremlin_query = VERTEX_QUERY_TPL.format(keywords=matched_vids)
-            vertexes = self._client.gremlin().exec(gremlin=gremlin_query)["data"]
-            log.debug("Vids gremlin query: %s", gremlin_query)
+            # Fetch seed vertices via REST API
+            vertexes = self._rest_vertex_query(matched_vids)
+            log.debug("REST vertex query found %d vertices", len(vertexes))
 
             vertex_knowledge = self._format_graph_from_vertex(query_result=vertexes)
-            paths: List[Any] = []
-            # TODO: use generator or asyncio to speed up the query logic
+            all_paths: List[Any] = []
+
+            # BFS multi-hop traversal for each matched VID
             for matched_vid in matched_vids:
-                gremlin_query = VID_QUERY_NEIGHBOR_TPL.format(
-                    keywords=f"'{matched_vid}'",
-                    max_deep=self._max_deep,
-                    edge_labels=edge_labels_str,
+                log.debug("REST neighbor traversal for VID: %s", matched_vid)
+                paths = self._rest_neighbor_traversal(
+                    seed_vid=matched_vid,
+                    edge_labels=edge_labels,
                     edge_limit=edge_limit_amount,
-                    max_items=self._max_items,
+                    max_deep=self._max_deep,
                 )
-                log.debug("Kneighbor gremlin query: %s", gremlin_query)
-                paths.extend(self._client.gremlin().exec(gremlin=gremlin_query)["data"])
+                all_paths.extend(paths)
 
             (
                 graph_chain_knowledge,
                 vertex_degree_list,
                 knowledge_with_degree,
-            ) = self._format_graph_query_result(query_paths=paths)
+            ) = self._format_graph_query_result(query_paths=all_paths)
 
-            # TODO: we may need to optimize the logic here with global deduplication (may lack some single vertex)
             if not graph_chain_knowledge:
                 graph_chain_knowledge.update(vertex_knowledge)
             if vertex_degree_list:
@@ -387,26 +474,33 @@ class GraphQueryNode(BaseNode):
             else:
                 vertex_degree_list.append(vertex_knowledge)
         else:
-            # WARN: When will the query enter here?
+            # Property-based fallback: use vertex condition search
             keywords = context.get("keywords")
             assert keywords, "No related property(keywords) for graph query."
-            keywords_str = ",".join("'" + kw + "'" for kw in keywords)
-            gremlin_query = PROPERTY_QUERY_NEIGHBOR_TPL.format(
-                prop=self._prop_to_match,
-                keywords=keywords_str,
-                edge_labels=edge_labels_str,
-                edge_limit=edge_limit_amount,
-                max_deep=self._max_deep,
-                max_items=self._max_items,
-            )
-            log.warning("Unable to find vid, downgraded to property query, please confirm if it meets expectation.")
+            log.warning("Unable to find vid, downgraded to property query via REST API.")
 
-            paths: List[Any] = self._client.gremlin().exec(gremlin=gremlin_query)["data"]
+            all_paths = []
+            for kw in keywords:
+                try:
+                    vertices, _ = self._client.graph().getVertexByCondition(
+                        label="", limit=8, properties={self._prop_to_match: kw}
+                    )
+                    for v in vertices:
+                        paths = self._rest_neighbor_traversal(
+                            seed_vid=v.id,
+                            edge_labels=edge_labels,
+                            edge_limit=edge_limit_amount,
+                            max_deep=self._max_deep,
+                        )
+                        all_paths.extend(paths)
+                except Exception as e:
+                    log.warning("Property query for '%s' failed: %s", kw, e)
+
             (
                 graph_chain_knowledge,
                 vertex_degree_list,
                 knowledge_with_degree,
-            ) = self._format_graph_query_result(query_paths=paths)
+            ) = self._format_graph_query_result(query_paths=all_paths)
 
         context["graph_result"] = list(graph_chain_knowledge)
         if context["graph_result"]:
