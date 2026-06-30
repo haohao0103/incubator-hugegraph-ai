@@ -257,6 +257,9 @@ class HugeGraphGraphStore(GraphStoreBase):
         """
         all_paths: List[List[Dict[str, Any]]] = []
 
+        # Use the matched vertex name (not the query entity string) for traversal
+        start_vertex = start_info.get("name", start_name)
+
         # Build adjacency map from edges
         adjacency: Dict[str, List[Dict[str, Any]]] = {}
         for edge in self._edge_cache:
@@ -275,8 +278,8 @@ class HugeGraphGraphStore(GraphStoreBase):
                 })
 
         # BFS traversal
-        visited: set = {start_name}
-        current_level = [(start_name, start_info.get("label", ""), [])]
+        visited: set = {start_vertex}
+        current_level = [(start_vertex, start_info.get("label", ""), [])]
 
         for hop in range(1, max_hops + 1):
             next_level = []

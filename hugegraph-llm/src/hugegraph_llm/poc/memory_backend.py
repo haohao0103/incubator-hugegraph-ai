@@ -84,6 +84,7 @@ from hugegraph_llm.engines.memory import (
     compute_entity_boosts,
     extract_query_entities_simple,
     get_bm25_params,
+    ENTITY_BOOST_WEIGHT,
     LLMQueryRewriteEngine,
     RouteStore,
     compute_routing_key,
@@ -878,8 +879,9 @@ class MemoryPipelineBackend:
                 print(f"[BM25] Init error (non-critical): {e}",
                       file=sys.stderr, flush=True)
 
-        # P0: RRF fusion operator
-        self._rrf = ReciprocalRankFusion(k=60, min_score=0.0) if HAS_GRAPHRAG_OPS else None
+        # P0: Additive hybrid scoring (mem0-style) replaces old RRF rank fusion
+        # 借鉴自: mem0/utils/scoring.py score_and_rank
+        self._additive_scoring_available = HAS_GRAPHRAG_OPS
 
         # P0: Optional cross-encoder / API reranker
         self._reranker = get_reranker() if HAS_GRAPHRAG_OPS else None
@@ -904,6 +906,38 @@ class MemoryPipelineBackend:
         # P0: Audit logging (PowerMem-style telemetry/audit)
         self._audit = get_audit_logger()
 
+        # P0: Entity-centric graph store for multi-hop retrieval
+        # 借鉴自: engines/memory/graph_store.py HugeGraphGraphStore
+        self._graph_store = HugeGraphGraphStore(self.hg, max_hops=2, max_neighbors=50)
+
+        # P0: Memory history tracking (mem0-style SQLite history)
+        # 借鉴自: mem0/memory/storage.py SQLiteManager + engines/memory/memory_history.py
+        self._history_db_path = os.path.join(os.path.dirname(DB_PATH), "memory_history.db")
+        self._history = MemoryHistoryTracker(db_path=self._history_db_path)
+
+        # P0: V3 additive extraction pipeline (mem0-style ADD-only extraction)
+        # 借鉴自: mem0/memory/main.py _add_to_vector_store + engines/memory/additive_extraction.py
+        self._additive_pipeline = AdditiveExtractionPipeline(
+            llm_callback=self._additive_llm_callback
+        )
+
+    def _additive_llm_callback(self, prompt: str) -> str:
+        """LLM callback wrapper for AdditiveExtractionPipeline."""
+        client = OpenAI(base_url=self.llm_base_url, api_key=self.llm_api_key)
+        try:
+            response = client.chat.completions.create(
+                model=self.llm_model,
+                messages=[
+                    {"role": "system", "content": "You are a memory extraction engine."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_completion_tokens=2048,
+            )
+            return _get_llm_text(response)
+        except Exception as e:
+            print(f"[Additive LLM error] {e}", file=sys.stderr, flush=True)
+            return ""
     def _load_provenance(self):
         """Load provenance tracking data from disk."""
         try:
@@ -943,6 +977,17 @@ class MemoryPipelineBackend:
                     sources.append({"memory_id": mem_id, "link": link})
                     break  # one match per memory is enough
         return sources
+
+    def _get_stored_hashes(self, user_id: str) -> set:
+        """Return MD5 hashes of all stored memories for a user (mem0-style dedup)."""
+        db = get_metadata_db()
+        try:
+            rows = db.execute(
+                "SELECT content FROM memories WHERE user_id=?", (user_id,)
+            ).fetchall()
+            return {content_hash_md5(row["content"]) for row in rows}
+        finally:
+            db.close()
 
     # ---- LLM Operations ----
 
@@ -1071,7 +1116,8 @@ class MemoryPipelineBackend:
             return []
 
     def _llm_generate_answer(self, query: str, memories: list, graph_context: str = "") -> str:
-        """Generate answer using LLM based on memories and graph context."""
+        """Generate answer using LLM based on memories and graph context.
+        Falls back to rule-based answer when LLM output is clearly garbage."""
         try:
             client = OpenAI(base_url=self.llm_base_url, api_key=self.llm_api_key)
             memory_text = "\n".join([f"- {m['content']}" for m in memories])
@@ -1079,24 +1125,61 @@ class MemoryPipelineBackend:
                 model=self.llm_model,
                 messages=[
                     {"role": "system", "content":
-                     "你是HugeGraph Memory助手，基于用户的记忆回答问题"
-                     "。回答要简短，不超过2句话。不要输出推理过程。"},
-                    {"role": "user", "content": ANSWER_PROMPT.format(
-                        query=query, memories=memory_text,
-                        graph_context=graph_context or "无")},
+                     "你是HugeGraph Memory助手。只根据提供的记忆内容直接回答用户问题。"
+                     "回答1-2句话，不要输出编号列表，不要复述规则，不要输出推理过程。"},
+                    {"role": "user", "content":
+                     f"用户问题：{query}\n\n相关记忆：\n{memory_text}\n\n"
+                     f"请直接回答问题，只用记忆中的信息。"},
                 ],
                 temperature=0.3,
-                max_completion_tokens=256,
+                max_completion_tokens=128,
             )
             content = _get_llm_text(response)
             if not content:
-                content = "无法生成回答。"
+                content = ""
             # Post-process: strip MiMo chain-of-thought reasoning
             content = self._strip_reasoning(content)
-            return content
+            # Detect prompt-regurgitation: if answer starts with numbered rules, fall back
+            if self._is_prompt_regurgitation(content):
+                content = self._rule_based_answer(query, memories)
+            return content if content else self._rule_based_answer(query, memories)
         except Exception as e:
             print(f"[LLM answer error] {e}", file=sys.stderr, flush=True)
-            return f"\u751f\u6210\u56de\u7b54\u65f6\u51fa\u9519: {e}"
+            return self._rule_based_answer(query, memories)
+
+    def _is_prompt_regurgitation(self, text: str) -> bool:
+        """Detect if the LLM output is regurgitating prompt rules instead of answering."""
+        if not text:
+            return True
+        # Starts with numbered rule pattern like "1." or "2."
+        if re.match(r'^\d+\.\s', text):
+            return True
+        # Contains meta-rule keywords that shouldn be in an answer
+        meta_keywords = ['不能跨记忆推断', '不能编造', '只根据记忆回答', '不要输出推理过程',
+                         '回答规则', '严格按', '绝不能']
+        for kw in meta_keywords:
+            if kw in text:
+                return True
+        return False
+
+    def _rule_based_answer(self, query: str, memories: list) -> str:
+        """Simple rule-based answer from search results when LLM fails."""
+        if not memories:
+            return "记忆中没有这个信息。"
+        # Just present the most relevant memory content directly
+        best = memories[0]
+        content = best.get('content', '')
+        # Try to match common query patterns
+        if '同事' in query and '同事' in content:
+            return f"根据记忆：{content}"
+        if '偏好' in query or '喜欢' in query or '爱好' in query:
+            relevant = [m for m in memories if any(kw in m.get('content','') for kw in ['偏好','喜欢','爱好','偏好使用'])]
+            if relevant:
+                return f"根据记忆：{relevant[0]['content']}"
+        if '谁' in query or '哪' in query:
+            return f"根据记忆找到：{content}"
+        # Generic fallback
+        return f"最相关的记忆：{content}"
 
     # ---- ADD Pipeline (7 steps, aligned with PowerMem) ----
 
@@ -1130,6 +1213,57 @@ class MemoryPipelineBackend:
         now = time.time()
         memory_id = str(uuid.uuid4())[:8]
         trace = []  # pipeline execution trace for frontend display
+
+        # P0: V3 additive extraction + MD5 hash dedup (mem0-style ADD-only pipeline)
+        # 借鉴自: mem0/memory/main.py _add_to_vector_store + engines/memory/additive_extraction.py
+        step_start = time.time()
+        existing_rows = db.execute(
+            "SELECT id, content FROM memories WHERE user_id=? ORDER BY created_at DESC",
+            (user_id,)
+        ).fetchall()
+        stored_hashes = self._get_stored_hashes(user_id)
+        existing_memories = [ex["content"] for ex in existing_rows]
+        additive_result = self._additive_pipeline.run(
+            content, stored_hashes=stored_hashes, existing_memories=existing_memories
+        )
+        new_facts = additive_result.get("new_facts", [])
+        dup_facts = additive_result.get("duplicate_facts", [])
+        if not new_facts:
+            db.close()
+            total_elapsed = round((time.time() - start_time) * 1000)
+            result = {
+                "memory_id": None,
+                "action": "SKIP",
+                "reason": "V3 additive dedup: all facts duplicate",
+                "trace": trace + [{"step": 1.8, "name": "V3 ADD-only\u53bb\u91cd",
+                                    "detail": "all facts duplicate, skip insert",
+                                    "elapsed_ms": round((time.time()-step_start)*1000)}],
+                "entities": additive_result.get("entities", []),
+                "relationships": [],
+                "total_elapsed_ms": total_elapsed,
+            }
+            try:
+                self._audit.log(
+                    operation="add_memory",
+                    user_id=user_id,
+                    memory_id=None,
+                    content=content[:2000] if content else None,
+                    latency_ms=total_elapsed,
+                    success=True,
+                    metadata={"action": "SKIP", "reason": "V3 additive dedup"},
+                )
+            except Exception:
+                pass
+            return result
+        if dup_facts:
+            content = "\uff1b".join(new_facts)
+            trace.append({"step": 1.8, "name": "V3 ADD-only\u53bb\u91cd",
+                          "detail": f"{len(new_facts) + len(dup_facts)} facts \u2192 {len(new_facts)} new, {len(dup_facts)} dup",
+                          "elapsed_ms": round((time.time()-step_start)*1000)})
+        else:
+            trace.append({"step": 1.8, "name": "V3 ADD-only\u63d0\u53d6",
+                          "detail": f"{len(new_facts)} facts, no duplicates",
+                          "elapsed_ms": round((time.time()-step_start)*1000)})
 
         # P2: importance scoring and Ebbinghaus retention (PowerMem-style)
         importance = self._importance_evaluator.score(content)
@@ -1170,10 +1304,7 @@ class MemoryPipelineBackend:
         action = "ADD"
         conflict_reason = ""
         conflict_detail = ""
-        existing_rows = db.execute(
-            "SELECT id, content FROM memories WHERE user_id=? ORDER BY created_at DESC",
-            (user_id,)
-        ).fetchall()
+        # existing_rows already fetched during V3 additive extraction
 
         # Entity-level conflict detection
         new_persons = [e["name"] for e in entities if e["type"] == "person"]
@@ -1294,6 +1425,17 @@ class MemoryPipelineBackend:
             # P1: Provenance tracking
             self._track_provenance(memory_id, entities, relationships)
 
+            # P0: Memory history tracking (mem0-style ADD event)
+            # 借鉴自: mem0/memory/storage.py SQLiteManager.batch_add_history
+            self._history.add_history(
+                memory_id=memory_id,
+                event="ADD",
+                new_memory=content,
+                actor_id=user_id or agent_id,
+                role="user",
+                metadata={"entities": entities, "relationships": stored_edges},
+            )
+
         db.commit()
         db.close()
 
@@ -1363,6 +1505,40 @@ class MemoryPipelineBackend:
         now = time.time()
         memory_id = str(uuid.uuid4())[:8]
         trace = []
+
+        # P0: V3 additive extraction + MD5 hash dedup (mem0-style ADD-only pipeline)
+        # 借鉴自: mem0/memory/main.py _add_to_vector_store + engines/memory/additive_extraction.py
+        step_start = time.time()
+        existing_rows = db.execute(
+            "SELECT id, content FROM memories WHERE user_id=? ORDER BY created_at DESC",
+            (user_id,)
+        ).fetchall()
+        stored_hashes = self._get_stored_hashes(user_id)
+        existing_memories = [ex["content"] for ex in existing_rows]
+        additive_result = self._additive_pipeline.run(
+            content, stored_hashes=stored_hashes, existing_memories=existing_memories
+        )
+        new_facts = additive_result.get("new_facts", [])
+        dup_facts = additive_result.get("duplicate_facts", [])
+        if not new_facts:
+            db.close()
+            return {
+                "memory_id": None,
+                "action": "SKIP",
+                "reason": "V3 additive dedup: all facts duplicate",
+                "entities": additive_result.get("entities", []),
+                "relationships": [],
+                "total_elapsed_ms": round((time.time() - start_time) * 1000),
+            }
+        if dup_facts:
+            content = "\uff1b".join(new_facts)
+            trace.append({"step": 1.8, "name": "V3 ADD-only\u53bb\u91cd",
+                          "detail": f"{len(new_facts) + len(dup_facts)} facts \u2192 {len(new_facts)} new, {len(dup_facts)} dup",
+                          "elapsed_ms": round((time.time()-step_start)*1000)})
+        else:
+            trace.append({"step": 1.8, "name": "V3 ADD-only\u63d0\u53d6",
+                          "detail": f"{len(new_facts)} facts, no duplicates",
+                          "elapsed_ms": round((time.time()-step_start)*1000)})
 
         # P2: importance scoring (PowerMem-style)
         importance = self._importance_evaluator.score(content)
@@ -1441,6 +1617,17 @@ class MemoryPipelineBackend:
                 except Exception as e:
                     print(f"[BM25] Add error: {e}", file=sys.stderr, flush=True)
             self._track_provenance(memory_id, entities, relationships)
+
+            # P0: Memory history tracking (mem0-style ADD event)
+            # 借鉴自: mem0/memory/storage.py SQLiteManager.batch_add_history
+            self._history.add_history(
+                memory_id=memory_id,
+                event="ADD",
+                new_memory=content,
+                actor_id=user_id or agent_id,
+                role="user",
+                metadata={"entities": entities, "relationships": stored_edges},
+            )
 
         db.commit()
         db.close()
@@ -1602,107 +1789,124 @@ class MemoryPipelineBackend:
             except Exception as e:
                 print(f"[BM25] Search error: {e}", file=sys.stderr, flush=True)
 
-        # --- Channel 3: Graph Entity Relevance Score ---
-        channel_graph = []
-        graph_entity_scores = {}
+        # --- Channel 3: Graph Entity-Centric Multi-Hop Search ---
+        # 借鉴自: engines/memory/graph_store.py HugeGraphGraphStore.search
+        graph_results = []
+        graph_entity_names: set = set()
         try:
-            all_vertices = self.hg.get_all_vertices()
-            all_edges = self.hg.get_all_edges()
-            # Score memories based on entity overlap with graph
-            extracted_entities = self._entity_extractor.extract(query)
-            query_entity_names = {e["name"] for e in extracted_entities}
-            # Fallback rule-based split for Chinese short tokens
-            parts = re.split(r'[的了在是有和也都哪些多少几怎么如何谁什么哪里哪个有没有]', query)
-            for part in parts:
-                part = part.strip()
-                if 2 <= len(part) <= 8 and re.match(r'^[\u4e00-\u9fa5]+$', part):
-                    query_entity_names.add(part)
-
-            # For each memory, score based on how many graph entities it references
-            for mid, mem in memories_map.items():
-                graph_score = 0.0
-                for qname in query_entity_names:
-                    # Check if this entity name appears in the memory content
-                    if qname in mem["content"]:
-                        graph_score += 0.5
-                    # Check if this entity has edges in the graph
-                    for e in all_edges:
-                        elabel = e.get("label") or e.get("relationship") or ""
-                        sname = e.get("source_name") or ""
-                        tname = e.get("target_name") or ""
-                        if qname in (sname, tname):
-                            graph_score += 0.3
-                            if sname in mem["content"] or tname in mem["content"]:
-                                graph_score += 0.2
-                if graph_score > 0:
-                    graph_entity_scores[mid] = round(graph_score, 4)
-            # Sort by graph score
-            channel_graph = sorted(graph_entity_scores, key=graph_entity_scores.get, reverse=True)
+            graph_results = self._graph_store.search(
+                query, limit=top_k * 3, max_hops=2
+            )
+            for gr in graph_results:
+                matched = gr.get("matched_entity", "")
+                if matched:
+                    graph_entity_names.add(matched)
+                ctx = gr.get("context", "")
+                for part in re.split(r"\s+\[[\w_]+\]\s+", ctx):
+                    part = part.strip()
+                    if 2 <= len(part) <= 8 and re.match(r"^[\u4e00-\u9fa5]+$", part):
+                        graph_entity_names.add(part)
         except Exception as e:
             print(f"[Graph Channel] Error: {e}", file=sys.stderr, flush=True)
 
-        # --- RRF Fusion of 3 Channels ---
-        if self._rrf and HAS_GRAPHRAG_OPS:
-            # Build ranked lists for RRF
-            ranked_lists = []
-            if channel_faiss:
-                ranked_lists.append(("faiss", channel_faiss))
-            if channel_bm25:
-                ranked_lists.append(("bm25", channel_bm25))
-            if channel_graph:
-                ranked_lists.append(("graph", channel_graph))
+        # --- Build memory entity map for entity boosting ---
+        # 借鉴自: mem0/memory/main.py _compute_entity_boosts
+        memory_entities: Dict[str, List[str]] = {}
+        for mid, mem in memories_map.items():
+            entities_in_mem: set = set()
+            # Extract Chinese entity candidates from memory content
+            for m in re.finditer(r"[\u4e00-\u9fa5]{2,8}", mem["content"]):
+                entities_in_mem.add(m.group(0))
+            # Add graph-derived entities that appear in this memory
+            for ename in graph_entity_names:
+                if ename in mem["content"]:
+                    entities_in_mem.add(ename)
+            memory_entities[mid] = list(entities_in_mem)
 
-            if ranked_lists:
-                rrf_result = self._rrf.fuse(ranked_lists)
-                fused_ids = rrf_result.top_k(top_k * 2)
+        # Query entities for boosting (search terms + graph-matched entities)
+        query_entities = extract_query_entities_simple(query)
+        query_entities = list(set(query_entities) | graph_entity_names)
 
-                # Build results with channel source tracking
-                results = []
-                for mid in fused_ids:
-                    if mid not in memories_map:
-                        continue
-                    mem = memories_map[mid]
-                    channels = []
-                    if mid in channel_faiss:
-                        rank_faiss = channel_faiss.index(mid) + 1 if mid in channel_faiss else 0
-                        channels.append(f"faiss#{rank_faiss}")
-                    if mid in channel_bm25:
-                        rank_bm25 = channel_bm25.index(mid) + 1 if mid in channel_bm25 else 0
-                        channels.append(f"bm25#{rank_bm25}")
-                    if mid in channel_graph:
-                        rank_graph = channel_graph.index(mid) + 1 if mid in channel_graph else 0
-                        channels.append(f"graph#{rank_graph}")
+        # Compute entity boosts (mem0-style: +0.5 per matching entity)
+        entity_boosts = compute_entity_boosts(
+            query_entities, memory_entities, boost_weight=ENTITY_BOOST_WEIGHT
+        )
 
-                    # Combine Ebbinghaus retention with channel diversity
-                    diversity_bonus = min(1.0, len(channels) * 0.15)
-                    final_score = min(1.0, mem["retention"] * 0.6 + diversity_bonus * 0.4)
+        # --- Additive Hybrid Scoring (mem0-style) ---
+        # 借鉴自: mem0/utils/scoring.py score_and_rank
+        semantic_results = []
+        for r in faiss_results:
+            mid = r.get("memory_id")
+            if mid and mid in memories_map:
+                semantic_results.append({
+                    "id": mid,
+                    "content": memories_map[mid]["content"],
+                    "score": r.get("weighted_score", r.get("raw_score", 0.0)),
+                    "metadata": {
+                        "retention": memories_map[mid].get("retention", 0.0),
+                        "access_count": memories_map[mid].get("access_count", 0),
+                    },
+                })
 
-                    results.append({
-                        "memory": mem,
-                        "score": round(final_score, 4),
-                        "source": "+".join(channels),
-                    })
-                trace.append({
-                    "step": 2, "name": "3\u901a\u9053RRF\u878d\u5408\u68c0\u7d22",
-                    "detail": f"FAISS={len(channel_faiss)}, BM25={len(channel_bm25)}, "
-                             f"Graph={len(channel_graph)} \u2192 RRF Top-{len(results)}",
-                    "channels": {"faiss": len(channel_faiss), "bm25": len(channel_bm25),
-                                 "graph": len(channel_graph)},
-                    "elapsed_ms": round((time.time()-step_start)*1000)})
-            else:
-                # Fallback: FAISS-only (no BM25/Graph results)
-                results = []
-                for r in faiss_results[:top_k]:
-                    mid = r.get("memory_id")
-                    if mid and mid in memories_map:
-                        results.append({
-                            "memory": memories_map[mid],
-                            "score": r.get("weighted_score", r.get("retention", 0.5)),
-                            "source": "faiss_only",
-                        })
-                trace.append({"step": 2, "name": "FAISS-only\u68c0\u7d22(RRF\u65e0\u8f93\u5165)",
-                              "detail": f"Top-{len(results)}",
-                              "elapsed_ms": round((time.time()-step_start)*1000)})
+        # Add Ebbinghaus-only memories as low-score semantic entries
+        for mid, mem in memories_map.items():
+            if mid not in {sr["id"] for sr in semantic_results} and mem["retention"] > 0.1:
+                semantic_results.append({
+                    "id": mid,
+                    "content": mem["content"],
+                    "score": mem["retention"] * 0.3,
+                    "metadata": {
+                        "retention": mem["retention"],
+                        "access_count": mem["access_count"],
+                    },
+                })
+
+        if HAS_GRAPHRAG_OPS and semantic_results:
+            ranked = score_and_rank(
+                semantic_results=semantic_results,
+                bm25_scores=bm25_scores,
+                entity_boosts=entity_boosts,
+                threshold=0.0,
+                top_k=top_k * 2,
+                explain=False,
+            )
+
+            # Build source tracking sets
+            faiss_id_set = {r["memory_id"] for r in faiss_results if r.get("memory_id")}
+            bm25_id_set = set(channel_bm25)
+            graph_id_set = set()
+            for gr in graph_results:
+                matched = gr.get("matched_entity", "")
+                for mid, mem in memories_map.items():
+                    if matched and matched in mem["content"]:
+                        graph_id_set.add(mid)
+
+            results = []
+            for r in ranked:
+                mid = r["id"]
+                if mid not in memories_map:
+                    continue
+                mem = memories_map[mid]
+                channels = []
+                if mid in faiss_id_set:
+                    channels.append("faiss")
+                if mid in bm25_id_set:
+                    channels.append("bm25")
+                if mid in graph_id_set or entity_boosts.get(mid, 0.0) > 0:
+                    channels.append("graph")
+                source = "+".join(channels) if channels else "additive"
+                results.append({
+                    "memory": mem,
+                    "score": r["score"],
+                    "source": source,
+                })
+            trace.append({
+                "step": 2, "name": "\u52a0\u6027\u6df7\u5408\u68c0\u7d22",
+                "detail": f"FAISS={len(faiss_results)}, BM25={len(channel_bm25)}, "
+                         f"Graph={len(graph_results)} \u2192 additive Top-{len(results)}",
+                "channels": {"faiss": len(faiss_results), "bm25": len(channel_bm25),
+                             "graph": len(graph_results)},
+                "elapsed_ms": round((time.time()-step_start)*1000)})
         else:
             # Fallback path when GraphRAG operators not available
             results = []
@@ -1715,7 +1919,7 @@ class MemoryPipelineBackend:
                         "source": "faiss_ebbinghaus",
                     })
             trace.append({"step": 2, "name": "FAISS+Ebbinghaus\u68c0\u7d22",
-                          "detail": f"Top-{len(results)} (BM25/RRF\u4e0d\u53ef\u7528)",
+                          "detail": f"Top-{len(results)} (BM25/Graph\u4e0d\u53ef\u7528)",
                           "elapsed_ms": round((time.time()-step_start)*1000)})
 
         # Cross-encoder rerank (optional) before LLM rerank
@@ -2428,7 +2632,8 @@ class MemoryPipelineBackend:
                 "doc_count": self._bm25.doc_count if self._bm25 else 0,
                 "available": self._bm25 is not None,
             },
-            "rrf_available": self._rrf is not None,
+            "rrf_available": False,
+            "additive_scoring_available": self._additive_scoring_available,
             "provenance_count": len(self._provenance),
             "graphrag_ops": HAS_GRAPHRAG_OPS,
         }
@@ -2595,12 +2800,13 @@ class MemoryPipelineBackend:
         """Update a memory's content and metadata. Re-indexes FAISS/BM25."""
         db = get_metadata_db()
         existing = db.execute(
-            "SELECT id FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
+            "SELECT id, content FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
         ).fetchone()
         if not existing:
             db.close()
             return {"error": "NOT_FOUND", "memory_id": memory_id}
 
+        old_content = existing["content"]
         now = time.time()
         merged_meta = json.dumps(metadata or {}, ensure_ascii=False)
         db.execute(
@@ -2609,6 +2815,21 @@ class MemoryPipelineBackend:
         )
         db.commit()
         db.close()
+
+        # P0: Memory history tracking (mem0-style UPDATE event)
+        # 借鉴自: mem0/memory/storage.py SQLiteManager.batch_add_history
+        try:
+            self._history.add_history(
+                memory_id=memory_id,
+                event="UPDATE",
+                old_memory=old_content,
+                new_memory=content,
+                actor_id=user_id,
+                role="user",
+                metadata={"source": "update_memory"},
+            )
+        except Exception as e:
+            print(f"[History] Update event error: {e}", file=sys.stderr, flush=True)
 
         # Re-index vector store (best-effort: remove + add)
         try:
@@ -2639,14 +2860,29 @@ class MemoryPipelineBackend:
         """Delete a memory from SQLite, FAISS and BM25. Graph provenance is kept."""
         db = get_metadata_db()
         row = db.execute(
-            "SELECT id FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
+            "SELECT id, content FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
         ).fetchone()
         if not row:
             db.close()
             return {"error": "NOT_FOUND", "memory_id": memory_id}
+        old_content = row["content"]
         db.execute("DELETE FROM memories WHERE id=?", (memory_id,))
         db.commit()
         db.close()
+
+        # P0: Memory history tracking (mem0-style DELETE event)
+        # 借鉴自: mem0/memory/storage.py SQLiteManager.batch_add_history
+        try:
+            self._history.add_history(
+                memory_id=memory_id,
+                event="DELETE",
+                old_memory=old_content,
+                actor_id=user_id,
+                role="user",
+                metadata={"source": "delete_memory"},
+            )
+        except Exception as e:
+            print(f"[History] Delete event error: {e}", file=sys.stderr, flush=True)
 
         try:
             self.faiss.delete_memory(memory_id)

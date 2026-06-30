@@ -245,6 +245,7 @@ a{color:var(--accent);text-decoration:none;}
       <div class="hero-stat"><div class="num teal" id="hs-vectors">-</div><div class="unit">个向量</div></div>
     </div>
     <button class="demo-btn" onclick="runFullDemo()" style="margin-top:16px;">🚀 一键演示全流程</button>
+    <div class="flow-log" id="overview-demo-log" style="margin-top:16px;display:none;"></div>
   </div>
 
   <!-- 10 Capability Cards -->
@@ -717,7 +718,7 @@ function renderGraph(data) {
     container: target,
     elements: [...nodes, ...edges],
     style: [
-      {selector:'node',style:{'label':'data(label)','text-valign':'center','text-halign':'center','font-size':'10px','color':'#e8eaed','background-color':node=>typeColors[node.data('type)]||'#8b8fa3','width':24,'height':24,'border-width':1,'border-color':'#2d3142','text-outline-color':'#0f1117','text-outline-width':2}},
+      {selector:'node',style:{'label':'data(label)','text-valign':'center','text-halign':'center','font-size':'10px','color':'#e8eaed','background-color':node=>typeColors[node.data('type')]||'#8b8fa3','width':24,'height':24,'border-width':1,'border-color':'#2d3142','text-outline-color':'#0f1117','text-outline-width':2}},
       {selector:'edge',style:{'width':1,'line-color':'#3d4260','target-arrow-color':'#3d4260','target-arrow-shape':'triangle','arrow-scale':0.6,'curve-style':'bezier','font-size':'8px','color':'#5a5e72','label':'data(label)'}},
     ],
     layout: {name:'cose',animate:true,animationDuration:500,nodeRepulsion:8000,idealEdgeLength:60},
@@ -961,8 +962,27 @@ async function routeSearch() {
 
 // ===== FULL DEMO =====
 async function runFullDemo() {
+  // Auto-switch to demo page first
+  switchPage('demo');
+
   const logEl = document.getElementById('demo-log');
+  const overviewLog = document.getElementById('overview-demo-log');
+  if (overviewLog) overviewLog.style.display = 'block';
+  if (overviewLog) overviewLog.innerHTML = '';
   logEl.innerHTML = '';
+  
+  const log = (msg, cls='') => {
+    logEl.innerHTML += `<div class="${cls}">${msg}</div>`;
+    if (overviewLog) overviewLog.innerHTML += `<div class="${cls}">${msg}</div>`;
+    logEl.scrollTop = logEl.scrollHeight;
+    if (overviewLog) overviewLog.scrollTop = overviewLog.scrollHeight;
+  };
+
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  log('🚀 一键演示全流程启动...', 'flow-step-info');
+  await delay(300);
+
   const steps = [
     {name:'📊 加载系统状态', fn: async()=>{ const d=await api('/api/stats'); return {ok:!d.error, data:d, summary:`记忆=${d.total_memories||d.memories||0} 实体=${d.entities||d.total_nodes||0} 边=${d.edges||d.total_edges||0}`}; }},
     {name:'💾 写入记忆', fn: async()=>{ const d=await api('/api/memory/add',{body:{user_id:'demo_user',content:'我们的风控图谱系统基于HugeGraph，支持60亿级点边存储'}}); return {ok:!d.error, data:d, summary:d.error?`失败:${d.error}`:`写入成功 ID=${d.id||d.memory_id||'ok'}`}; }},
@@ -978,19 +998,20 @@ async function runFullDemo() {
   ];
 
   for (const step of steps) {
-    logEl.innerHTML += `<div class="flow-step-info">⏳ ${step.name}...</div>`;
+    log(`⏳ ${step.name}...`, 'flow-step-info');
+    await delay(200);
     try {
       const result = await step.fn();
       const cls = result.ok ? 'flow-step-ok' : 'flow-step-fail';
       const icon = result.ok ? '✅' : '❌';
-      logEl.innerHTML += `<div class="${cls}">${icon} ${step.name}: ${result.summary}</div>`;
+      log(`${icon} ${step.name}: ${result.summary}`, cls);
       if (!result.ok) toast(step.name + ' 失败', 'error');
     } catch(e) {
-      logEl.innerHTML += `<div class="flow-step-fail">❌ ${step.name}: ${e.message}</div>`;
+      log(`❌ ${step.name}: ${e.message}`, 'flow-step-fail');
     }
-    logEl.scrollTop = logEl.scrollHeight;
+    await delay(150);
   }
-  logEl.innerHTML += `<div class="flow-step-ok" style="font-weight:700;margin-top:8px;">🎉 全流程演示完成！</div>`;
+  log('🎉 全流程演示完成！', 'flow-step-ok');
   toast('全流程演示完成 🎉', 'success');
   refreshOverview();
 }

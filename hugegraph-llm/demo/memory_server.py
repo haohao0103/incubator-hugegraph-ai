@@ -64,25 +64,24 @@ def main():
     app = create_app(backend)
 
     # Serve static frontend files from the demo directory
+    # Root "/" → interactive chat-driven page (the main demo)
     @app.route("/")
     def index():
-        return send_from_directory(SCRIPT_DIR, "dashboard.html")
-
-    @app.route("/legacy")
-    def legacy_frontend():
         return send_from_directory(SCRIPT_DIR, "memory_frontend.html")
+
+    # "/dashboard" → the older card-based dashboard (kept as backup)
+    @app.route("/dashboard")
+    def dashboard():
+        return send_from_directory(SCRIPT_DIR, "dashboard.html")
 
     @app.route("/hugegraph-memory-demo")
     def hugegraph_memory_demo():
         return send_from_directory(SCRIPT_DIR, "hugegraph-memory-demo.html")
 
-    @app.route("/dashboard")
-    def dashboard():
-        return send_from_directory(SCRIPT_DIR, "dashboard.html")
-
     actual_graph = backend.hg.client.cfg.graph_name if backend.hg and backend.hg.client and backend.hg.client.cfg else args.graph_name
     print(f"[INFO] HugeGraph Memory Demo Server running at http://{args.host}:{args.port}")
-    print(f"[INFO] Dashboard: http://{args.host}:{args.port}/dashboard")
+    print(f"[INFO] Interactive Demo: http://{args.host}:{args.port}/")
+    print(f"[INFO] Dashboard (backup): http://{args.host}:{args.port}/dashboard")
     print(f"[INFO] Connected to HugeGraph graph={actual_graph}")
     app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 

@@ -20,6 +20,7 @@
 import json
 import os
 import tempfile
+import time
 import uuid
 from unittest import mock
 
@@ -28,11 +29,14 @@ import pytest
 
 from hugegraph_llm.poc.memory_backend import (
     FaissMemoryIndex,
+    MemoryPipelineBackend,
     _extract_json_from_response,
     _normalize_keys,
+    content_hash_md5,
     get_metadata_db,
     init_metadata_db,
 )
+from hugegraph_llm.config.memory_config import memory_settings
 
 
 class MockMessage:
@@ -211,3 +215,291 @@ def test_memory_backend_import():
     assert hasattr(memory_backend, "MemoryPipelineBackend")
     assert hasattr(memory_backend, "HugeGraphMemoryClient")
     assert hasattr(memory_backend, "FaissMemoryIndex")
+
+
+# ── P0: Additive hybrid scoring tests (mem0-style) ───────────────────────────
+
+from hugegraph_llm.engines.memory.hybrid_scoring import (
+    score_and_rank,
+    compute_entity_boosts,
+    normalize_bm25,
+    get_bm25_params,
+)
+
+
+def test_score_and_rank_semantic_only():
+    """Additive scoring with semantic only: scores should be normalized by 1.0."""
+    semantic = [
+        {"id": "m1", "content": "hello world", "score": 0.9},
+        {"id": "m2", "content": "foo bar", "score": 0.5},
+    ]
+    ranked = score_and_rank(semantic, {}, {}, top_k=10)
+    assert len(ranked) == 2
+    assert ranked[0]["id"] == "m1"
+    assert ranked[0]["score"] == pytest.approx(0.9, abs=0.01)
+    assert ranked[1]["score"] == pytest.approx(0.5, abs=0.01)
+
+
+def test_score_and_rank_with_bm25_and_entity():
+    """Additive scoring combines semantic + BM25 + entity boost and divides by 2.5."""
+    semantic = [
+        {"id": "m1", "content": "Alice works at Tencent", "score": 0.8},
+        {"id": "m2", "content": "Bob likes coffee", "score": 0.7},
+    ]
+    bm25 = {"m1": 25.0, "m2": 5.0}
+    entity = {"m1": 0.5}  # Alice matches
+    midpoint, steepness = get_bm25_params("Alice Tencent")
+    bm25_norm_m1 = normalize_bm25(25.0, midpoint, steepness)
+    bm25_norm_m2 = normalize_bm25(5.0, midpoint, steepness)
+
+    ranked = score_and_rank(semantic, bm25, entity, top_k=10)
+    m1 = next(r for r in ranked if r["id"] == "m1")
+    m2 = next(r for r in ranked if r["id"] == "m2")
+    expected_m1 = (0.8 + bm25_norm_m1 + 0.5) / 2.5
+    expected_m2 = (0.7 + bm25_norm_m2 + 0.0) / 2.5
+    assert m1["score"] == pytest.approx(expected_m1, abs=0.01)
+    assert m2["score"] == pytest.approx(expected_m2, abs=0.01)
+    assert m1["score"] > m2["score"]
+
+
+def test_score_and_rank_threshold_filtering():
+    """Memories with semantic score below threshold are discarded."""
+    semantic = [
+        {"id": "m1", "content": "relevant", "score": 0.15},
+        {"id": "m2", "content": "low", "score": 0.05},
+    ]
+    ranked = score_and_rank(semantic, {}, {}, threshold=0.1, top_k=10)
+    assert len(ranked) == 1
+    assert ranked[0]["id"] == "m1"
+
+
+def test_score_and_rank_explain_mode():
+    """Explain mode returns score breakdown."""
+    semantic = [
+        {"id": "m1", "content": "Alice works at Tencent", "score": 0.8},
+    ]
+    bm25 = {"m1": 20.0}
+    entity = {"m1": 0.5}
+    ranked = score_and_rank(semantic, bm25, entity, explain=True, top_k=10)
+    assert len(ranked) == 1
+    assert "score_breakdown" in ranked[0]
+    breakdown = ranked[0]["score_breakdown"]
+    assert breakdown["semantic"] == pytest.approx(0.8, abs=0.01)
+    assert breakdown["entity_boost"] == pytest.approx(0.5, abs=0.01)
+
+
+# ── P0: HugeGraphGraphStore multi-hop retrieval tests ───────────────────────
+
+from hugegraph_llm.engines.memory.graph_store import HugeGraphGraphStore
+
+
+def test_graph_store_search_multi_hop():
+    """GraphStore.search returns multi-hop paths from matched query entities."""
+    hg_client = mock.MagicMock()
+    hg_client.get_all_vertices.return_value = [
+        {"id": "person:1", "name": "\u7231\u4e3d\u4e1d", "label": "person"},
+        {"id": "person:2", "name": "\u9c8c\u9c7c", "label": "person"},
+        {"id": "organization:1", "name": "\u817e\u8baf", "label": "organization"},
+    ]
+    hg_client.get_all_edges.return_value = [
+        {"id": "e1", "source": "person:1", "target": "organization:1",
+         "source_name": "\u7231\u4e3d\u4e1d", "target_name": "\u817e\u8baf", "label": "works_at"},
+        {"id": "e2", "source": "person:2", "target": "organization:1",
+         "source_name": "\u9c8c\u9c7c", "target_name": "\u817e\u8baf", "label": "works_at"},
+    ]
+
+    gs = HugeGraphGraphStore(hg_client, max_hops=2, max_neighbors=50)
+    # Query with Chinese org suffix to trigger entity extraction
+    results = gs.search("\u7231\u4e3d\u4e1d\u5728\u817e\u8baf\u516c\u53f8\u5de5\u4f5c")
+    assert len(results) > 0
+    contexts = [r["context"] for r in results]
+    assert any("\u7231\u4e3d\u4e1d" in c for c in contexts)
+    assert any("\u817e\u8baf" in c for c in contexts)
+
+
+def test_graph_store_empty_when_no_entities():
+    """GraphStore.search returns empty list when no entities are extracted."""
+    hg_client = mock.MagicMock()
+    hg_client.get_all_vertices.return_value = []
+    hg_client.get_all_edges.return_value = []
+    gs = HugeGraphGraphStore(hg_client, max_hops=2, max_neighbors=50)
+    results = gs.search("hello world")
+    assert results == []
+
+
+# ── P0: MemoryPipelineBackend integration tests ─────────────────────────────
+
+
+@pytest.fixture
+def memory_backend(tmp_path):
+    """Create a MemoryPipelineBackend with mocked dependencies for unit tests."""
+    old_db_path = os.environ.get("MEMORY_DB_PATH")
+    old_llm_key = os.environ.get("LLM_API_KEY")
+    old_settings_db_path = getattr(memory_settings, "memory_db_path", None)
+    os.environ["MEMORY_DB_PATH"] = str(tmp_path / "meta.db")
+    os.environ["LLM_API_KEY"] = "test-key"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        os.environ["MEMORY_DATA_DIR"] = tmpdir
+        # Patch both module-level DB_PATH and settings object so all SQLite helpers
+        # use the fresh per-test database file.
+        import hugegraph_llm.poc.memory_backend as mb_module
+        old_module_db_path = mb_module.DB_PATH
+        new_db_path = str(tmp_path / "meta.db")
+        memory_settings.memory_db_path = new_db_path
+        mb_module.DB_PATH = new_db_path
+        try:
+            with mock.patch("hugegraph_llm.poc.memory_backend.FaissMemoryIndex") as MockFaiss:
+                with mock.patch("hugegraph_llm.poc.memory_backend.HugeGraphMemoryClient") as MockHG:
+                    backend = MemoryPipelineBackend()
+                    yield backend
+        finally:
+            mb_module.DB_PATH = old_module_db_path
+            if old_settings_db_path is not None:
+                memory_settings.memory_db_path = old_settings_db_path
+            else:
+                memory_settings.memory_db_path = None
+            if old_db_path is not None:
+                os.environ["MEMORY_DB_PATH"] = old_db_path
+            else:
+                os.environ.pop("MEMORY_DB_PATH", None)
+            if old_llm_key is not None:
+                os.environ["LLM_API_KEY"] = old_llm_key
+            else:
+                os.environ.pop("LLM_API_KEY", None)
+            os.environ.pop("MEMORY_DATA_DIR", None)
+
+
+def test_backend_uses_graph_store_and_additive_scoring(memory_backend):
+    """Backend initializes HugeGraphGraphStore and additive scoring flag."""
+    from hugegraph_llm.engines.memory.graph_store import HugeGraphGraphStore
+    assert isinstance(memory_backend._graph_store, HugeGraphGraphStore)
+    assert hasattr(memory_backend, "_additive_scoring_available")
+    # Old RRF operator should not be initialized
+    assert getattr(memory_backend, "_rrf", None) is None
+
+
+def test_backend_search_uses_additive_not_rrf(memory_backend):
+    """search_memory uses additive scoring when GraphRAG ops are available."""
+    import hugegraph_llm.poc.memory_backend as mb
+    mb.HAS_GRAPHRAG_OPS = True
+    try:
+        # Mock FAISS and BM25 results
+        memory_backend.faiss.search.return_value = [
+            {"memory_id": "m1", "content": "Alice works at Tencent", "raw_score": 0.9,
+             "retention": 1.0, "weighted_score": 0.9},
+            {"memory_id": "m2", "content": "Bob likes coffee", "raw_score": 0.7,
+             "retention": 1.0, "weighted_score": 0.7},
+        ]
+        bm25_mock = mock.MagicMock()
+        bm25_mock.doc_count = 2
+        bm25_mock.search.return_value = [
+            {"id": "m1", "score": 20.0},
+            {"id": "m2", "score": 5.0},
+        ]
+        memory_backend._bm25 = bm25_mock
+
+        # Mock graph store to return entity boost for Alice
+        graph_store_mock = mock.MagicMock()
+        graph_store_mock.search.return_value = [
+            {"matched_entity": "Alice", "context": "Alice [works_at] Tencent", "score": 1.0},
+        ]
+        memory_backend._graph_store = graph_store_mock
+
+        # Mock additive pipeline to avoid LLM calls in add path (not needed for search)
+        additive_mock = mock.MagicMock()
+        additive_mock.run.return_value = {
+            "new_facts": ["stub"], "duplicate_facts": [], "entities": [], "hashes": set(),
+        }
+        memory_backend._additive_pipeline = additive_mock
+
+        # Pre-seed metadata DB
+        db = get_metadata_db()
+        now = time.time()
+        db.execute(
+            "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+            "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            ("m1", "Alice works at Tencent", "demo_user", now, now, 1, 0.8,
+             "private", "standard", 0.8, "{}"),
+        )
+        db.execute(
+            "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+            "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            ("m2", "Bob likes coffee", "demo_user", now, now, 1, 0.8,
+             "private", "standard", 0.8, "{}"),
+        )
+        db.commit()
+        db.close()
+
+        result = memory_backend.search_memory("Alice", user_id="demo_user", fast_eval=True)
+        assert "results" in result
+        # m1 should rank higher because of entity boost from Alice
+        assert result["results"][0]["memory"]["id"] == "m1"
+        # Source should indicate graph or additive
+        assert "graph" in result["results"][0]["source"] or "additive" in result["results"][0]["source"]
+    finally:
+        mb.HAS_GRAPHRAG_OPS = False
+
+
+def test_backend_add_memory_triggers_history(memory_backend):
+    """add_memory writes an ADD event to MemoryHistoryTracker."""
+    # Mock the additive pipeline to return a single new fact
+    additive_mock = mock.MagicMock()
+    additive_mock.run.return_value = {
+        "new_facts": ["Alice works at Tencent"],
+        "duplicate_facts": [],
+        "entities": [{"name": "Alice", "type": "person"}, {"name": "Tencent", "type": "organization"}],
+        "hashes": {content_hash_md5("Alice works at Tencent")},
+    }
+    memory_backend._additive_pipeline = additive_mock
+    # Mock LLM extraction inside add_memory
+    memory_backend._llm_extract = mock.MagicMock(return_value={
+        "entities": [{"name": "Alice", "type": "person"}, {"name": "Tencent", "type": "organization"}],
+        "relationships": [{"source": "Alice", "relationship": "works_at", "target": "Tencent"}],
+    })
+    # Mock hg client vertex/edge creation
+    memory_backend.hg.add_vertex.return_value = "vid"
+    memory_backend.hg.add_edge.return_value = "eid"
+
+    history_mock = mock.MagicMock()
+    memory_backend._history = history_mock
+
+    result = memory_backend.add_memory(
+        "Alice works at Tencent", user_id="demo_user", skip_index_save=True
+    )
+    assert result["action"] == "ADD"
+    history_mock.add_history.assert_called_once()
+    call_kwargs = history_mock.add_history.call_args.kwargs
+    assert call_kwargs["event"] == "ADD"
+    assert call_kwargs["memory_id"] == result["memory_id"]
+    assert "Alice works at Tencent" in call_kwargs["new_memory"]
+
+
+def test_backend_update_and_delete_memory_triggers_history(memory_backend):
+    """update_memory and delete_memory write UPDATE/DELETE events."""
+    # Pre-seed a memory
+    db = get_metadata_db()
+    now = time.time()
+    db.execute(
+        "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+        "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("m1", "old content", "demo_user", now, now, 1, 0.8,
+         "private", "standard", 0.8, "{}"),
+    )
+    db.commit()
+    db.close()
+
+    history_mock = mock.MagicMock()
+    memory_backend._history = history_mock
+
+    # Update
+    memory_backend.update_memory("m1", "new content", user_id="demo_user")
+    update_call = history_mock.add_history.call_args_list[-1]
+    assert update_call.kwargs["event"] == "UPDATE"
+    assert update_call.kwargs["old_memory"] == "old content"
+    assert update_call.kwargs["new_memory"] == "new content"
+
+    # Delete
+    memory_backend.delete_memory("m1", user_id="demo_user")
+    delete_call = history_mock.add_history.call_args_list[-1]
+    assert delete_call.kwargs["event"] == "DELETE"
+    assert delete_call.kwargs["old_memory"] == "new content"

@@ -68,6 +68,7 @@ from hugegraph_llm.engines.memory.additive_extraction import (
 from hugegraph_llm.engines.memory.memory_history import MemoryHistoryTracker, HistoryEvent
 from hugegraph_llm.engines.memory.hybrid_scoring import (
     compute_entity_boosts,
+    ENTITY_BOOST_WEIGHT,
     extract_query_entities_simple,
     get_bm25_params,
     normalize_bm25,
@@ -144,6 +145,7 @@ __all__ = [
     "MemoryHistoryTracker",
     "HistoryEvent",
     "compute_entity_boosts",
+    "ENTITY_BOOST_WEIGHT",
     "extract_query_entities_simple",
     "get_bm25_params",
     "normalize_bm25",
