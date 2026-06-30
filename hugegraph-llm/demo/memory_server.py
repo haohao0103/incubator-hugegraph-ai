@@ -66,6 +66,10 @@ def main():
     # Serve static frontend files from the demo directory
     @app.route("/")
     def index():
+        return send_from_directory(SCRIPT_DIR, "dashboard.html")
+
+    @app.route("/legacy")
+    def legacy_frontend():
         return send_from_directory(SCRIPT_DIR, "memory_frontend.html")
 
     @app.route("/hugegraph-memory-demo")

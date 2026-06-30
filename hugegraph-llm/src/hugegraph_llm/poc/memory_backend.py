@@ -1109,6 +1109,7 @@ class MemoryPipelineBackend:
         scope: MemoryScope = MemoryScope.PRIVATE,
         privacy: PrivacyLevel = PrivacyLevel.STANDARD,
         metadata: Optional[Dict[str, Any]] = None,
+        skip_index_save: bool = False,
     ) -> dict:
         """
         Add a new memory through the full 7-step pipeline.
@@ -2781,11 +2782,11 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     @app.route("/api/memory/update", methods=["POST"])
     def api_update_memory():
         data = request.json or {}
-        memory_id = data.get("id")
+        memory_id = data.get("id") or data.get("memory_id")
         content = data.get("content", "").strip()
         user_id = data.get("user_id", "demo_user")
         if not memory_id or not content:
-            return jsonify({"error": "id and content are required"}), 400
+            return jsonify({"error": "id/memory_id and content are required"}), 400
         return jsonify(store.update_memory(
             memory_id=memory_id,
             content=content,
@@ -2796,10 +2797,10 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     @app.route("/api/memory/delete", methods=["POST"])
     def api_delete_memory():
         data = request.json or {}
-        memory_id = data.get("id")
+        memory_id = data.get("id") or data.get("memory_id")
         user_id = data.get("user_id", "demo_user")
         if not memory_id:
-            return jsonify({"error": "id is required"}), 400
+            return jsonify({"error": "id/memory_id is required"}), 400
         return jsonify(store.delete_memory(memory_id=memory_id, user_id=user_id))
 
     @app.route("/api/memory/classify", methods=["POST"])
@@ -2921,9 +2922,15 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     # --- Entity-centric Graph Traversal ---
     @app.route("/api/graph/entities", methods=["GET"])
     def api_graph_entities():
-        """List all entities in the graph."""
+        """List all entities in the graph (entity-centric traversal)."""
+        query = request.args.get("query", "")
+        limit = int(request.args.get("limit", "50"))
         try:
-            gs = HugeGraphGraphStore()
+            gs = HugeGraphGraphStore(hg_client=store.hg)
+            if query:
+                # Search entities matching query
+                results = gs.search(query=query, limit=limit, max_hops=1)
+                return jsonify({"entities": results, "count": len(results), "query": query})
             entities = gs.get_all_entities()
             return jsonify({"entities": entities, "count": len(entities)})
         except Exception as e:
@@ -2932,9 +2939,14 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     @app.route("/api/graph/relations", methods=["GET"])
     def api_graph_relations():
         """List all relations (edges) in the graph."""
+        entity = request.args.get("entity", "")
         try:
-            gs = HugeGraphGraphStore()
+            gs = HugeGraphGraphStore(hg_client=store.hg)
             relations = gs.get_all_relations()
+            if entity:
+                # Filter relations involving this entity
+                filtered = [r for r in relations if entity in str(r)]
+                return jsonify({"relations": filtered, "count": len(filtered), "entity": entity})
             return jsonify({"relations": relations, "count": len(relations)})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -2947,7 +2959,7 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         if not query:
             return jsonify({"error": "query is required"}), 400
         try:
-            gs = HugeGraphGraphStore()
+            gs = HugeGraphGraphStore(hg_client=store.hg)
             results = gs.search(
                 query=query,
                 limit=int(data.get("limit", 10)),
@@ -2975,6 +2987,14 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
                 existing_memories=existing_memories,
                 use_llm_dedup=bool(data.get("use_llm_dedup", False)),
             )
+            # Ensure all values are JSON-serializable (convert sets to lists)
+            if isinstance(result.get("hashes"), set):
+                result["hashes"] = list(result["hashes"])
+            if isinstance(result.get("entities"), set):
+                result["entities"] = list(result["entities"])
+            for k, v in result.items():
+                if isinstance(v, set):
+                    result[k] = list(v)
             return jsonify(result)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -2987,7 +3007,7 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         stored_hashes = set(data.get("stored_hashes", []))
         from hugegraph_llm.engines.memory.additive_extraction import batch_dedup
         new, dup, all_hashes = batch_dedup(facts, stored_hashes)
-        return jsonify({"new_facts": new, "duplicate_facts": dup, "all_hashes": list(all_hashes)})
+        return jsonify({"new_facts": new, "duplicate_facts": dup, "all_hashes": sorted(list(all_hashes))})
 
     # --- Hybrid Scoring Breakdown ---
     @app.route("/api/scoring/explain", methods=["POST"])
@@ -3131,13 +3151,27 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     def api_agent_check_access():
         """Check if an agent has permission to access a memory."""
         data = request.json or {}
-        agent_id = data.get("agent_id", "")
+        requesting_agent_id = data.get("requesting_agent_id", "")
+        owner_agent_id = data.get("owner_agent_id", "")
         operation = data.get("operation", "read")
-        memory = data.get("memory", {})
-        if not agent_id:
-            return jsonify({"error": "agent_id is required"}), 400
-        result = _agent_mgr.check_access(agent_id=agent_id, operation=operation, memory=memory)
-        return jsonify({"allowed": result, "agent_id": agent_id, "operation": operation})
+        scope = data.get("scope", "SHARED")
+        privacy = data.get("privacy", "CONFIDENTIAL")
+        if not requesting_agent_id:
+            return jsonify({"error": "requesting_agent_id is required"}), 400
+        # Normalize scope aliases: SHARED -> agent_group
+        _scope_map = {"SHARED": "agent_group", "PERSONAL": "private",
+                      "PRIVATE": "private", "PUBLIC": "public", "RESTRICTED": "restricted"}
+        normalized_scope = _scope_map.get(scope.upper(), scope.lower())
+        # Normalize privacy aliases
+        _privacy_map = {"PUBLIC": "standard", "PRIVATE": "confidential",
+                        "SENSITIVE": "sensitive", "CONFIDENTIAL": "confidential", "STANDARD": "standard"}
+        normalized_privacy = _privacy_map.get(privacy.upper(), privacy.lower())
+        # Build a memory dict for permission checking
+        memory = {"scope": normalized_scope, "owner": owner_agent_id, "privacy": normalized_privacy}
+        result = _agent_mgr.check_access(agent_id=requesting_agent_id, operation=operation, memory=memory)
+        return jsonify({"allowed": result, "requesting_agent_id": requesting_agent_id,
+                        "owner_agent_id": owner_agent_id, "operation": operation,
+                        "scope": normalized_scope, "privacy": normalized_privacy})
 
     @app.route("/api/agent/filter_privacy", methods=["POST"])
     def api_agent_filter_privacy():
@@ -3145,8 +3179,22 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         data = request.json or {}
         memories = data.get("memories", [])
         target_privacy = data.get("target_privacy", "standard")
-        result = _agent_mgr.filter_for_sharing(memories=memories, target_privacy=target_privacy)
-        return jsonify({"filtered_memories": result})
+        try:
+            # Normalize privacy values: "PUBLIC" -> "standard", "PRIVATE" -> "confidential"
+            _privacy_map = {"PUBLIC": "standard", "PRIVATE": "confidential",
+                           "SENSITIVE": "sensitive", "CONFIDENTIAL": "confidential", "STANDARD": "standard"}
+            normalized_target = _privacy_map.get(target_privacy.upper(), target_privacy.lower())
+            normalized_memories = []
+            for m in memories:
+                norm_m = dict(m)
+                if "privacy" in norm_m:
+                    norm_m["privacy"] = _privacy_map.get(str(norm_m["privacy"]).upper(),
+                                                         str(norm_m["privacy"]).lower())
+                normalized_memories.append(norm_m)
+            result = _agent_mgr.filter_for_sharing(memories=normalized_memories, target_privacy=normalized_target)
+            return jsonify({"filtered_memories": result})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/agent/share", methods=["POST"])
     def api_agent_share():
@@ -3190,15 +3238,18 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         """Create a collaboration group."""
         data = request.json or {}
         group_id = data.get("group_id", "")
-        name = data.get("name", "")
+        name = data.get("name", data.get("group_name", ""))
         members = data.get("members", [])
         scope = data.get("scope", "agent_group")
         if not group_id or not name:
-            return jsonify({"error": "group_id and name are required"}), 400
-        result = _collab_broker.create_group(
-            group_id=group_id, name=name, members=members, scope=MemoryScope(scope),
-        )
-        return jsonify(result)
+            return jsonify({"error": "group_id and name/group_name are required"}), 400
+        try:
+            result = _collab_broker.create_group(
+                group_id=group_id, name=name, members=members, scope=MemoryScope(scope),
+            )
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/collab/add_member", methods=["POST"])
     def api_collab_add_member():
@@ -3216,8 +3267,9 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     def api_faiss_stats():
         """FAISS index statistics (vectors, tombstones, dimension)."""
         try:
-            idx = FaissDeletableIndex()
-            return jsonify(idx.get_stats())
+            stats = store.get_stats()
+            faiss_info = stats.get("faiss", {})
+            return jsonify(faiss_info)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -3225,8 +3277,12 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     def api_faiss_compact():
         """Compact FAISS index: rebuild without tombstones to reclaim space."""
         try:
-            idx = FaissDeletableIndex()
-            count = idx.compact()
+            # Use store's existing FAISS index if available
+            if hasattr(store, 'faiss_index') and store.faiss_index is not None:
+                count = store.faiss_index.compact()
+            else:
+                idx = FaissDeletableIndex()
+                count = idx.compact()
             return jsonify({"compact_count": count, "status": "compacted"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -3238,9 +3294,16 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
         data = request.json or {}
         content = data.get("content", "")
         privacy_level = data.get("privacy_level", "standard")
-        pf = PrivacyFilter()
-        filtered = pf.filter(content=content, privacy_level=PrivacyLevel(privacy_level))
-        return jsonify({"original": content, "filtered": filtered, "privacy_level": privacy_level})
+        # Normalize: accept uppercase aliases
+        _pl_map = {"PUBLIC": "standard", "PRIVATE": "confidential",
+                   "SENSITIVE": "sensitive", "CONFIDENTIAL": "confidential", "STANDARD": "standard"}
+        normalized = _pl_map.get(privacy_level.upper(), privacy_level.lower())
+        try:
+            pf = PrivacyFilter()
+            filtered = pf.filter(content=content, privacy_level=PrivacyLevel(normalized))
+            return jsonify({"original": content, "filtered": filtered, "privacy_level": normalized})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     return app
 
