@@ -16,7 +16,7 @@
 # under the License.
 
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from openai import AsyncOpenAI, OpenAI
 
@@ -30,10 +30,11 @@ class OpenAIEmbedding(BaseEmbedding):
         model_name: str = "text-embedding-3-small",
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
+        default_headers: Optional[Dict[str, str]] = None,
     ):
         api_key = api_key or ""
-        self.client = OpenAI(api_key=api_key, base_url=api_base)
-        self.aclient = AsyncOpenAI(api_key=api_key, base_url=api_base)
+        self.client = OpenAI(api_key=api_key, base_url=api_base, default_headers=default_headers or {})
+        self.aclient = AsyncOpenAI(api_key=api_key, base_url=api_base, default_headers=default_headers or {})
         self.model = model_name
         self.embedding_dimension = embedding_dimension
 

@@ -17,9 +17,11 @@
 
 
 from hugegraph_llm.config import LLMConfig, llm_settings
+from hugegraph_llm.models.embeddings.custom_endpoint import CustomEndpointEmbedding
 from hugegraph_llm.models.embeddings.litellm import LiteLLMEmbedding
 from hugegraph_llm.models.embeddings.ollama import OllamaEmbedding
 from hugegraph_llm.models.embeddings.openai import OpenAIEmbedding
+from hugegraph_llm.models.llms.init_llm import _parse_headers
 
 model_map = {
     "openai": llm_settings.openai_embedding_model,
@@ -30,10 +32,19 @@ model_map = {
 
 def get_embedding(llm_configs: LLMConfig):
     if llm_configs.embedding_type == "openai":
+        # Use custom endpoint if configured (for non-standard /embeddings paths)
+        if llm_configs.openai_embedding_url:
+            return CustomEndpointEmbedding(
+                model_name=llm_configs.openai_embedding_model,
+                api_key=llm_configs.openai_embedding_api_key,
+                api_url=llm_configs.openai_embedding_url,
+                default_headers=_parse_headers(llm_configs.openai_default_headers or ""),
+            )
         return OpenAIEmbedding(
             model_name=llm_configs.openai_embedding_model,
             api_key=llm_configs.openai_embedding_api_key,
             api_base=llm_configs.openai_embedding_api_base,
+            default_headers=_parse_headers(llm_configs.openai_default_headers or ""),
         )
     if llm_configs.embedding_type == "ollama/local":
         return OllamaEmbedding(
@@ -58,12 +69,23 @@ class Embeddings:
     def get_embedding(self):
         """Get embedding instance and dynamically determine dimension if needed."""
         if self.embedding_type == "openai":
-            # Create with default dimension first
-            embedding = OpenAIEmbedding(
-                model_name=llm_settings.openai_embedding_model,
-                api_key=llm_settings.openai_embedding_api_key,
-                api_base=llm_settings.openai_embedding_api_base,
-            )
+            # Use custom endpoint if configured (for non-standard /embeddings paths)
+            embedding_url = getattr(llm_settings, "openai_embedding_url", "")
+            if embedding_url:
+                embedding = CustomEndpointEmbedding(
+                    model_name=llm_settings.openai_embedding_model,
+                    api_key=llm_settings.openai_embedding_api_key,
+                    api_url=embedding_url,
+                    default_headers=_parse_headers(getattr(llm_settings, "openai_default_headers", "") or ""),
+                )
+            else:
+                # Create with default dimension first
+                embedding = OpenAIEmbedding(
+                    model_name=llm_settings.openai_embedding_model,
+                    api_key=llm_settings.openai_embedding_api_key,
+                    api_base=llm_settings.openai_embedding_api_base,
+                    default_headers=_parse_headers(getattr(llm_settings, "openai_default_headers", "") or ""),
+                )
             # Dynamically get actual dimension
             try:
                 test_vec = embedding.get_text_embedding("test")

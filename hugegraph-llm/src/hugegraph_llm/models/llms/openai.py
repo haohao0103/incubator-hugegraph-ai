@@ -41,10 +41,11 @@ class OpenAIClient(BaseLLM):
         model_name: str = "gpt-4.1-mini",
         max_tokens: int = 8092,
         temperature: float = 0.01,
+        default_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         api_key = api_key or ""
-        self.client = OpenAI(api_key=api_key, base_url=api_base)
-        self.aclient = AsyncOpenAI(api_key=api_key, base_url=api_base)
+        self.client = OpenAI(api_key=api_key, base_url=api_base, default_headers=default_headers or {})
+        self.aclient = AsyncOpenAI(api_key=api_key, base_url=api_base, default_headers=default_headers or {})
         self.model = model_name
         self.max_tokens = max_tokens
         self.temperature = temperature

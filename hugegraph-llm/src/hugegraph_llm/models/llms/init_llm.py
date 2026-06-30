@@ -19,11 +19,25 @@ import logging
 from typing import Optional, Union
 
 from hugegraph_llm.config import LLMConfig, llm_settings
+from hugegraph_llm.models.llms.custom_endpoint import CustomEndpointLLM
 from hugegraph_llm.models.llms.litellm import LiteLLMClient
 from hugegraph_llm.models.llms.ollama import OllamaClient
 from hugegraph_llm.models.llms.openai import OpenAIClient
 
 log = logging.getLogger(__name__)
+
+
+def _parse_headers(headers_str: str) -> dict:
+    """Parse 'key1=val1,key2=val2' into a dict."""
+    if not headers_str:
+        return {}
+    result = {}
+    for pair in headers_str.split(","):
+        pair = pair.strip()
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            result[k.strip()] = v.strip()
+    return result
 
 # Supported LLM type identifiers
 _SUPPORTED_TYPES = {"openai", "ollama/local", "litellm"}
@@ -43,30 +57,29 @@ def _create_llm(
     max_tokens: int = 4096,
     host: str = "localhost",
     port: int = 11434,
-) -> Union[OpenAIClient, OllamaClient, LiteLLMClient]:
+    default_headers: Optional[dict] = None,
+    direct_url: str = "",
+) -> Union[OpenAIClient, OllamaClient, LiteLLMClient, CustomEndpointLLM]:
     """Unified LLM factory that instantiates the correct client from parameters.
 
-    Args:
-        llm_type: One of ``openai``, ``ollama/local``, ``litellm``.
-        api_key: API key for remote providers.
-        api_base: Base URL for remote providers.
-        model_name: Model identifier.
-        max_tokens: Max tokens for generation.
-        host: Host for local providers.
-        port: Port for local providers.
-
-    Returns:
-        An LLM client instance.
-
-    Raises:
-        ValueError: If *llm_type* is not supported.
+    When *direct_url* is set and *llm_type* is ``openai``, returns a
+    :class:`CustomEndpointLLM` that posts directly to that URL.
     """
     if llm_type == "openai":
+        if direct_url:
+            return CustomEndpointLLM(
+                api_key=api_key,
+                api_base=direct_url,
+                model_name=model_name,
+                max_tokens=max_tokens,
+                default_headers=default_headers,
+            )
         return OpenAIClient(
             api_key=api_key,
             api_base=api_base,
             model_name=model_name,
             max_tokens=max_tokens,
+            default_headers=default_headers,
         )
     if llm_type == "ollama/local":
         return OllamaClient(
@@ -101,6 +114,8 @@ def _role_config(llm_configs: LLMConfig, role: str):
         "litellm_api_base": getattr(llm_configs, f"litellm_{r}_api_base", ""),
         "litellm_model_name": getattr(llm_configs, f"litellm_{r}_language_model", ""),
         "litellm_max_tokens": getattr(llm_configs, f"litellm_{r}_tokens", 4096),
+        "default_headers": _parse_headers(getattr(llm_configs, "openai_default_headers", "") or ""),
+        "direct_url": getattr(llm_configs, f"openai_{r}_direct_url", "") or "",
     }
 
 
@@ -123,6 +138,8 @@ def _build_from_role_params(params: dict) -> Union[OpenAIClient, OllamaClient, L
         max_tokens=params["max_tokens"],
         host=params["host"],
         port=params["port"],
+        default_headers=params.get("default_headers"),
+        direct_url=params.get("direct_url", ""),
     )
 
 
@@ -205,6 +222,8 @@ class LLMs:
             max_tokens=getattr(llm_settings, f"openai_{role}_tokens", 4096),
             host=getattr(llm_settings, f"ollama_{role}_host", "localhost"),
             port=getattr(llm_settings, f"ollama_{role}_port", 11434),
+            default_headers=_parse_headers(getattr(llm_settings, "openai_default_headers", "") or ""),
+            direct_url=getattr(llm_settings, f"openai_{role}_direct_url", "") or "",
         )
 
     # -- public role accessors ------------------------------------------------
