@@ -52,10 +52,16 @@ class LLMConfig(BaseConfig):
     openai_embedding_api_base: Optional[str] = os.environ.get("OPENAI_EMBEDDING_BASE_URL", "https://api.openai.com/v1")
     openai_embedding_api_key: Optional[str] = os.environ.get("OPENAI_EMBEDDING_API_KEY")
     openai_embedding_model: Optional[str] = "text-embedding-3-small"
+    openai_embedding_url: Optional[str] = os.environ.get("OPENAI_EMBEDDING_URL", "")
     openai_chat_tokens: int = 8192
     openai_extract_tokens: int = 256
     openai_text2gql_tokens: int = 4096
     openai_agent_tokens: int = 8192
+    openai_default_headers: Optional[str] = os.environ.get("OPENAI_DEFAULT_HEADERS", "")
+    openai_chat_direct_url: Optional[str] = os.environ.get("OPENAI_CHAT_DIRECT_URL", "")
+    openai_extract_direct_url: Optional[str] = os.environ.get("OPENAI_EXTRACT_DIRECT_URL", "")
+    openai_text2gql_direct_url: Optional[str] = os.environ.get("OPENAI_TEXT2GQL_DIRECT_URL", "")
+    openai_agent_direct_url: Optional[str] = os.environ.get("OPENAI_AGENT_DIRECT_URL", "")
     # 2. Rerank settings
     cohere_base_url: Optional[str] = os.environ.get("CO_API_URL", "https://api.cohere.com/v1/rerank")
     reranker_api_key: Optional[str] = None

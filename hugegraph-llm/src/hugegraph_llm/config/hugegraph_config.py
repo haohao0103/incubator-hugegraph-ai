@@ -25,7 +25,7 @@ class HugeGraphConfig(BaseConfig):
 
     # graph server config
     graph_url: str = "127.0.0.1:8080"
-    graph_name: str = "hugegraph"
+    graph_name: str = "hugegraph_ai"
     graph_user: str = "admin"
     graph_pwd: str = "xxx"
     graph_space: Optional[str] = None

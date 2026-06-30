@@ -144,7 +144,7 @@ Output:
 """
 
     # TODO: we should provide a better example to reduce the useless information
-    text2gql_graph_schema: str = "hugegraph"
+    text2gql_graph_schema: str = "hugegraph_ai"
 
     # Extracted from llm_op/keyword_extract.py
     keywords_extract_prompt_EN: str = """Instructions:
