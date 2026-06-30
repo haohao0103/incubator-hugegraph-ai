@@ -57,7 +57,7 @@ def filter_item(schema, items) -> List[Dict[str, Any]]:
     for vertex in schema["vertexlabels"]:
         properties_map["vertex"][vertex["name"]] = {
             "primary_keys": vertex["primary_keys"],
-            "nullable_keys": vertex["nullable_keys"],
+            "nullable_keys": vertex.get("nullable_keys", []),
             "properties": vertex["properties"],
         }
     for edge in schema["edgelabels"]:
@@ -78,10 +78,34 @@ def filter_item(schema, items) -> List[Dict[str, Any]]:
 
 
 class PropertyGraphExtract:
+    # Maximum characters per LLM call to avoid gateway timeouts (e.g. nginx 60s).
+    # ~500 chars ≈ 2 paragraphs, balancing timeout safety (~40-50s per call) with
+    # enough cross-entity context for the LLM to identify relationships (edges).
+    MAX_CHUNK_CHARS = 500
+
     def __init__(self, llm: BaseLLM, example_prompt: str = prompt.extract_graph_prompt) -> None:
         self.llm = llm
         self.example_prompt = example_prompt
         self.NECESSARY_ITEM_KEYS = {"label", "type", "properties"}  # pylint: disable=invalid-name
+
+    @staticmethod
+    def _split_into_subchunks(text: str, max_chars: int = MAX_CHUNK_CHARS) -> List[str]:
+        """Split a large text chunk into smaller sub-chunks by paragraph boundaries."""
+        paragraphs = re.split(r"\n{2,}", text.strip())
+        sub_chunks: List[str] = []
+        current = ""
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            if current and len(current) + len(para) + 2 > max_chars:
+                sub_chunks.append(current)
+                current = para
+            else:
+                current = f"{current}\n\n{para}".strip() if current else para
+        if current:
+            sub_chunks.append(current)
+        return sub_chunks if sub_chunks else [text]
 
     def run(self, context: Dict[str, Any]) -> Dict[str, List[Any]]:
         schema = context["schema"]
@@ -90,25 +114,133 @@ class PropertyGraphExtract:
             context["vertices"] = []
         if "edges" not in context:
             context["edges"] = []
-        items = []
+
+        all_parsed_vertices = []
+        all_parsed_edges = []
+        total_ll_calls = 0
+
         for chunk in chunks:
-            proceeded_chunk = self.extract_property_graph_by_llm(schema, chunk)
-            log.debug(
-                "[LLM] %s input: %s \n output:%s",
-                self.__class__.__name__,
-                chunk,
-                proceeded_chunk,
-            )
-            items.extend(self._extract_and_filter_label(schema, proceeded_chunk))
-        items = filter_item(schema, items)
-        for item in items:
+            sub_chunks = self._split_into_subchunks(chunk) if len(chunk) > self.MAX_CHUNK_CHARS else [chunk]
+            for sub_chunk in sub_chunks:
+                proceeded_chunk = self.extract_property_graph_by_llm(schema, sub_chunk)
+                total_ll_calls += 1
+                log.debug(
+                    "[LLM] %s input (sub-chunk): %s \n output:%s",
+                    self.__class__.__name__,
+                    sub_chunk[:200],
+                    proceeded_chunk[:500] if proceeded_chunk else "",
+                )
+                parsed = self._parse_extracted_graph(schema, proceeded_chunk)
+                all_parsed_vertices.extend(parsed["vertices"])
+                all_parsed_edges.extend(parsed["edges"])
+
+        # Build schema maps
+        vertex_label_map = {v["name"]: v for v in schema["vertexlabels"]}
+        edge_label_map = {e["name"]: e for e in schema["edgelabels"]}
+
+        # Normalize ALL vertices first → complete ID map
+        vertices, vertex_id_map = self._normalize_vertices(all_parsed_vertices, vertex_label_map)
+        # Add fuzzy matching entries for tolerant edge endpoint resolution
+        self._add_fuzzy_vertex_ids(vertices, vertex_label_map, vertex_id_map)
+
+        # Resolve edges using the COMPLETE vertex map (deferred from per-chunk resolution)
+        edges = self._normalize_edges(all_parsed_edges, edge_label_map, vertex_label_map, vertex_id_map)
+
+        # Apply property filtering
+        all_items = vertices + edges
+        all_items = filter_item(schema, all_items)
+
+        for item in all_items:
             if item["type"] == "vertex":
                 context["vertices"].append(item)
             elif item["type"] == "edge":
                 context["edges"].append(item)
 
-        context["call_count"] = context.get("call_count", 0) + len(chunks)
+        context["call_count"] = context.get("call_count", 0) + total_ll_calls
+        final_v = sum(1 for i in all_items if i["type"] == "vertex")
+        final_e = sum(1 for i in all_items if i["type"] == "edge")
+        log.info(
+            "PropertyGraphExtract: %d LLM calls for %d chunks → %d vertices + %d edges "
+            "(raw: %d vertices, %d edges before resolution)",
+            total_ll_calls, len(chunks), final_v, final_e,
+            len(all_parsed_vertices), len(all_parsed_edges),
+        )
         return context
+
+    def _parse_extracted_graph(self, schema, text) -> Dict[str, List[Dict[str, Any]]]:
+        """Parse LLM output into raw vertex and edge dicts without endpoint resolution."""
+        result: Dict[str, List[Dict[str, Any]]] = {"vertices": [], "edges": []}
+
+        text = re.sub(r"```\w*\n?", "", text)
+        text = re.sub(r"```", "", text)
+        text = text.strip()
+
+        json_match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
+        if not json_match:
+            log.critical("Invalid property graph! No JSON found, please check the output format example in prompt.")
+            return result
+        json_str = json_match.group(1).strip()
+
+        try:
+            property_graph = json.loads(json_str)
+            if isinstance(property_graph, list):
+                vertices = [i for i in property_graph if isinstance(i, dict) and i.get("type") == "vertex"]
+                edges = [i for i in property_graph if isinstance(i, dict) and i.get("type") == "edge"]
+                property_graph = {"vertices": vertices, "edges": edges}
+            if not (isinstance(property_graph, dict)
+                    and "vertices" in property_graph and "edges" in property_graph):
+                log.critical("Invalid property graph format; expecting 'vertices' and 'edges'.")
+                return result
+
+            vertex_label_set = {v["name"] for v in schema["vertexlabels"]}
+            edge_label_set = {e["name"] for e in schema["edgelabels"]}
+
+            for item_type, item_list, valid_labels in [
+                ("vertex", property_graph["vertices"], vertex_label_set),
+                ("edge", property_graph["edges"], edge_label_set),
+            ]:
+                for item in item_list:
+                    if not isinstance(item, dict):
+                        continue
+                    item = dict(item)
+                    item_type_value = item.get("type", item_type)
+                    item["type"] = item_type_value
+                    if not self.NECESSARY_ITEM_KEYS.issubset(item.keys()):
+                        continue
+                    if item_type_value != item_type:
+                        continue
+                    if item["label"] not in valid_labels:
+                        log.warning("Invalid %s label '%s' ignored.", item_type, item["label"])
+                        continue
+                    key = "vertices" if item_type == "vertex" else "edges"
+                    result[key].append(item)
+
+        except json.JSONDecodeError:
+            log.critical("Invalid property graph JSON! Please check the extracted JSON data carefully")
+        return result
+
+    @staticmethod
+    def _add_fuzzy_vertex_ids(vertices, vertex_label_map, vertex_id_map):
+        """Add extra entries to vertex_id_map for fuzzy edge endpoint matching.
+
+        The LLM may generate vertex IDs in various formats (plain name, label:name, etc.)
+        that don't match the canonical {labelId}:{primaryKey} format. This method adds
+        lookup entries for common alternative formats so edges can still find their endpoints.
+        """
+        for vertex in vertices:
+            label = vertex["label"]
+            vid = vertex.get("id")
+            props = vertex.get("properties", {})
+            vl = vertex_label_map.get(label, {})
+            for pk in vl.get("primary_keys", []):
+                pk_val = props.get(pk)
+                if pk_val:
+                    # Allow matching by plain primary key value
+                    vertex_id_map.setdefault((label, str(pk_val)), vid)
+                    # Allow matching by label:value format (e.g. "company:摩拜单车")
+                    vertex_id_map.setdefault((label, f"{label}:{pk_val}"), vid)
+                    # Allow matching by label name:value (e.g. "company:摩拜单车" keyed by Chinese label)
+                    vertex_id_map.setdefault((label, f"{label}:{pk_val}"), vid)
 
     def extract_property_graph_by_llm(self, schema, chunk):
         prompt = generate_extract_property_graph_prompt(chunk, schema)

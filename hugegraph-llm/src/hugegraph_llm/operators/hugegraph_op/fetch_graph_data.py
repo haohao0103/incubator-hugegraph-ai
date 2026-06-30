@@ -34,36 +34,86 @@ class FetchGraphData:
         self.v_limit = v_limit
         self.e_limit = e_limit
 
+    def _fetch_all_vertices(self) -> list:
+        """Fetch vertex IDs via REST API, paginated by label."""
+        schema = self.graph.schema()
+        vertex_labels = schema.getVertexLabels()
+        all_vids = []
+        for vl in vertex_labels:
+            label = vl.get("name") if isinstance(vl, dict) else getattr(vl, "name", str(vl))
+            page = ""
+            fetched = 0
+            while fetched < self.v_limit:
+                batch_size = min(500, self.v_limit - fetched)
+                try:
+                    vertices, next_page = self.graph.graph().getVertexByPage(
+                        label=label, limit=batch_size, page=page if page else None
+                    )
+                except Exception as e:
+                    log.warning("FetchGraphData: failed to fetch vertices for label '%s': %s", label, e)
+                    break
+                if not vertices:
+                    break
+                for v in vertices:
+                    all_vids.append(v.id)
+                fetched += len(vertices)
+                if not next_page or len(vertices) < batch_size:
+                    break
+                page = next_page
+        return all_vids
+
+    def _fetch_all_edges(self) -> list:
+        """Fetch edge IDs via REST API, paginated."""
+        all_eids = []
+        page = ""
+        fetched = 0
+        while fetched < self.e_limit:
+            batch_size = min(500, self.e_limit - fetched)
+            try:
+                edges, next_page = self.graph.graph().getEdgeByPage(
+                    limit=batch_size, page=page if page else None
+                )
+            except Exception as e:
+                log.warning("FetchGraphData: failed to fetch edges: %s", e)
+                break
+            if not edges:
+                break
+            for e in edges:
+                all_eids.append(e.id)
+            fetched += len(edges)
+            if not next_page or len(edges) < batch_size:
+                break
+            page = next_page
+        return all_eids
+
     def run(self, graph_summary: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if graph_summary is None:
             graph_summary = {}
 
-        keys = ["vertex_num", "edge_num", "vertices", "edges", "note"]
-
-        groovy_code = f"""
-        def res = [:];
-        res.{keys[0]} = g.V().count().next();
-        res.{keys[1]} = g.E().count().next();
-        res.{keys[2]} = g.V().id().limit({self.v_limit}).toList();
-        res.{keys[3]} = g.E().id().limit({self.e_limit}).toList();
-        res.{keys[4]} = "Only ≤{self.v_limit} VIDs and ≤ {self.e_limit} EIDs for brief overview .";
-        return res;
-        """
+        try:
+            schema = self.graph.schema()
+            vertex_labels = schema.getVertexLabels()
+            edge_labels = schema.getEdgeLabels()
+            graph_summary["vertex_num"] = len(vertex_labels)
+            graph_summary["edge_num"] = len(edge_labels)
+        except Exception as e:
+            log.warning("FetchGraphData: failed to get schema: %s", e)
+            graph_summary["vertex_num"] = 0
+            graph_summary["edge_num"] = 0
 
         try:
-            response = self.graph.gremlin().exec(groovy_code)
-            result = response.get("data") if isinstance(response, dict) else None
-            if isinstance(result, list) and len(result) > 0:
-                if len(result) == 1 and isinstance(result[0], dict):
-                    graph_summary.update({key: result[0].get(key) for key in keys})
-                else:
-                    graph_summary.update(
-                        {
-                            key: result[i].get(key) if i < len(result) and isinstance(result[i], dict) else None
-                            for i, key in enumerate(keys)
-                        }
-                    )
+            vertices = self._fetch_all_vertices()
+            graph_summary["vertices"] = vertices
         except Exception as e:
-            log.error("FetchGraphData: Gremlin execution failed: %s", e)
+            log.error("FetchGraphData: failed to fetch vertices: %s", e)
+            graph_summary["vertices"] = []
 
+        try:
+            edges = self._fetch_all_edges()
+            graph_summary["edges"] = edges
+        except Exception as e:
+            log.error("FetchGraphData: failed to fetch edges: %s", e)
+            graph_summary["edges"] = []
+
+        graph_summary["note"] = f"Only ≤{self.v_limit} VIDs and ≤ {self.e_limit} EIDs for brief overview."
         return graph_summary

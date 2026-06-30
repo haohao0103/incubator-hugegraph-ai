@@ -83,7 +83,10 @@ class OperatorList:
         return self
 
     def example_index_query(self, num_examples):
-        self.operators.append(GremlinExampleIndexQuery(self.embedding, num_examples))
+        from hugegraph_llm.config import index_settings
+        from hugegraph_llm.utils.vector_index_utils import get_vector_index_class
+        vector_index = get_vector_index_class(index_settings.cur_vector_index)
+        self.operators.append(GremlinExampleIndexQuery(vector_index, embedding=self.embedding, num_examples=num_examples))
         return self
 
     def gremlin_generate_synthesize(

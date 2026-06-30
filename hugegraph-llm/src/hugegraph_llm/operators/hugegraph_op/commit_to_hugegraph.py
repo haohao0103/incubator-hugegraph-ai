@@ -84,6 +84,15 @@ class Commit2Graph:
 
     def load_into_graph(self, vertices, edges, schema):  # pylint: disable=too-many-statements
         # pylint: disable=R0912 (too-many-branches)
+        # Use SERVER schema for authoritative property lists (ifNotExist won't update existing labels)
+        server_vertex_map = {}
+        try:
+            server_schema = self.client.schema().getSchema()
+            for vl in server_schema.get("vertexlabels", []):
+                server_vertex_map[vl["name"]] = vl
+        except Exception as e:
+            log.warning("Could not fetch server schema for property validation: %s", e)
+
         vertex_label_map = {v_label["name"]: v_label for v_label in schema["vertexlabels"]}
         edge_label_map = {e_label["name"]: e_label for e_label in schema["edgelabels"]}
         property_label_map = {p_label["name"]: p_label for p_label in schema["propertykeys"]}
@@ -132,9 +141,20 @@ class Commit2Graph:
             if has_problem:
                 continue
 
-            # 3. Ensure all non-nullable props are set
+            # 3. Strip properties not defined in SERVER schema (authoritative source)
+            server_vl = server_vertex_map.get(input_label)
+            if server_vl:
+                schema_prop_keys = set(server_vl.get("properties", []))
+            else:
+                schema_prop_keys = set(vertex_label.get("properties", []))
+            extra_keys = [k for k in input_properties if k not in schema_prop_keys]
+            for k in extra_keys:
+                log.warning("Stripping extra property '%s' not in schema for vertex label '%s'", k, input_label)
+                del input_properties[k]
+
+            # 4. Ensure all non-nullable props are set (only for properties that survived stripping)
             for key in non_null_keys:
-                if key not in input_properties:
+                if key not in input_properties and key in schema_prop_keys:
                     self._set_default_property(key, input_properties, property_label_map)
 
             # 4. Check all data type value is right
@@ -201,7 +221,7 @@ class Commit2Graph:
         for vertex in vertices:
             vertex_label = vertex["name"]
             properties = vertex["properties"]
-            nullable_keys = vertex["nullable_keys"]
+            nullable_keys = vertex.get("nullable_keys", [])
             primary_keys = vertex["primary_keys"]
             self.schema.vertexLabel(vertex_label).properties(*properties).nullableKeys(
                 *nullable_keys

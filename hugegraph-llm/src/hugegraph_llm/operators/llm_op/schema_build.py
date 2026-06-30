@@ -32,7 +32,7 @@ class SchemaBuilder:
         llm: Optional[BaseLLM] = None,
         schema_prompt: Optional[str] = None,
     ):
-        self.llm = llm or LLMs().get_chat_llm()
+        self.llm = llm or LLMs().get_extract_llm()
         # TODO: use a basic format for it
         self.schema_prompt = (
             schema_prompt

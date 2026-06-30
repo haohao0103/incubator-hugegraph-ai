@@ -64,15 +64,22 @@ class SemanticIdQuery:
         for i in range(vertex_label_num):
             possible_vids.update([f"{i + 1}:{keyword}" for keyword in keywords])
 
-        vids_str = ",".join([f"'{vid}'" for vid in possible_vids])
-        resp = self._client.gremlin().exec(SemanticIdQuery.ID_QUERY_TEMPL.format(vids_str=vids_str))
-        searched_vids = [v["id"] for v in resp["data"]]
+        # Use REST API to check each VID (avoids Gremlin/Groovy + Java 21 incompatibility)
+        searched_vids = []
+        for vid in possible_vids:
+            try:
+                result = self._client.graph().getVertexById(vid)
+                if result and result.id:
+                    searched_vids.append(result.id)
+            except Exception:
+                # Vertex doesn't exist, skip
+                continue
 
         unsearched_keywords = set(keywords)
         for vid in searched_vids:
-            for keyword in unsearched_keywords:
+            for keyword in list(unsearched_keywords):
                 if keyword in vid:
-                    unsearched_keywords.remove(keyword)
+                    unsearched_keywords.discard(keyword)
                     break
         return searched_vids, list(unsearched_keywords)
 
