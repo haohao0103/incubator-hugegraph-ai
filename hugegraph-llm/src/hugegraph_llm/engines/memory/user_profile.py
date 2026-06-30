@@ -198,6 +198,7 @@ class UserProfileStore:
     def _init_db(self):
         """Initialize the user_profiles table."""
         with self._lock:
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
             db = sqlite3.connect(self.db_path)
             db.execute("""
                 CREATE TABLE IF NOT EXISTS user_profiles (

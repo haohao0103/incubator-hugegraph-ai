@@ -76,6 +76,27 @@ from hugegraph_llm.engines.memory import (
     EbbinghausDecay,
     EntityExtractor,
     QueryRewriteEngine,
+    HugeGraphGraphStore,
+    AdditiveExtractionPipeline,
+    content_hash_md5,
+    MemoryHistoryTracker,
+    score_and_rank,
+    compute_entity_boosts,
+    extract_query_entities_simple,
+    get_bm25_params,
+    LLMQueryRewriteEngine,
+    RouteStore,
+    compute_routing_key,
+    UserProfileStore,
+    UserProfile,
+    TopicExtractor,
+    ProfileInjector,
+    FaissDeletableIndex,
+    MemoryCompressor,
+    AgentMemoryManager,
+    PermissionChecker,
+    PrivacyFilter,
+    CollaborationBroker,
 )
 
 HUGEGRAPH_URL = memory_settings.hugegraph_url
@@ -2871,6 +2892,355 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
             summary=data.get("summary", ""),
         )
         return jsonify(store.get_persona(data.get("user_id", "demo_user")))
+
+    # ------------------------------------------------------------------
+    # NEW: P0/P1/P2 capability endpoints (aligned with mem0/PowerMem)
+    # ------------------------------------------------------------------
+
+    # --- Memory Version History ---
+    _history_tracker = MemoryHistoryTracker()
+
+    @app.route("/api/memory/history", methods=["GET"])
+    def api_memory_history():
+        """Get version history for a specific memory or recent global events."""
+        memory_id = request.args.get("memory_id")
+        limit = int(request.args.get("limit", "50"))
+        offset = int(request.args.get("offset", "0"))
+        event_type = request.args.get("event_type")
+        if memory_id:
+            events = _history_tracker.get_history(memory_id)
+            return jsonify({"memory_id": memory_id, "events": [e.to_dict() if hasattr(e, 'to_dict') else e for e in events]})
+        events = _history_tracker.get_recent_history(limit=limit, offset=offset, event_type=event_type)
+        return jsonify({"events": [e.to_dict() if hasattr(e, 'to_dict') else e for e in events]})
+
+    @app.route("/api/history/stats", methods=["GET"])
+    def api_history_stats():
+        """History tracker statistics."""
+        return jsonify(_history_tracker.get_stats())
+
+    # --- Entity-centric Graph Traversal ---
+    @app.route("/api/graph/entities", methods=["GET"])
+    def api_graph_entities():
+        """List all entities in the graph."""
+        try:
+            gs = HugeGraphGraphStore()
+            entities = gs.get_all_entities()
+            return jsonify({"entities": entities, "count": len(entities)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/graph/relations", methods=["GET"])
+    def api_graph_relations():
+        """List all relations (edges) in the graph."""
+        try:
+            gs = HugeGraphGraphStore()
+            relations = gs.get_all_relations()
+            return jsonify({"relations": relations, "count": len(relations)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/graph/search", methods=["POST"])
+    def api_graph_search():
+        """Entity-centric graph search with multi-hop traversal."""
+        data = request.json or {}
+        query = data.get("query", "").strip()
+        if not query:
+            return jsonify({"error": "query is required"}), 400
+        try:
+            gs = HugeGraphGraphStore()
+            results = gs.search(
+                query=query,
+                limit=int(data.get("limit", 10)),
+                max_hops=int(data.get("max_hops", 2)),
+            )
+            return jsonify({"query": query, "results": results})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- V3 Additive Extraction ---
+    @app.route("/api/memory/extract", methods=["POST"])
+    def api_extract_facts():
+        """V3-style ADD-only extraction pipeline with MD5 dedup."""
+        data = request.json or {}
+        text = data.get("text", "").strip()
+        if not text:
+            return jsonify({"error": "text is required"}), 400
+        try:
+            pipeline = AdditiveExtractionPipeline()
+            stored_hashes = set(data.get("stored_hashes", []))
+            existing_memories = data.get("existing_memories")
+            result = pipeline.run(
+                text=text,
+                stored_hashes=stored_hashes,
+                existing_memories=existing_memories,
+                use_llm_dedup=bool(data.get("use_llm_dedup", False)),
+            )
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/memory/dedup", methods=["POST"])
+    def api_dedup():
+        """MD5 batch dedup check."""
+        data = request.json or {}
+        facts = data.get("facts", [])
+        stored_hashes = set(data.get("stored_hashes", []))
+        from hugegraph_llm.engines.memory.additive_extraction import batch_dedup
+        new, dup, all_hashes = batch_dedup(facts, stored_hashes)
+        return jsonify({"new_facts": new, "duplicate_facts": dup, "all_hashes": list(all_hashes)})
+
+    # --- Hybrid Scoring Breakdown ---
+    @app.route("/api/scoring/explain", methods=["POST"])
+    def api_scoring_explain():
+        """Show hybrid scoring breakdown for a query (sigmoid BM25 + entity boost + semantic)."""
+        data = request.json or {}
+        query = data.get("query", "").strip()
+        if not query:
+            return jsonify({"error": "query is required"}), 400
+        try:
+            query_entities = extract_query_entities_simple(query)
+            bm25_params = get_bm25_params(query)
+            return jsonify({
+                "query": query,
+                "extracted_entities": query_entities,
+                "bm25_sigmoid_params": {"midpoint": bm25_params[0], "steepness": bm25_params[1]},
+                "explanation": f"BM25 sigmoid: midpoint={bm25_params[0]:.2f}, steepness={bm25_params[1]:.2f}; "
+                               f"Entity boost: {len(query_entities)} entities extracted for boost computation; "
+                               f"Fusion: additive (semantic + bm25_normalized + entity_boost)",
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- LLM Query Rewrite ---
+    @app.route("/api/query/rewrite", methods=["POST"])
+    def api_query_rewrite():
+        """LLM-enhanced query rewrite with entity extraction and intent classification."""
+        data = request.json or {}
+        query = data.get("query", "").strip()
+        if not query:
+            return jsonify({"error": "query is required"}), 400
+        try:
+            engine = LLMQueryRewriteEngine()
+            result = engine.rewrite(
+                query=query,
+                context=data.get("context"),
+                user_profile=data.get("user_profile"),
+            )
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- Sub-Store Routing ---
+    _route_store = RouteStore()
+
+    @app.route("/api/routing/shards", methods=["GET"])
+    def api_routing_shards():
+        """List all active shards and their stats."""
+        return jsonify(_route_store.get_shard_stats())
+
+    @app.route("/api/routing/route", methods=["POST"])
+    def api_routing_route():
+        """Compute routing key for given metadata."""
+        data = request.json or {}
+        rk = compute_routing_key(
+            user_id=data.get("user_id", "demo_user"),
+            agent_id=data.get("agent_id"),
+            app_name=data.get("app_name"),
+            scope=data.get("scope", "private"),
+        )
+        return jsonify({"routing_key": rk, "metadata": data})
+
+    @app.route("/api/routing/search", methods=["POST"])
+    def api_routing_search():
+        """Search across accessible shards."""
+        data = request.json or {}
+        query = data.get("query", "").strip()
+        if not query:
+            return jsonify({"error": "query is required"}), 400
+        results = _route_store.search_accessible(
+            user_id=data.get("user_id", "demo_user"),
+            agent_id=data.get("agent_id"),
+            app_name=data.get("app_name"),
+            query=query,
+            limit=int(data.get("limit", 10)),
+        )
+        return jsonify({"results": results})
+
+    # --- User Profile Auto-Extraction ---
+    _profile_store = UserProfileStore()
+
+    @app.route("/api/profile/auto", methods=["POST"])
+    def api_profile_auto():
+        """Auto-extract user profile from memory content (topics, name, preferences, aliases)."""
+        data = request.json or {}
+        user_id = data.get("user_id", "demo_user")
+        memories = data.get("memories", [])
+        if not memories:
+            # Use existing memories from the backend
+            existing = store.get_memories(user_id=user_id)
+            memories = [m.get("content", "") for m in (existing.get("memories", []) if isinstance(existing, dict) else existing)]
+        try:
+            profile = _profile_store.update_from_memories(user_id=user_id, memories=memories)
+            return jsonify(profile.to_dict() if hasattr(profile, 'to_dict') else profile)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/profile/users", methods=["GET"])
+    def api_profile_users():
+        """List all users with profiles."""
+        return jsonify({"users": _profile_store.list_users()})
+
+    @app.route("/api/profile/all", methods=["GET"])
+    def api_profile_all():
+        """Get all user profiles."""
+        profiles = _profile_store.get_all_profiles()
+        return jsonify({"profiles": [p.to_dict() if hasattr(p, 'to_dict') else p for p in profiles]})
+
+    @app.route("/api/profile/inject", methods=["POST"])
+    def api_profile_inject():
+        """Get profile data formatted for query rewrite injection."""
+        data = request.json or {}
+        user_id = data.get("user_id", "demo_user")
+        injector = ProfileInjector(profile_store=_profile_store)
+        result = injector.get_profile_for_rewrite(user_id)
+        return jsonify(result)
+
+    # --- Memory Compression ---
+    _compressor = MemoryCompressor()
+
+    @app.route("/api/memory/compress", methods=["POST"])
+    def api_memory_compress():
+        """Run memory compression pipeline: cluster → summarize → prune → archive."""
+        data = request.json or {}
+        user_id = data.get("user_id", "demo_user")
+        try:
+            # Get user's memories for compression
+            mem_data = store.get_memories(user_id=user_id)
+            memories = mem_data.get("memories", []) if isinstance(mem_data, dict) else mem_data
+            if not memories:
+                return jsonify({"status": "no_memories", "stats": {}})
+            result = _compressor.compress(memories=memories)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- Multi-Agent Collaboration ---
+    _agent_mgr = AgentMemoryManager()
+
+    @app.route("/api/agent/check_access", methods=["POST"])
+    def api_agent_check_access():
+        """Check if an agent has permission to access a memory."""
+        data = request.json or {}
+        agent_id = data.get("agent_id", "")
+        operation = data.get("operation", "read")
+        memory = data.get("memory", {})
+        if not agent_id:
+            return jsonify({"error": "agent_id is required"}), 400
+        result = _agent_mgr.check_access(agent_id=agent_id, operation=operation, memory=memory)
+        return jsonify({"allowed": result, "agent_id": agent_id, "operation": operation})
+
+    @app.route("/api/agent/filter_privacy", methods=["POST"])
+    def api_agent_filter_privacy():
+        """Filter memories for sharing based on privacy level (with sanitization)."""
+        data = request.json or {}
+        memories = data.get("memories", [])
+        target_privacy = data.get("target_privacy", "standard")
+        result = _agent_mgr.filter_for_sharing(memories=memories, target_privacy=target_privacy)
+        return jsonify({"filtered_memories": result})
+
+    @app.route("/api/agent/share", methods=["POST"])
+    def api_agent_share():
+        """Share a memory from one agent to another."""
+        data = request.json or {}
+        memory_id = data.get("memory_id", "")
+        source_agent = data.get("source_agent", "")
+        target_agent = data.get("target_agent", "")
+        scope = data.get("scope", "agent_group")
+        if not memory_id or not source_agent or not target_agent:
+            return jsonify({"error": "memory_id, source_agent, target_agent are required"}), 400
+        result = _agent_mgr.share_memory_to_agent(
+            memory_id=memory_id, source_agent=source_agent,
+            target_agent=target_agent, scope=scope,
+        )
+        return jsonify({"success": result})
+
+    @app.route("/api/agent/groups", methods=["GET"])
+    def api_agent_groups():
+        """List collaboration groups for an agent."""
+        agent_id = request.args.get("agent_id", "")
+        if not agent_id:
+            return jsonify({"error": "agent_id is required"}), 400
+        groups = _agent_mgr.get_agent_groups(agent_id=agent_id)
+        return jsonify({"groups": groups})
+
+    @app.route("/api/agent/shared_with", methods=["GET"])
+    def api_agent_shared_with():
+        """List memories shared with an agent."""
+        agent_id = request.args.get("agent_id", "")
+        if not agent_id:
+            return jsonify({"error": "agent_id is required"}), 400
+        shared = _agent_mgr.get_shared_with_agent(agent_id=agent_id)
+        return jsonify({"shared_memories": shared})
+
+    # --- Collaboration Group Management ---
+    _collab_broker = CollaborationBroker()
+
+    @app.route("/api/collab/create_group", methods=["POST"])
+    def api_collab_create_group():
+        """Create a collaboration group."""
+        data = request.json or {}
+        group_id = data.get("group_id", "")
+        name = data.get("name", "")
+        members = data.get("members", [])
+        scope = data.get("scope", "agent_group")
+        if not group_id or not name:
+            return jsonify({"error": "group_id and name are required"}), 400
+        result = _collab_broker.create_group(
+            group_id=group_id, name=name, members=members, scope=MemoryScope(scope),
+        )
+        return jsonify(result)
+
+    @app.route("/api/collab/add_member", methods=["POST"])
+    def api_collab_add_member():
+        """Add an agent to a collaboration group."""
+        data = request.json or {}
+        group_id = data.get("group_id", "")
+        agent_id = data.get("agent_id", "")
+        if not group_id or not agent_id:
+            return jsonify({"error": "group_id and agent_id are required"}), 400
+        result = _collab_broker.add_member(group_id=group_id, agent_id=agent_id)
+        return jsonify({"success": result})
+
+    # --- FAISS Index Management ---
+    @app.route("/api/faiss/stats", methods=["GET"])
+    def api_faiss_stats():
+        """FAISS index statistics (vectors, tombstones, dimension)."""
+        try:
+            idx = FaissDeletableIndex()
+            return jsonify(idx.get_stats())
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/faiss/compact", methods=["POST"])
+    def api_faiss_compact():
+        """Compact FAISS index: rebuild without tombstones to reclaim space."""
+        try:
+            idx = FaissDeletableIndex()
+            count = idx.compact()
+            return jsonify({"compact_count": count, "status": "compacted"})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # --- Privacy Demo (Sanitization) ---
+    @app.route("/api/privacy/filter", methods=["POST"])
+    def api_privacy_filter():
+        """Filter/sanitize text content based on privacy level (regex-based PII removal)."""
+        data = request.json or {}
+        content = data.get("content", "")
+        privacy_level = data.get("privacy_level", "standard")
+        pf = PrivacyFilter()
+        filtered = pf.filter(content=content, privacy_level=PrivacyLevel(privacy_level))
+        return jsonify({"original": content, "filtered": filtered, "privacy_level": privacy_level})
 
     return app
 

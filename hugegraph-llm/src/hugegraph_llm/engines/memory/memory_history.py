@@ -27,6 +27,7 @@ as complementary tracking layers.
 """
 
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -117,6 +118,7 @@ class MemoryHistoryTracker:
     def _get_conn(self) -> sqlite3.Connection:
         """Thread-local SQLite connection."""
         if not hasattr(self._local, "conn") or self._local.conn is None:
+            os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
             self._local.conn = sqlite3.connect(self._db_path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
         return self._local.conn

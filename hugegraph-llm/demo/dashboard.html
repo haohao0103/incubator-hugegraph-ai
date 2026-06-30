@@ -3,256 +3,618 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HugeGraph AI Memory · 运营 Dashboard</title>
+  <title>HugeGraph AI Memory · 全能力 Dashboard</title>
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
   <style>
     :root {
-      --bg: #f5f7fa;
-      --card: #ffffff;
-      --text: #1f2937;
-      --text2: #6b7280;
-      --primary: #2563eb;
-      --primary-light: #eff6ff;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --border: #e5e7eb;
-      --radius: 10px;
-      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+      --bg: #f0f2f5; --card: #ffffff; --text: #1f2937; --text2: #6b7280; --text3: #9ca3af;
+      --primary: #3b82f6; --primary-dark: #1d4ed8; --primary-light: #eff6ff;
+      --success: #10b981; --success-light: #ecfdf5; --warning: #f59e0b; --warning-light: #fffbeb;
+      --danger: #ef4444; --danger-light: #fef2f2;
+      --purple: #8b5cf6; --purple-light: #f5f3ff; --teal: #14b8a6; --teal-light: #f0fdfa;
+      --border: #e5e7eb; --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg); color: var(--text); font-size: 14px;
-    }
-    header {
-      background: var(--card); border-bottom: 1px solid var(--border);
-      padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 100;
-    }
-    header h1 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 10px; }
-    header .subtitle { color: var(--text2); font-size: 13px; margin-top: 4px; }
-    .badge {
-      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-      font-size: 12px; font-weight: 600; background: var(--primary-light); color: var(--primary);
-    }
-    .container {
-      padding: 20px 24px; display: grid; grid-template-columns: 320px 1fr 360px; gap: 20px;
-    }
-    .card {
-      background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
-      border: 1px solid var(--border); overflow: hidden; margin-bottom: 20px;
-    }
-    .card-header {
-      padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600;
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .card-body { padding: 16px; }
-    .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-    .status-card {
-      background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
-      padding: 16px; box-shadow: var(--shadow);
-    }
-    .status-card .label { color: var(--text2); font-size: 12px; margin-bottom: 6px; }
-    .status-card .value { font-size: 22px; font-weight: 700; }
-    .status-card .value.small { font-size: 14px; }
-    .status-card .indicator {
-      width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
-    }
-    .ok { background: var(--success); }
-    .warn { background: var(--warning); }
-    .err { background: var(--danger); }
-    .form-row { margin-bottom: 12px; }
-    label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
-    input, textarea, select {
-      width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
-      font-size: 13px; font-family: inherit;
-    }
-    textarea { resize: vertical; min-height: 60px; }
-    button {
-      background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 6px;
-      cursor: pointer; font-size: 13px; font-weight: 600;
-    }
-    button:hover { opacity: 0.92; }
-    button.secondary { background: #f3f4f6; color: var(--text); border: 1px solid var(--border); }
-    button.danger { background: var(--danger); }
-    .memory-list { max-height: 320px; overflow-y: auto; }
-    .memory-item {
-      padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;
-      cursor: pointer; transition: background 0.15s;
-    }
-    .memory-item:hover { background: var(--primary-light); }
-    .memory-item .content { font-size: 13px; line-height: 1.4; }
-    .memory-item .meta { font-size: 11px; color: var(--text2); margin-top: 4px; }
-    .result-panel {
-      background: #f9fafb; border: 1px dashed var(--border); border-radius: 6px; padding: 12px;
-      margin-top: 12px; min-height: 80px; white-space: pre-wrap; font-size: 13px; line-height: 1.5;
-    }
-    .result-rank { display: flex; gap: 8px; margin-bottom: 6px; }
-    .rank-chip {
-      font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #e5e7eb; color: #374151;
-    }
-    #cy {
-      width: 100%; height: 420px; background: #fafafa; border-radius: 6px; border: 1px solid var(--border);
-    }
-    .tab-bar { display: flex; border-bottom: 1px solid var(--border); }
-    .tab-bar button {
-      flex: 1; background: transparent; color: var(--text2); border-radius: 0; border-bottom: 2px solid transparent;
-      padding: 10px; font-weight: 500;
-    }
-    .tab-bar button.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-light); }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-    .empty { color: var(--text2); font-style: italic; text-align: center; padding: 20px; }
-    .spinner {
-      width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: var(--primary);
-      border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; vertical-align: middle; margin-right: 6px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .metric-box { background: #f9fafb; border-radius: 6px; padding: 10px; text-align: center; }
-    .metric-box .num { font-size: 20px; font-weight: 700; color: var(--primary); }
-    .metric-box .label { font-size: 11px; color: var(--text2); margin-top: 2px; }
-    .toast {
-      position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white;
-      padding: 10px 16px; border-radius: 6px; box-shadow: var(--shadow); z-index: 200; display: none;
-    }
-    .toast.show { display: block; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+    header { background:var(--card); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
+    header h1 { margin:0; font-size:18px; display:flex; align-items:center; gap:8px; }
+    header .subtitle { color:var(--text2); font-size:12px; margin-top:2px; }
+    .badge { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+    .badge-blue { background:var(--primary-light); color:var(--primary); }
+    .badge-green { background:var(--success-light); color:var(--success); }
+    .badge-purple { background:var(--purple-light); color:var(--purple); }
+    .indicator { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:4px; }
+    .ok { background:var(--success); } .warn { background:var(--warning); } .err { background:var(--danger); }
+    /* Navigation */
+    .nav-bar { background:var(--card); border-bottom:1px solid var(--border); padding:0 20px; display:flex; gap:0; overflow-x:auto; }
+    .nav-btn { background:none; border:none; border-bottom:2px solid transparent; padding:10px 16px; font-size:13px; font-weight:500; color:var(--text2); cursor:pointer; white-space:nowrap; transition:all 0.15s; }
+    .nav-btn:hover { color:var(--text); background:var(--primary-light); }
+    .nav-btn.active { color:var(--primary-dark); border-bottom-color:var(--primary); background:var(--primary-light); }
+    .page { display:none; padding:16px 20px; }
+    .page.active { display:block; }
+    /* Layout */
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+    .grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .grid-2-1 { display:grid; grid-template-columns:2fr 1fr; gap:16px; }
+    .card { background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--border); overflow:hidden; margin-bottom:16px; }
+    .card-header { padding:12px 14px; border-bottom:1px solid var(--border); font-weight:600; font-size:13px; display:flex; align-items:center; justify-content:space-between; }
+    .card-header .icon { margin-right:6px; }
+    .card-body { padding:14px; }
+    .status-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:16px; }
+    .status-card { background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:14px; box-shadow:var(--shadow); }
+    .status-card .label { color:var(--text2); font-size:11px; margin-bottom:4px; }
+    .status-card .value { font-size:20px; font-weight:700; }
+    .status-card .value.small { font-size:13px; }
+    /* Form */
+    .form-row { margin-bottom:10px; }
+    label { display:block; font-size:11px; color:var(--text2); margin-bottom:3px; }
+    input,textarea,select { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; }
+    textarea { resize:vertical; min-height:50px; }
+    .btn { background:var(--primary); color:#fff; border:none; padding:7px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+    .btn:hover { opacity:0.9; }
+    .btn-sm { padding:5px 8px; font-size:11px; }
+    .btn-secondary { background:#f3f4f6; color:var(--text); border:1px solid var(--border); }
+    .btn-success { background:var(--success); }
+    .btn-danger { background:var(--danger); }
+    .btn-warning { background:var(--warning); color:#fff; }
+    .btn-purple { background:var(--purple); }
+    .btn-teal { background:var(--teal); }
+    .btn-group { display:flex; gap:6px; margin-top:6px; }
+    /* Results */
+    .result-box { background:#f9fafb; border:1px dashed var(--border); border-radius:6px; padding:10px; margin-top:10px; min-height:60px; white-space:pre-wrap; font-size:12px; line-height:1.5; overflow-x:auto; }
+    .memory-item { padding:8px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; cursor:pointer; transition:background 0.15s; position:relative; }
+    .memory-item:hover { background:var(--primary-light); }
+    .memory-item .content { font-size:12px; line-height:1.4; }
+    .memory-item .meta { font-size:10px; color:var(--text2); margin-top:3px; display:flex; gap:6px; flex-wrap:wrap; }
+    .memory-item .actions { position:absolute; top:6px; right:8px; display:flex; gap:4px; }
+    .memory-list { max-height:300px; overflow-y:auto; }
+    .tag { font-size:10px; padding:1px 6px; border-radius:3px; font-weight:600; }
+    .tag-blue { background:var(--primary-light); color:var(--primary); }
+    .tag-green { background:var(--success-light); color:var(--success); }
+    .tag-purple { background:var(--purple-light); color:var(--purple); }
+    .tag-yellow { background:var(--warning-light); color:var(--warning); }
+    .tag-red { background:var(--danger-light); color:var(--danger); }
+    .tag-teal { background:var(--teal-light); color:var(--teal); }
+    /* Tabs inside cards */
+    .tab-bar { display:flex; border-bottom:1px solid var(--border); }
+    .tab-bar .tab-btn { flex:1; background:none; color:var(--text2); border:none; border-bottom:2px solid transparent; padding:8px; font-weight:500; font-size:12px; cursor:pointer; }
+    .tab-bar .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); background:var(--primary-light); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+    /* Cytoscape */
+    #cy { width:100%; height:360px; background:#fafafa; border-radius:6px; border:1px solid var(--border); }
+    /* Metrics */
+    .metrics-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .metric-box { background:#f9fafb; border-radius:6px; padding:8px; text-align:center; }
+    .metric-box .num { font-size:18px; font-weight:700; }
+    .metric-box .label { font-size:10px; color:var(--text2); margin-top:1px; }
+    /* History timeline */
+    .timeline-item { padding:8px 10px; border-left:3px solid var(--border); margin-left:8px; margin-bottom:8px; position:relative; font-size:12px; }
+    .timeline-item::before { content:''; position:absolute; left:-7px; top:10px; width:10px; height:10px; border-radius:50%; background:var(--border); }
+    .timeline-item.event-ADD { border-left-color:var(--success); }
+    .timeline-item.event-ADD::before { background:var(--success); }
+    .timeline-item.event-UPDATE { border-left-color:var(--primary); }
+    .timeline-item.event-UPDATE::before { background:var(--primary); }
+    .timeline-item.event-DELETE { border-left-color:var(--danger); }
+    .timeline-item.event-DELETE::before { background:var(--danger); }
+    .timeline-item .event-type { font-weight:600; font-size:11px; }
+    .timeline-item .event-detail { color:var(--text2); font-size:11px; margin-top:2px; }
+    /* Empty */
+    .empty { color:var(--text2); font-style:italic; text-align:center; padding:16px; font-size:12px; }
+    /* Spinner */
+    .spinner { width:12px; height:12px; border:2px solid #e5e7eb; border-top-color:var(--primary); border-radius:50%; display:inline-block; animation:spin 1s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    /* Toast */
+    .toast { position:fixed; bottom:16px; right:16px; background:#1f2937; color:#fff; padding:8px 14px; border-radius:6px; box-shadow:var(--shadow); z-index:200; display:none; font-size:12px; }
+    .toast.show { display:block; }
+    /* Collapsible section */
+    .collapsible-header { cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:600; font-size:13px; padding:8px 0; }
+    .collapsible-header .arrow { font-size:11px; transition:transform 0.15s; }
+    .collapsible-header.open .arrow { transform:rotate(90deg); }
+    .collapsible-body { display:none; }
+    .collapsible-body.open { display:block; }
+    /* Table */
+    .data-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .data-table th { background:#f9fafb; padding:6px 8px; text-align:left; font-weight:600; border:1px solid var(--border); }
+    .data-table td { padding:6px 8px; border:1px solid var(--border); }
+    /* Score bar */
+    .score-bar { display:flex; align-items:center; gap:4px; margin-bottom:4px; }
+    .score-bar .bar { height:6px; border-radius:3px; min-width:2px; }
+    .score-bar .bar-segment { display:inline-block; height:6px; }
+    /* Capability grid */
+    .cap-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .cap-card { background:var(--card); border-radius:8px; border:1px solid var(--border); padding:12px; text-align:center; }
+    .cap-card .cap-icon { font-size:24px; margin-bottom:6px; }
+    .cap-card .cap-title { font-size:13px; font-weight:600; margin-bottom:2px; }
+    .cap-card .cap-desc { font-size:11px; color:var(--text2); }
+    .cap-card .cap-status { font-size:10px; margin-top:4px; }
   </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>
-        <span>🦊</span>
-        HugeGraph AI Memory · 运营 Dashboard
-      </h1>
-      <div class="subtitle">真实 HugeGraph + FAISS + BM25 + MiMo LLM · 记忆全生命周期管理</div>
+      <h1><span>🦊</span> HugeGraph AI Memory · 全能力 Dashboard</h1>
+      <div class="subtitle">HugeGraph + FAISS + BM25 + MiMo LLM · 10 大能力全覆盖</div>
     </div>
-    <div class="badge" id="connBadge">
-      <span class="indicator ok" id="connDot"></span>
-      <span id="connText">HugeGraph 在线</span>
+    <div style="display:flex; gap:8px;">
+      <div class="badge badge-blue" id="connBadge"><span class="indicator ok" id="connDot"></span><span id="connText">HugeGraph 在线</span></div>
+      <div class="badge badge-green" id="memBadge">记忆: <span id="memCount">-</span></div>
     </div>
   </header>
 
-  <div style="padding: 20px 24px 0;">
+  <!-- Navigation -->
+  <div class="nav-bar" id="navBar">
+    <button class="nav-btn active" onclick="switchPage('pgOverview', this)">概览</button>
+    <button class="nav-btn" onclick="switchPage('pgMemory', this)">记忆管理</button>
+    <button class="nav-btn" onclick="switchPage('pgSearch', this)">检索与改写</button>
+    <button class="nav-btn" onclick="switchPage('pgGraph', this)">图谱探索</button>
+    <button class="nav-btn" onclick="switchPage('pgHistory', this)">版本历史</button>
+    <button class="nav-btn" onclick="switchPage('pgProfile', this)">用户画像</button>
+    <button class="nav-btn" onclick="switchPage('pgCompress', this)">记忆压缩</button>
+    <button class="nav-btn" onclick="switchPage('pgCollab', this)">Agent 协作</button>
+    <button class="nav-btn" onclick="switchPage('pgRouting', this)">分片路由</button>
+    <button class="nav-btn" onclick="switchPage('pgBenchmark', this)">基准测试</button>
+  </div>
+
+  <!-- Page 1: Overview -->
+  <div id="pgOverview" class="page active">
     <div class="status-grid">
-      <div class="status-card">
-        <div class="label">记忆总数</div>
-        <div class="value" id="statMemories">-</div>
-      </div>
-      <div class="status-card">
-        <div class="label">图实体 / 关系</div>
-        <div class="value small" id="statGraph">- / -</div>
-      </div>
-      <div class="status-card">
-        <div class="label">FAISS 向量</div>
-        <div class="value" id="statVectors">-</div>
-      </div>
-      <div class="status-card">
-        <div class="label">平均检索延迟</div>
-        <div class="value small" id="statLatency">-</div>
+      <div class="status-card"><div class="label">记忆总数</div><div class="value" id="statMemories">-</div></div>
+      <div class="status-card"><div class="label">图实体 / 关系</div><div class="value small" id="statGraph">- / -</div></div>
+      <div class="status-card"><div class="label">FAISS 向量</div><div class="value" id="statVectors">-</div></div>
+      <div class="status-card"><div class="label">平均检索延迟</div><div class="value small" id="statLatency">-</div></div>
+      <div class="status-card"><div class="label">历史事件数</div><div class="value" id="statHistory">-</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">🧠 十大核心能力矩阵</div>
+      <div class="card-body">
+        <div class="cap-grid">
+          <div class="cap-card"><div class="cap-icon">📝</div><div class="cap-title">记忆 CRUD</div><div class="cap-desc">写入 / 查询 / 更新 / 删除全生命周期</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🔍</div><div class="cap-title">三通道检索</div><div class="cap-desc">FAISS + BM25 + Graph 实体多跳遍历</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🧮</div><div class="cap-title">混合评分</div><div class="cap-desc">sigmoid BM25 + entity boost + 加性融合</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🔄</div><div class="cap-title">查询改写</div><div class="cap-desc">LLM 消歧 / 指代消解 / 缩写展开</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🧬</div><div class="cap-title">V3 ADD 提取</div><div class="cap-desc">纯ADD提取 + MD5哈希去重 + 实体抽取</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">📜</div><div class="cap-title">版本历史</div><div class="cap-desc">ADD/UPDATE/DELETE 事件追踪 + 快照</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">👤</div><div class="cap-title">用户画像</div><div class="cap-desc">自动提取姓名/偏好/话题/别名 + 注入检索</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🗜️</div><div class="cap-title">记忆压缩</div><div class="cap-desc">聚类 + LLM摘要 + 衰减剪枝 + 归档</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🤝</div><div class="cap-title">Agent 协作</div><div class="cap-desc">5级权限 + 3级隐私 + 协作组 + 跨Agent共享</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🔀</div><div class="cap-title">分片路由</div><div class="cap-desc">按 user/agent/app/scope 路由到独立 shard</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">蒸馏</div><div class="cap-title">Experience 蒸馏</div><div class="cap-desc">从记忆蒸馏经验与技能</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+          <div class="cap-card"><div class="cap-icon">🔒</div><div class="cap-title">隐私脱敏</div><div class="cap-desc">正则 PII 检测 + 多级脱敏过滤</div><div class="cap-status"><span class="tag tag-green">已实现</span></div></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="container">
-    <!-- 左侧：记忆管理 -->
-    <div>
-      <div class="card">
-        <div class="card-header">写入记忆</div>
-        <div class="card-body">
-          <div class="form-row">
-            <label>用户 ID</label>
-            <input type="text" id="userId" value="demo_user" placeholder="demo_user">
-          </div>
-          <div class="form-row">
-            <label>记忆内容</label>
-            <textarea id="memoryContent" placeholder="例如：我下周一要去上海参加 GraphRAG 技术沙龙，航班是 CA1835。"></textarea>
-          </div>
-          <button onclick="addMemory()">添加记忆</button>
-          <div id="addResult" class="result-panel" style="display:none"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          记忆列表
-          <button class="secondary" onclick="loadMemories()">刷新</button>
-        </div>
-        <div class="card-body">
-          <div class="memory-list" id="memoryList"><div class="empty">点击刷新加载</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 中间：检索测试 + 图谱可视化 -->
-    <div>
-      <div class="card">
-        <div class="card-header">检索与问答测试</div>
-        <div class="card-body">
-          <div class="form-row">
-            <label>查询问题</label>
-            <input type="text" id="searchQuery" placeholder="例如：我下周要去哪里？">
-          </div>
-          <button onclick="searchMemory()">检索</button>
-          <button class="secondary" onclick="classifyQuery()">意图识别</button>
-          <div id="searchResult" class="result-panel" style="display:none"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">记忆图谱可视化</div>
-        <div class="card-body">
-          <div id="cy"></div>
-          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <button class="secondary" onclick="renderGraph()">刷新图谱</button>
-            <span style="font-size:12px;color:var(--text2)">节点=实体/记忆，边=关系/引用</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 右侧：Persona / Experience / Skill / LOCOMO -->
-    <div>
-      <div class="card">
-        <div class="tab-bar">
-          <button class="active" onclick="switchTab('tabPersona', this)">Persona</button>
-          <button onclick="switchTab('tabExp', this)">Experience</button>
-          <button onclick="switchTab('tabSkill', this)">Skill</button>
-        </div>
-        <div class="card-body">
-          <div id="tabPersona" class="tab-panel active">
-            <div class="form-row">
-              <label>用户画像摘要</label>
-              <textarea id="personaSummary" placeholder="加载中..."></textarea>
+  <!-- Page 2: Memory Management -->
+  <div id="pgMemory" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">📝 写入记忆 (V3 ADD 提取)</div>
+          <div class="card-body">
+            <div class="form-row"><label>用户 ID</label><input type="text" id="userId" value="demo_user"></div>
+            <div class="form-row"><label>Scope</label>
+              <select id="addScope"><option value="private">private</option><option value="agent_group">agent_group</option><option value="user_group">user_group</option><option value="public">public</option></select>
             </div>
-            <button onclick="updatePersona()">更新画像</button>
-            <button class="secondary" onclick="loadPersona()">刷新</button>
+            <div class="form-row"><label>Privacy</label>
+              <select id="addPrivacy"><option value="standard">standard</option><option value="sensitive">sensitive</option><option value="confidential">confidential</option></select>
+            </div>
+            <div class="form-row"><label>记忆内容</label><textarea id="memoryContent" placeholder="例如：我下周一要去上海参加 GraphRAG 技术沙龙"></textarea></div>
+            <div class="btn-group">
+              <button class="btn" onclick="addMemory()">添加记忆</button>
+              <button class="btn btn-teal btn-sm" onclick="extractFacts()">V3 提取预览</button>
+            </div>
+            <div id="addResult" class="result-box" style="display:none"></div>
           </div>
-          <div id="tabExp" class="tab-panel">
-            <button onclick="distillMemories()">蒸馏 Experience</button>
-            <button class="secondary" onclick="loadExperiences()">刷新</button>
-            <div id="expList" style="margin-top:12px;"><div class="empty">暂无 Experience</div></div>
-          </div>
-          <div id="tabSkill" class="tab-panel">
-            <button class="secondary" onclick="loadSkills()">刷新</button>
-            <div id="skillList" style="margin-top:12px;"><div class="empty">暂无 Skill</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🔍 V3 ADD 提取分析</div>
+          <div class="card-body">
+            <div class="form-row"><label>待提取文本</label><textarea id="extractText" placeholder="输入一段文本，预览 V3 纯ADD提取结果"></textarea></div>
+            <div class="btn-group">
+              <button class="btn btn-teal" onclick="extractFacts()">提取事实</button>
+              <button class="btn btn-secondary btn-sm" onclick="dedupCheck()">MD5 去重检查</button>
+            </div>
+            <div id="extractResult" class="result-box" style="display:none"></div>
           </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">LOCOMO 基准结果</div>
-        <div class="card-body">
-          <div class="metrics-grid" id="locomoMetrics">
-            <div class="metric-box"><div class="num">-</div><div class="label">Accuracy</div></div>
-            <div class="metric-box"><div class="num">-</div><div class="label">Hit@5</div></div>
-            <div class="metric-box"><div class="num">-</div><div class="label">MRR</div></div>
-            <div class="metric-box"><div class="num">-</div><div class="label">Avg Latency</div></div>
+      <div>
+        <div class="card">
+          <div class="card-header">📋 记忆列表 <button class="btn btn-secondary btn-sm" onclick="loadMemories()">刷新</button></div>
+          <div class="card-body">
+            <div class="memory-list" id="memoryList"><div class="empty">点击刷新加载</div></div>
           </div>
-          <button class="secondary" onclick="loadLocomo()" style="margin-top:12px;width:100%">刷新结果</button>
-          <div id="locomoStatus" class="empty" style="margin-top:8px;font-size:12px;">未检测到结果文件</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">蒸馏 Experience / Skill</div>
+          <div class="card-body">
+            <div class="tab-bar">
+              <button class="tab-btn active" onclick="switchTab('tabExp2', this)">Experience</button>
+              <button class="tab-btn" onclick="switchTab('tabSkill2', this)">Skill</button>
+            </div>
+            <div id="tabExp2" class="tab-panel active">
+              <button class="btn btn-warning btn-sm" onclick="distillMemories()">蒸馏 Experience</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadExperiences()">刷新</button>
+              <div id="expList2" style="margin-top:10px;"><div class="empty">暂无 Experience</div></div>
+            </div>
+            <div id="tabSkill2" class="tab-panel">
+              <button class="btn btn-secondary btn-sm" onclick="loadSkills()">刷新</button>
+              <div id="skillList2" style="margin-top:10px;"><div class="empty">暂无 Skill</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 3: Search & Rewrite -->
+  <div id="pgSearch" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">🔍 检索与问答</div>
+          <div class="card-body">
+            <div class="form-row"><label>查询问题</label><input type="text" id="searchQuery" placeholder="例如：我下周要去哪里？"></div>
+            <div class="form-row"><label>Top K</label><input type="number" id="searchTopK" value="5" min="1" max="20"></div>
+            <div class="btn-group">
+              <button class="btn" onclick="searchMemory()">检索</button>
+              <button class="btn btn-purple btn-sm" onclick="rewriteQuery()">LLM 查询改写</button>
+              <button class="btn btn-secondary btn-sm" onclick="classifyQuery()">意图识别</button>
+              <button class="btn btn-teal btn-sm" onclick="scoringExplain()">评分分解</button>
+            </div>
+            <div id="searchResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🧮 混合评分分解</div>
+          <div class="card-body">
+            <p style="font-size:12px;color:var(--text2);margin-bottom:8px">输入查询，查看 sigmoid BM25 参数、实体提取结果和融合策略</p>
+            <div class="form-row"><label>查询文本</label><input type="text" id="scoringQuery" placeholder="与检索共用或单独输入"></div>
+            <button class="btn btn-teal btn-sm" onclick="scoringExplain()">分析评分策略</button>
+            <div id="scoringResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">🔄 LLM 查询改写</div>
+          <div class="card-body">
+            <div class="form-row"><label>原始查询</label><input type="text" id="rewriteQueryInput" placeholder="例如：他上次说的那个项目进展怎么样了"></div>
+            <div class="form-row"><label>上下文 (可选)</label><textarea id="rewriteContext" placeholder="对话上下文，帮助消歧" rows="2"></textarea></div>
+            <button class="btn btn-purple" onclick="rewriteQuery()">改写查询</button>
+            <div id="rewriteResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🔒 隐私脱敏演示</div>
+          <div class="card-body">
+            <div class="form-row"><label>原始文本</label><textarea id="privacyInput" placeholder="例如：我的手机号是13812345678，银行卡6222021234567890"></textarea></div>
+            <div class="form-row"><label>隐私级别</label>
+              <select id="privacyLevel"><option value="standard">standard</option><option value="sensitive">sensitive</option><option value="confidential">confidential</option></select>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="privacyFilter()">脱敏处理</button>
+            <div id="privacyResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 4: Graph Exploration -->
+  <div id="pgGraph" class="page">
+    <div class="grid-2-1">
+      <div>
+        <div class="card">
+          <div class="card-header">🧬 实体图可视化</div>
+          <div class="card-body">
+            <div id="cy"></div>
+            <div class="btn-group" style="margin-top:8px">
+              <button class="btn btn-secondary btn-sm" onclick="renderGraph()">刷新图谱</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadEntities()">全量实体</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadRelations()">全量关系</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">🎯 实体中心图搜索</div>
+          <div class="card-body">
+            <div class="form-row"><label>查询实体</label><input type="text" id="graphSearchQuery" placeholder="例如：上海"></div>
+            <div class="form-row"><label>最大跳数</label><input type="number" id="graphMaxHops" value="2" min="1" max="4"></div>
+            <div class="form-row"><label>返回数量</label><input type="number" id="graphSearchLimit" value="10"></div>
+            <button class="btn btn-purple" onclick="graphSearch()">实体多跳搜索</button>
+            <div id="graphSearchResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">📊 实体/关系统计</div>
+          <div class="card-body">
+            <div id="entityStats" class="result-box"><div class="empty">点击加载</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 5: Version History -->
+  <div id="pgHistory" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">📜 全局历史流水</div>
+          <div class="card-body">
+            <div class="btn-group">
+              <button class="btn btn-sm" onclick="loadRecentHistory()">最近50条</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadHistoryStats()">历史统计</button>
+              <select id="historyEventType" style="width:auto;padding:5px 8px;font-size:11px">
+                <option value="">全部</option><option value="ADD">ADD</option><option value="UPDATE">UPDATE</option><option value="DELETE">DELETE</option>
+              </select>
+            </div>
+            <div id="historyTimeline" style="margin-top:12px;max-height:400px;overflow-y:auto"><div class="empty">点击加载</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">🔍 记忆版本追踪</div>
+          <div class="card-body">
+            <div class="form-row"><label>记忆 ID</label><input type="text" id="historyMemoryId" placeholder="输入 memory_id 查看完整版本历史"></div>
+            <button class="btn btn-sm" onclick="loadMemoryHistory()">查询版本链</button>
+            <div id="memoryHistoryResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">📊 历史统计仪表盘</div>
+          <div class="card-body">
+            <div class="metrics-grid" id="historyMetrics">
+              <div class="metric-box"><div class="num">-</div><div class="label">总事件</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">ADD</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">UPDATE</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">DELETE</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 6: User Profile -->
+  <div id="pgProfile" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">👤 用户画像自动提取</div>
+          <div class="card-body">
+            <div class="form-row"><label>用户 ID</label><input type="text" id="profileUserId" value="demo_user"></div>
+            <div class="btn-group">
+              <button class="btn" onclick="autoExtractProfile()">自动提取画像</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadProfile()">查看画像</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadAllProfiles()">全部用户</button>
+            </div>
+            <div id="profileResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🧪 画像注入检索改写</div>
+          <div class="card-body">
+            <button class="btn btn-purple btn-sm" onclick="injectProfile()">获取注入数据</button>
+            <div id="injectResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">📋 用户画像详情</div>
+          <div class="card-body">
+            <div id="profileDetail" class="result-box" style="min-height:200px"><div class="empty">点击自动提取或查看画像</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">👥 用户列表</div>
+          <div class="card-body">
+            <div id="userList" class="result-box"><div class="empty">点击全部用户加载</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 7: Memory Compression -->
+  <div id="pgCompress" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">🗜️ 记忆压缩管线</div>
+          <div class="card-body">
+            <p style="font-size:12px;color:var(--text2)">ClusterFinder → SummaryGenerator → PruningEngine → Archive</p>
+            <div class="form-row"><label>用户 ID</label><input type="text" id="compressUserId" value="demo_user"></div>
+            <button class="btn btn-warning" onclick="compressMemories()">执行压缩</button>
+            <div id="compressResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">📊 压缩结果统计</div>
+          <div class="card-body">
+            <div class="metrics-grid" id="compressMetrics">
+              <div class="metric-box"><div class="num">-</div><div class="label">聚类数</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">摘要数</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">保留数</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">剪枝数</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">归档数</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">压缩率</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">FAISS 索引管理</div>
+          <div class="card-body">
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" onclick="faissStats()">索引统计</button>
+              <button class="btn btn-warning btn-sm" onclick="faissCompact()">压缩索引</button>
+            </div>
+            <div id="faissResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 8: Agent Collaboration -->
+  <div id="pgCollab" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">🤝 Agent 权限检查</div>
+          <div class="card-body">
+            <div class="form-row"><label>Agent ID</label><input type="text" id="collabAgentId" placeholder="agent_001"></div>
+            <div class="form-row"><label>Operation</label>
+              <select id="collabOperation"><option value="read">read</option><option value="write">write</option><option value="delete">delete</option><option value="share">share</option><option value="admin">admin</option></select>
+            </div>
+            <div class="form-row"><label>记忆 Scope</label>
+              <select id="collabMemoryScope"><option value="private">private</option><option value="agent_group">agent_group</option><option value="user_group">user_group</option><option value="public">public</option></select>
+            </div>
+            <button class="btn btn-purple" onclick="checkAgentAccess()">检查权限</button>
+            <div id="collabAccessResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🔒 隐私脱敏过滤</div>
+          <div class="card-body">
+            <div class="form-row"><label>记忆内容 (JSON数组)</label><textarea id="collabFilterMemories" placeholder='[{"content":"密码是abc123"}]' rows="3"></textarea></div>
+            <div class="form-row"><label>目标隐私级别</label>
+              <select id="collabFilterPrivacy"><option value="standard">standard</option><option value="sensitive">sensitive</option><option value="confidential">confidential</option></select>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="filterAgentPrivacy()">过滤脱敏</button>
+            <div id="collabFilterResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">🔄 记忆共享</div>
+          <div class="card-body">
+            <div class="form-row"><label>Memory ID</label><input type="text" id="shareMemoryId" placeholder="mem_xxx"></div>
+            <div class="form-row"><label>Source Agent</label><input type="text" id="shareSourceAgent" placeholder="agent_001"></div>
+            <div class="form-row"><label>Target Agent</label><input type="text" id="shareTargetAgent" placeholder="agent_002"></div>
+            <div class="form-row"><label>Scope</label>
+              <select id="shareScope"><option value="agent_group">agent_group</option><option value="user_group">user_group</option><option value="public">public</option></select>
+            </div>
+            <button class="btn btn-success btn-sm" onclick="shareMemory()">共享记忆</button>
+            <div id="shareResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🤝 协作组管理</div>
+          <div class="card-body">
+            <div class="form-row"><label>Group ID</label><input type="text" id="collabGroupId" placeholder="team_alpha"></div>
+            <div class="form-row"><label>Group Name</label><input type="text" id="collabGroupName" placeholder="Alpha Team"></div>
+            <div class="form-row"><label>Members (逗号分隔)</label><input type="text" id="collabGroupMembers" placeholder="agent_001,agent_002"></div>
+            <button class="btn btn-purple btn-sm" onclick="createCollabGroup()">创建协作组</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadAgentGroups()">查看协作组</button>
+            <div id="collabGroupResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 9: Sub-Store Routing -->
+  <div id="pgRouting" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">🔀 路由键计算</div>
+          <div class="card-body">
+            <div class="form-row"><label>User ID</label><input type="text" id="routeUserId" value="demo_user"></div>
+            <div class="form-row"><label>Agent ID</label><input type="text" id="routeAgentId" placeholder="(可选)"></div>
+            <div class="form-row"><label>App Name</label><input type="text" id="routeAppName" placeholder="(可选)"></div>
+            <div class="form-row"><label>Scope</label>
+              <select id="routeScope"><option value="private">private</option><option value="agent_group">agent_group</option><option value="user_group">user_group</option><option value="public">public</option></select>
+            </div>
+            <button class="btn btn-purple" onclick="computeRoute()">计算路由键</button>
+            <div id="routeResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">🔍 跨 Shard 搜索</div>
+          <div class="card-body">
+            <div class="form-row"><label>查询</label><input type="text" id="routeSearchQuery" placeholder="搜索可访问的所有 shard"></div>
+            <button class="btn btn-sm" onclick="routingSearch()">跨 Shard 搜索</button>
+            <div id="routeSearchResult" class="result-box" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">📊 Shard 状态</div>
+          <div class="card-body">
+            <button class="btn btn-secondary btn-sm" onclick="loadShardStats()">刷新 Shard 统计</button>
+            <div id="shardStats" class="result-box" style="margin-top:8px"><div class="empty">点击刷新</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page 10: Benchmark -->
+  <div id="pgBenchmark" class="page">
+    <div class="grid-2">
+      <div>
+        <div class="card">
+          <div class="card-header">📈 LOCOMO 基准结果</div>
+          <div class="card-body">
+            <div class="metrics-grid" id="locomoMetrics">
+              <div class="metric-box"><div class="num">-</div><div class="label">Accuracy</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">Hit@5</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">MRR</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">p95 Latency</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">Sessions</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">Questions</div></div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadLocomo()" style="margin-top:8px;width:100%">刷新结果</button>
+            <div id="locomoStatus" class="empty" style="margin-top:6px;font-size:11px">未检测到结果文件</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">📊 ICEWS 事件图基准</div>
+          <div class="card-body">
+            <div class="metrics-grid" id="icewsMetrics">
+              <div class="metric-box"><div class="num">-</div><div class="label">Accuracy</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">Hit@5</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">MRR</div></div>
+              <div class="metric-box"><div class="num">-</div><div class="label">Avg Latency</div></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -266,64 +628,149 @@
 
     function showToast(msg, type="info") {
       const t = document.getElementById("toast");
-      t.textContent = msg;
-      t.style.background = type === "error" ? "#ef4444" : "#1f2937";
-      t.classList.add("show");
-      setTimeout(() => t.classList.remove("show"), 2500);
+      t.textContent = msg; t.style.background = type === "error" ? "#ef4444" : "#1f2937";
+      t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2500);
     }
 
     async function api(method, path, body) {
       const opts = { method, headers: { "Content-Type": "application/json" } };
       if (body) opts.body = JSON.stringify(body);
       const r = await fetch(API + path, opts);
-      if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+      if (!r.ok) throw new Error((await r.text()).slice(0, 300));
       return r.json();
     }
 
-    async function addMemory() {
-      const content = document.getElementById("memoryContent").value.trim();
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
-      if (!content) return showToast("请输入记忆内容", "error");
-      const resDiv = document.getElementById("addResult");
-      resDiv.style.display = "block";
-      resDiv.innerHTML = '<span class="spinner"></span>写入中...';
-      try {
-        const data = await api("POST", "/api/memory/add", { content, user_id: userId });
-        resDiv.textContent = JSON.stringify(data, null, 2);
-        showToast("记忆写入成功");
-        loadMemories(); loadStats(); renderGraph();
-      } catch (e) {
-        resDiv.textContent = "错误: " + e.message;
-        showToast(e.message, "error");
-      }
+    function escapeHtml(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function fmtTime(ts) { if (!ts) return "-"; try { return new Date(ts*1000).toLocaleString("zh-CN"); } catch { return ts; } }
+    function fmtJson(obj) { return JSON.stringify(obj, null, 2); }
+
+    function switchPage(id, btn) {
+      document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
     }
 
+    function switchTab(id, btn) {
+      const parent = btn.closest(".card-body");
+      parent.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+      parent.querySelectorAll(".tab-bar .tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    }
+
+    function getUserId() { return document.getElementById("userId").value.trim() || "demo_user"; }
+
+    // === Memory CRUD ===
+    async function addMemory() {
+      const content = document.getElementById("memoryContent").value.trim();
+      const userId = getUserId();
+      if (!content) return showToast("请输入记忆内容", "error");
+      const resDiv = document.getElementById("addResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>写入中...';
+      try {
+        const data = await api("POST", "/api/memory/add", {
+          content, user_id: userId,
+          scope: document.getElementById("addScope").value,
+          privacy: document.getElementById("addPrivacy").value,
+        });
+        resDiv.textContent = fmtJson(data);
+        showToast("记忆写入成功"); loadMemories(); loadStats(); renderGraph();
+      } catch (e) { resDiv.textContent = "错误: " + e.message; showToast(e.message, "error"); }
+    }
+
+    async function loadMemories() {
+      const userId = getUserId();
+      const list = document.getElementById("memoryList");
+      list.innerHTML = '<div class="empty"><span class="spinner"></span>加载中...</div>';
+      try {
+        const data = await api("GET", "/api/memory/list?user_id=" + encodeURIComponent(userId));
+        if (!data.memories || !data.memories.length) { list.innerHTML = '<div class="empty">暂无记忆</div>'; return; }
+        list.innerHTML = data.memories.map(m => `<div class="memory-item" onclick="document.getElementById('searchQuery').value='${m.content.replace(/'/g,"\\'")}'">
+          <div class="content">${escapeHtml(m.content)}</div>
+          <div class="meta">
+            <span class="tag tag-blue">${m.scope||"private"}</span>
+            <span class="tag tag-${m.privacy==="confidential"?"red":m.privacy==="sensitive"?"yellow":"green"}">${m.privacy||"standard"}</span>
+            user=${m.user_id||"-"} | ${fmtTime(m.created_at)} | score=${m.score||0}
+          </div>
+          <div class="actions">
+            <button class="btn btn-secondary btn-sm" onclick="viewMemory('${m.id||m.memory_id||""}')">详情</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id||m.memory_id||""}')">删除</button>
+          </div>
+        </div>`).join("");
+      } catch (e) { list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`; }
+    }
+
+    async function viewMemory(id) {
+      if (!id) return showToast("memory_id 为空", "error");
+      try {
+        const data = await api("GET", "/api/memory/get?id=" + encodeURIComponent(id));
+        document.getElementById("addResult").style.display = "block";
+        document.getElementById("addResult").textContent = fmtJson(data);
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    async function deleteMemory(id) {
+      if (!id) return showToast("memory_id 为空", "error");
+      try {
+        const data = await api("POST", "/api/memory/delete", { id, user_id: getUserId() });
+        showToast("记忆已删除: " + (data.status || data.result || ""));
+        loadMemories(); loadStats(); renderGraph();
+      } catch (e) { showToast(e.message, "error"); }
+    }
+
+    // === V3 Additive Extraction ===
+    async function extractFacts() {
+      const text = document.getElementById("memoryContent").value.trim() || document.getElementById("extractText").value.trim();
+      if (!text) return showToast("请输入文本", "error");
+      const resDiv = document.getElementById("extractResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>提取中...';
+      try {
+        const data = await api("POST", "/api/memory/extract", { text });
+        let html = `<div style="font-weight:600;margin-bottom:4px">新事实 (${data.new_facts?.length||0})</div>`;
+        (data.new_facts||[]).forEach(f => html += `<div class="tag tag-green" style="display:block;margin-bottom:2px">${escapeHtml(f)}</div>`);
+        html += `<div style="font-weight:600;margin:6px 0 4px">重复事实 (${data.duplicate_facts?.length||0})</div>`;
+        (data.duplicate_facts||[]).forEach(f => html += `<div class="tag tag-yellow" style="display:block;margin-bottom:2px">${escapeHtml(f)}</div>`);
+        html += `<div style="font-weight:600;margin:6px 0 4px">实体 (${data.entities?.length||0})</div>`;
+        (data.entities||[]).forEach(e => html += `<span class="tag tag-purple" style="margin-right:4px">${escapeHtml(e)}</span>`);
+        html += `<div style="color:var(--text2);font-size:11px;margin-top:6px">提取耗时: ${data.extraction_time_ms||0}ms</div>`;
+        resDiv.innerHTML = html;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; showToast(e.message, "error"); }
+    }
+
+    async function dedupCheck() {
+      const text = document.getElementById("extractText").value.trim();
+      if (!text) return showToast("请输入文本", "error");
+      const facts = text.split("\n").filter(l => l.trim());
+      const resDiv = document.getElementById("extractResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>去重检查中...';
+      try {
+        const data = await api("POST", "/api/memory/dedup", { facts });
+        resDiv.textContent = `New: ${data.new_facts?.length||0}\nDup: ${data.duplicate_facts?.length||0}\n\n${fmtJson(data)}`;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === Search ===
     async function searchMemory() {
       const query = document.getElementById("searchQuery").value.trim();
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
+      const userId = getUserId();
       if (!query) return showToast("请输入查询", "error");
       const resDiv = document.getElementById("searchResult");
-      resDiv.style.display = "block";
-      resDiv.innerHTML = '<span class="spinner"></span>检索中...';
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>检索中...';
       try {
         const t0 = performance.now();
-        const data = await api("POST", "/api/memory/search", { query, user_id: userId });
+        const data = await api("POST", "/api/memory/search", { query, user_id: userId, top_k: +document.getElementById("searchTopK").value || 5 });
         const latency = (performance.now() - t0).toFixed(0);
-        let html = `<div style="margin-bottom:8px;font-weight:600;color:var(--primary)">Answer: ${data.answer || "(无)"} <span style="color:var(--text2);font-weight:400">(${latency}ms)</span></div>`;
-        html += `<div class="result-rank"><span class="rank-chip">Vector</span><span class="rank-chip">BM25</span><span class="rank-chip">Graph</span><span class="rank-chip">RRF Fusion</span></div>`;
+        let html = `<div style="margin-bottom:6px;font-weight:600;color:var(--primary)">Answer: ${data.answer || "(无)"} <span style="color:var(--text2)">(${latency}ms)</span></div>`;
+        html += `<div style="display:flex;gap:4px;margin-bottom:4px"><span class="tag tag-blue">Vector</span><span class="tag tag-green">BM25</span><span class="tag tag-purple">Graph</span><span class="tag tag-teal">Hybrid Fusion</span></div>`;
         if (data.results && data.results.length) {
-          html += data.results.map((r, i) => `<div style="margin-bottom:6px;padding:8px;background:#fff;border-radius:4px;border:1px solid var(--border)">
+          html += data.results.map((r, i) => `<div style="margin-bottom:4px;padding:6px;background:#fff;border-radius:4px;border:1px solid var(--border)">
             <div style="font-weight:600">#${i+1} score=${r.score || r.rrf_score || 0}</div>
-            <div style="color:var(--text2);font-size:12px">${r.memory ? r.memory.content : JSON.stringify(r).slice(0, 200)}</div>
+            <div style="color:var(--text2);font-size:11px">${r.memory ? r.memory.content : JSON.stringify(r).slice(0,200)}</div>
           </div>`).join("");
-        } else {
-          html += "<div class='empty'>无召回结果</div>";
-        }
+        } else html += "<div class='empty'>无召回结果</div>";
         resDiv.innerHTML = html;
-      } catch (e) {
-        resDiv.textContent = "错误: " + e.message;
-        showToast(e.message, "error");
-      }
+      } catch (e) { resDiv.textContent = "错误: " + e.message; showToast(e.message, "error"); }
     }
 
     async function classifyQuery() {
@@ -333,154 +780,428 @@
       resDiv.style.display = "block";
       try {
         const data = await api("POST", "/api/memory/classify", { text });
-        resDiv.innerHTML = `<pre style="margin:0">${JSON.stringify(data, null, 2)}</pre>`;
-      } catch (e) {
-        resDiv.textContent = "错误: " + e.message;
-      }
+        resDiv.innerHTML = `<div style="font-weight:600">意图: <span class="tag tag-${data.action==='QUERY'?'blue':'green'}">${data.action}</span></div>
+          <div>方法: ${data.method} | 原因: ${data.reason}</div>
+          <pre style="margin:4px 0">${fmtJson(data)}</pre>`;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
     }
 
-    async function loadMemories() {
-      const list = document.getElementById("memoryList");
-      list.innerHTML = '<div class="empty"><span class="spinner"></span>加载中...</div>';
+    // === Scoring Breakdown ===
+    async function scoringExplain() {
+      const query = document.getElementById("searchQuery").value.trim() || document.getElementById("scoringQuery").value.trim();
+      if (!query) return showToast("请输入查询", "error");
+      const resDiv = document.getElementById("scoringResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>分析中...';
       try {
-        const data = await api("GET", "/api/memory/list");
-        if (!data.memories || !data.memories.length) {
-          list.innerHTML = '<div class="empty">暂无记忆</div>';
-          return;
-        }
-        list.innerHTML = data.memories.map(m => `<div class="memory-item" onclick="document.getElementById('searchQuery').value='${m.content.replace(/'/g, "\\'")}'">
-          <div class="content">${escapeHtml(m.content)}</div>
-          <div class="meta">user=${m.user_id || "-"} | ${fmtTime(m.created_at)} | score=${m.score || 0}</div>
-        </div>`).join("");
-      } catch (e) {
-        list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`;
-      }
+        const data = await api("POST", "/api/scoring/explain", { query });
+        let html = `<div style="font-weight:600;margin-bottom:4px">查询: ${escapeHtml(data.query)}</div>`;
+        html += `<div>提取实体: ${(data.extracted_entities||[]).map(e=>`<span class="tag tag-purple">${e}</span>`).join(" ") || "无"}</div>`;
+        html += `<div>BM25 sigmoid 参数: midpoint=${data.bm25_sigmoid_params?.midpoint}, steepness=${data.bm25_sigmoid_params?.steepness}</div>`;
+        html += `<div style="margin-top:6px;color:var(--text2);font-size:11px">${data.explanation}</div>`;
+        resDiv.innerHTML = html;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
     }
 
+    // === Query Rewrite ===
+    async function rewriteQuery() {
+      const query = document.getElementById("searchQuery").value.trim() || document.getElementById("rewriteQueryInput").value.trim();
+      if (!query) return showToast("请输入查询", "error");
+      const context = document.getElementById("rewriteContext").value.trim();
+      const resDiv = document.getElementById("rewriteResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>改写中...';
+      try {
+        const data = await api("POST", "/api/query/rewrite", { query, context });
+        let html = `<div style="font-weight:600;margin-bottom:4px">原始: ${escapeHtml(data.original)}</div>`;
+        html += `<div style="font-weight:600;color:var(--purple);margin-bottom:4px">改写: ${escapeHtml(data.rewritten)}</div>`;
+        html += `<div>意图: <span class="tag tag-blue">${data.intent||"-"}</span> 方法: ${data.method||"-"}</div>`;
+        html += `<div>实体: ${(data.entities||[]).map(e=>`<span class="tag tag-purple">${e}</span>`).join(" ") || "无"}</div>`;
+        html += `<div>Boosts: ${data.boosts ? fmtJson(data.boosts) : "无"}</div>`;
+        html += `<div>变体: ${(data.variants||[]).map(v=>`<span class="tag tag-teal">${v}</span>`).join(" ") || "无"}</div>`;
+        resDiv.innerHTML = html;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; showToast(e.message, "error"); }
+    }
+
+    // === Privacy Filter ===
+    async function privacyFilter() {
+      const content = document.getElementById("privacyInput").value.trim();
+      const level = document.getElementById("privacyLevel").value;
+      if (!content) return showToast("请输入文本", "error");
+      const resDiv = document.getElementById("privacyResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>处理中...';
+      try {
+        const data = await api("POST", "/api/privacy/filter", { content, privacy_level: level });
+        let html = `<div style="font-weight:600;margin-bottom:4px">隐私级别: <span class="tag tag-${level==="confidential"?"red":level==="sensitive"?"yellow":"green"}">${data.privacy_level}</span></div>`;
+        html += `<div style="margin-bottom:4px"><b>原文:</b> ${escapeHtml(data.original)}</div>`;
+        html += `<div style="color:var(--success)"><b>脱敏:</b> ${escapeHtml(data.filtered)}</div>`;
+        resDiv.innerHTML = html;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === Stats ===
     async function loadStats() {
       try {
         const data = await api("GET", "/api/stats");
         document.getElementById("statMemories").textContent = data.memories || 0;
-        document.getElementById("statGraph").textContent = `${data.entities || 0} / ${data.edges || 0}`;
+        document.getElementById("statGraph").textContent = `${data.entities||0} / ${data.edges||0}`;
         document.getElementById("statVectors").textContent = data.vectors || 0;
         document.getElementById("statLatency").textContent = data.avg_latency_ms ? `${data.avg_latency_ms} ms` : "-";
+        document.getElementById("memCount").textContent = data.memories || 0;
         const ok = (data.hugegraph_connected !== false);
         document.getElementById("connDot").className = "indicator " + (ok ? "ok" : "err");
-        document.getElementById("connText").textContent = ok ? `HugeGraph 在线 (${data.graph || "-"})` : "HugeGraph 离线";
+        document.getElementById("connText").textContent = ok ? `在线 (${data.graph||"-"})` : "离线";
       } catch (e) {
         document.getElementById("connDot").className = "indicator err";
         document.getElementById("connText").textContent = "API 异常";
       }
     }
 
+    // === Graph ===
     async function renderGraph() {
       try {
         const data = await api("GET", "/api/graph");
-        const nodes = (data.nodes || []).map(n => ({ data: { id: n.id, label: n.label || n.id, type: n.type || "entity" } }));
-        const edges = (data.edges || []).map(e => ({ data: { id: e.id || `${e.source}-${e.target}`, source: e.source, target: e.target, label: e.label || "" } }));
+        const nodes = (data.nodes||[]).map(n => ({ data: { id:n.id, label:n.label||n.id, type:n.type||"entity" } }));
+        const edges = (data.edges||[]).map(e => ({ data: { id:e.id||`${e.source}-${e.target}`, source:e.source, target:e.target, label:e.label||"" } }));
         if (cy) cy.destroy();
         cy = cytoscape({
           container: document.getElementById("cy"),
           elements: [...nodes, ...edges],
           style: [
-            { selector: "node", style: { "background-color": "#60a5fa", "label": "data(label)", "width": 28, "height": 28, "font-size": 10, "text-valign": "bottom", "text-margin-y": 4, "color": "#374151" } },
-            { selector: "node[type='memory']", style: { "background-color": "#f59e0b" } },
-            { selector: "edge", style: { "width": 1.5, "line-color": "#cbd5e1", "target-arrow-color": "#cbd5e1", "target-arrow-shape": "triangle", "curve-style": "bezier", "font-size": 9, "label": "data(label)" } }
+            { selector:"node", style:{ "background-color":"#60a5fa", "label":"data(label)", "width":24, "height":24, "font-size":9, "text-valign":"bottom", "text-margin-y":3, "color":"#374151" } },
+            { selector:"node[type='memory']", style:{ "background-color":"#f59e0b" } },
+            { selector:"node[type='person']", style:{ "background-color":"#8b5cf6" } },
+            { selector:"node[type='location']", style:{ "background-color":"#14b8a6" } },
+            { selector:"edge", style:{ "width":1.5, "line-color":"#cbd5e1", "target-arrow-color":"#cbd5e1", "target-arrow-shape":"triangle", "curve-style":"bezier", "font-size":8, "label":"data(label)" } }
           ],
-          layout: { name: "cose", padding: 10, animate: false, componentSpacing: 60 }
+          layout: { name:"cose", padding:10, animate:false, componentSpacing:50 }
         });
-      } catch (e) {
-        document.getElementById("cy").innerHTML = `<div class="empty">图谱加载失败: ${e.message}</div>`;
-      }
+      } catch (e) { document.getElementById("cy").innerHTML = `<div class="empty">图谱加载失败: ${e.message}</div>`; }
     }
 
-    async function loadPersona() {
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
+    async function loadEntities() {
+      const resDiv = document.getElementById("entityStats");
+      try {
+        const data = await api("GET", "/api/graph/entities");
+        resDiv.textContent = `实体总数: ${data.count}\n\n` + (data.entities||[]).slice(0,20).map(e => `${e.id||e.name} (${e.type||"entity"})`).join("\n");
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function loadRelations() {
+      const resDiv = document.getElementById("entityStats");
+      try {
+        const data = await api("GET", "/api/graph/relations");
+        resDiv.textContent = `关系总数: ${data.count}\n\n` + (data.relations||[]).slice(0,20).map(r => `${r.source} -> ${r.target} (${r.label||""})`).join("\n");
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function graphSearch() {
+      const query = document.getElementById("graphSearchQuery").value.trim();
+      if (!query) return showToast("请输入查询实体", "error");
+      const resDiv = document.getElementById("graphSearchResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>多跳遍历中...';
+      try {
+        const data = await api("POST", "/api/graph/search", {
+          query, max_hops: +document.getElementById("graphMaxHops").value || 2,
+          limit: +document.getElementById("graphSearchLimit").value || 10,
+        });
+        let html = `<div style="font-weight:600;margin-bottom:4px">实体搜索: ${escapeHtml(data.query)}</div>`;
+        (data.results||[]).forEach((r,i) => {
+          html += `<div style="margin-bottom:4px;padding:6px;background:#fff;border-radius:4px;border:1px solid var(--border)">
+            <div style="font-weight:600">#${i+1} score=${r.score||0} | entity=${r.matched_entity||"-"}</div>
+            <div style="color:var(--text2);font-size:11px">${escapeHtml(r.context||JSON.stringify(r).slice(0,200))}</div>
+          </div>`;
+        });
+        resDiv.innerHTML = html;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === History ===
+    async function loadRecentHistory() {
+      const eventType = document.getElementById("historyEventType").value;
+      const resDiv = document.getElementById("historyTimeline");
+      resDiv.innerHTML = '<span class="spinner"></span>加载中...';
+      try {
+        const params = new URLSearchParams({ limit: "50" });
+        if (eventType) params.set("event_type", eventType);
+        const data = await api("GET", "/api/memory/history?" + params.toString());
+        if (!data.events || !data.events.length) { resDiv.innerHTML = '<div class="empty">暂无历史事件</div>'; return; }
+        resDiv.innerHTML = data.events.map(e => `<div class="timeline-item event-${e.event||e.event_type||""}">
+          <div class="event-type">${e.event||e.event_type||"-"} ${e.event==="ADD"?"🟢":e.event==="UPDATE"?"🔵":"🔴"}</div>
+          <div class="event-detail">memory_id=${e.memory_id||"-"} | ${fmtTime(e.created_at)} | actor=${e.actor_id||"-"}</div>
+          ${e.old_memory ? `<div style="color:var(--danger);font-size:11px">旧: ${escapeHtml(e.old_memory).slice(0,100)}</div>` : ""}
+          ${e.new_memory ? `<div style="color:var(--success);font-size:11px">新: ${escapeHtml(e.new_memory).slice(0,100)}</div>` : ""}
+        </div>`).join("");
+      } catch (e) { resDiv.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`; }
+    }
+
+    async function loadMemoryHistory() {
+      const memoryId = document.getElementById("historyMemoryId").value.trim();
+      if (!memoryId) return showToast("请输入 memory_id", "error");
+      const resDiv = document.getElementById("memoryHistoryResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>加载中...';
+      try {
+        const data = await api("GET", "/api/memory/history?memory_id=" + encodeURIComponent(memoryId));
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function loadHistoryStats() {
+      try {
+        const data = await api("GET", "/api/history/stats");
+        document.getElementById("statHistory").textContent = data.total_events || 0;
+        const m = document.getElementById("historyMetrics");
+        m.innerHTML = `
+          <div class="metric-box"><div class="num">${data.total_events||0}</div><div class="label">总事件</div></div>
+          <div class="metric-box"><div class="num">${data.add_events||0}</div><div class="label">ADD</div></div>
+          <div class="metric-box"><div class="num">${data.update_events||0}</div><div class="label">UPDATE</div></div>
+          <div class="metric-box"><div class="num">${data.delete_events||0}</div><div class="label">DELETE</div></div>`;
+      } catch (e) { showToast("历史统计加载失败: " + e.message, "error"); }
+    }
+
+    // === Profile ===
+    async function autoExtractProfile() {
+      const userId = document.getElementById("profileUserId").value.trim() || "demo_user";
+      const resDiv = document.getElementById("profileResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>自动提取中...';
+      try {
+        const data = await api("POST", "/api/profile/auto", { user_id: userId });
+        resDiv.textContent = fmtJson(data);
+        showProfileDetail(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; showToast(e.message, "error"); }
+    }
+
+    async function loadProfile() {
+      const userId = document.getElementById("profileUserId").value.trim() || "demo_user";
+      const resDiv = document.getElementById("profileResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>加载中...';
       try {
         const data = await api("GET", "/api/memory/persona?user_id=" + encodeURIComponent(userId));
-        document.getElementById("personaSummary").value = data.summary || "";
-      } catch (e) { showToast(e.message, "error"); }
+        resDiv.textContent = fmtJson(data);
+        showProfileDetail(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
     }
 
-    async function updatePersona() {
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
-      const summary = document.getElementById("personaSummary").value.trim();
+    function showProfileDetail(data) {
+      const d = document.getElementById("profileDetail");
+      d.innerHTML = `<div style="font-weight:600;margin-bottom:6px">用户画像</div>
+        <div><b>姓名:</b> ${escapeHtml(data.name||"-")}</div>
+        <div><b>摘要:</b> ${escapeHtml(data.summary||"-")}</div>
+        <div><b>偏好:</b> ${(data.preferences||[]).map(p=>`<span class="tag tag-blue">${p}</span>`).join(" ") || "-"}</div>
+        <div><b>话题:</b> ${(data.topics||[]).map(t=>`<span class="tag tag-purple">${t}</span>`).join(" ") || "-"}</div>
+        <div><b>别名:</b> ${(data.aliases||[]).map(a=>`<span class="tag tag-teal">${a}</span>`).join(" ") || "-"}</div>
+        <div><b>关系:</b> ${(data.relationships||[]).map(r=>`<span class="tag tag-green">${r}</span>`).join(" ") || "-"}</div>`;
+    }
+
+    async function loadAllProfiles() {
       try {
-        await api("POST", "/api/memory/persona", { user_id: userId, summary });
-        showToast("画像已更新");
-      } catch (e) { showToast(e.message, "error"); }
+        const data = await api("GET", "/api/profile/all");
+        document.getElementById("userList").textContent = fmtJson(data);
+      } catch (e) { document.getElementById("userList").textContent = "错误: " + e.message; }
     }
 
+    async function injectProfile() {
+      const userId = document.getElementById("profileUserId").value.trim() || "demo_user";
+      const resDiv = document.getElementById("injectResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>获取注入数据...';
+      try {
+        const data = await api("POST", "/api/profile/inject", { user_id: userId });
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === Compression ===
+    async function compressMemories() {
+      const userId = document.getElementById("compressUserId").value.trim() || "demo_user";
+      const resDiv = document.getElementById("compressResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>压缩中...';
+      try {
+        const data = await api("POST", "/api/memory/compress", { user_id: userId });
+        resDiv.textContent = fmtJson(data);
+        const s = data.stats || {};
+        document.getElementById("compressMetrics").innerHTML = `
+          <div class="metric-box"><div class="num">${s.cluster_count||s.clusters||0}</div><div class="label">聚类数</div></div>
+          <div class="metric-box"><div class="num">${(data.summaries||[]).length}</div><div class="label">摘要数</div></div>
+          <div class="metric-box"><div class="num">${(data.kept||[]).length}</div><div class="label">保留数</div></div>
+          <div class="metric-box"><div class="num">${(data.pruned||[]).length}</div><div class="label">剪枝数</div></div>
+          <div class="metric-box"><div class="num">${(data.archived||[]).length}</div><div class="label">归档数</div></div>
+          <div class="metric-box"><div class="num">${s.compression_ratio ? (s.compression_ratio*100).toFixed(1)+"%" : "-"}</div><div class="label">压缩率</div></div>`;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; showToast(e.message, "error"); }
+    }
+
+    async function faissStats() {
+      const resDiv = document.getElementById("faissResult");
+      resDiv.style.display = "block";
+      try {
+        const data = await api("GET", "/api/faiss/stats");
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function faissCompact() {
+      const resDiv = document.getElementById("faissResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>压缩中...';
+      try {
+        const data = await api("POST", "/api/faiss/compact");
+        resDiv.textContent = fmtJson(data);
+        showToast("FAISS 索引已压缩");
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === Distillation ===
     async function distillMemories() {
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
-      try {
-        showToast("开始蒸馏...");
+      const userId = getUserId();
+      try { showToast("开始蒸馏...");
         const data = await api("POST", "/api/memory/distill", { user_id: userId });
-        showToast(`蒸馏完成: ${data.experiences || 0} Experience, ${data.skills || 0} Skill`);
+        showToast(`蒸馏完成: ${data.experiences||0} Exp, ${data.skills||0} Skill`);
         loadExperiences(); loadSkills();
       } catch (e) { showToast(e.message, "error"); }
     }
 
     async function loadExperiences() {
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
-      const list = document.getElementById("expList");
+      const userId = getUserId();
+      const list = document.getElementById("expList2");
       try {
         const data = await api("POST", "/api/memory/experiences", { user_id: userId, top_k: 20 });
-        if (!data.experiences || !data.experiences.length) { list.innerHTML = '<div class="empty">暂无 Experience</div>'; return; }
-        list.innerHTML = data.experiences.map(x => `<div class="memory-item"><div class="content">${escapeHtml(x.content || x.text || JSON.stringify(x))}</div></div>`).join("");
+        if (!data.experiences||!data.experiences.length) { list.innerHTML = '<div class="empty">暂无 Experience</div>'; return; }
+        list.innerHTML = data.experiences.map(x => `<div class="memory-item"><div class="content">${escapeHtml(x.content||x.text||JSON.stringify(x))}</div></div>`).join("");
       } catch (e) { list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`; }
     }
 
     async function loadSkills() {
-      const userId = document.getElementById("userId").value.trim() || "demo_user";
-      const list = document.getElementById("skillList");
+      const userId = getUserId();
+      const list = document.getElementById("skillList2");
       try {
         const data = await api("POST", "/api/memory/skills", { user_id: userId, top_k: 20 });
-        if (!data.skills || !data.skills.length) { list.innerHTML = '<div class="empty">暂无 Skill</div>'; return; }
-        list.innerHTML = data.skills.map(s => `<div class="memory-item"><div class="content">${escapeHtml(s.name || s.content || JSON.stringify(s))}</div></div>`).join("");
+        if (!data.skills||!data.skills.length) { list.innerHTML = '<div class="empty">暂无 Skill</div>'; return; }
+        list.innerHTML = data.skills.map(s => `<div class="memory-item"><div class="content">${escapeHtml(s.name||s.content||JSON.stringify(s))}</div></div>`).join("");
       } catch (e) { list.innerHTML = `<div class="empty">加载失败: ${e.message}</div>`; }
     }
 
+    // === Agent Collaboration ===
+    async function checkAgentAccess() {
+      const agentId = document.getElementById("collabAgentId").value.trim();
+      if (!agentId) return showToast("请输入 Agent ID", "error");
+      const resDiv = document.getElementById("collabAccessResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>检查中...';
+      try {
+        const memory = { scope: document.getElementById("collabMemoryScope").value };
+        const data = await api("POST", "/api/agent/check_access", {
+          agent_id: agentId, operation: document.getElementById("collabOperation").value, memory,
+        });
+        resDiv.innerHTML = `<div style="font-weight:600;color:${data.allowed?'var(--success)':'var(--danger)'}">${data.allowed ? "✅ 允许" : "❌ 拒绝"} | ${data.operation} | scope=${memory.scope}</div><pre>${fmtJson(data)}</pre>`;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function filterAgentPrivacy() {
+      const raw = document.getElementById("collabFilterMemories").value.trim();
+      if (!raw) return showToast("请输入记忆数据", "error");
+      try {
+        const memories = JSON.parse(raw);
+        const resDiv = document.getElementById("collabFilterResult");
+        resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>过滤中...';
+        const data = await api("POST", "/api/agent/filter_privacy", {
+          memories, target_privacy: document.getElementById("collabFilterPrivacy").value,
+        });
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { showToast("JSON 解析错误或 API 错误: " + e.message, "error"); }
+    }
+
+    async function shareMemory() {
+      const memoryId = document.getElementById("shareMemoryId").value.trim();
+      const source = document.getElementById("shareSourceAgent").value.trim();
+      const target = document.getElementById("shareTargetAgent").value.trim();
+      if (!memoryId || !source || !target) return showToast("请填写所有字段", "error");
+      const resDiv = document.getElementById("shareResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>共享中...';
+      try {
+        const data = await api("POST", "/api/agent/share", {
+          memory_id: memoryId, source_agent: source, target_agent: target,
+          scope: document.getElementById("shareScope").value,
+        });
+        resDiv.innerHTML = `<div style="font-weight:600;color:var(--success)">共享 ${data.success?"成功":"失败"}</div>${fmtJson(data)}`;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function createCollabGroup() {
+      const groupId = document.getElementById("collabGroupId").value.trim();
+      const name = document.getElementById("collabGroupName").value.trim();
+      const members = document.getElementById("collabGroupMembers").value.split(",").map(m=>m.trim()).filter(Boolean);
+      if (!groupId || !name) return showToast("请填写 Group ID 和 Name", "error");
+      const resDiv = document.getElementById("collabGroupResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>创建中...';
+      try {
+        const data = await api("POST", "/api/collab/create_group", { group_id: groupId, name, members });
+        resDiv.textContent = fmtJson(data);
+        showToast("协作组创建成功");
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function loadAgentGroups() {
+      const agentId = document.getElementById("collabAgentId").value.trim();
+      if (!agentId) return showToast("请先输入 Agent ID", "error");
+      const resDiv = document.getElementById("collabGroupResult");
+      resDiv.style.display = "block";
+      try {
+        const data = await api("GET", "/api/agent/groups?agent_id=" + encodeURIComponent(agentId));
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === Routing ===
+    async function computeRoute() {
+      const resDiv = document.getElementById("routeResult");
+      resDiv.style.display = "block";
+      try {
+        const data = await api("POST", "/api/routing/route", {
+          user_id: document.getElementById("routeUserId").value.trim() || "demo_user",
+          agent_id: document.getElementById("routeAgentId").value.trim() || undefined,
+          app_name: document.getElementById("routeAppName").value.trim() || undefined,
+          scope: document.getElementById("routeScope").value,
+        });
+        resDiv.innerHTML = `<div style="font-weight:600;color:var(--purple)">路由键: ${data.routing_key}</div><pre>${fmtJson(data)}</pre>`;
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function loadShardStats() {
+      const resDiv = document.getElementById("shardStats");
+      try {
+        const data = await api("GET", "/api/routing/shards");
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    async function routingSearch() {
+      const query = document.getElementById("routeSearchQuery").value.trim();
+      if (!query) return showToast("请输入查询", "error");
+      const resDiv = document.getElementById("routeSearchResult");
+      resDiv.style.display = "block"; resDiv.innerHTML = '<span class="spinner"></span>跨 Shard 搜索中...';
+      try {
+        const data = await api("POST", "/api/routing/search", { query, user_id: getUserId(), limit: 10 });
+        resDiv.textContent = fmtJson(data);
+      } catch (e) { resDiv.textContent = "错误: " + e.message; }
+    }
+
+    // === LOCOMO ===
     async function loadLocomo() {
       const status = document.getElementById("locomoStatus");
       try {
         const data = await api("GET", "/api/locomo");
-        if (data.status === "not_ready") {
-          status.textContent = "LOCOMO 全量基准正在后台运行，结果尚未生成";
-          return;
-        }
+        if (data.status === "not_ready") { status.textContent = "LOCOMO 全量基准正在后台运行"; return; }
         const m = data.metrics || {};
         document.getElementById("locomoMetrics").innerHTML = `
-          <div class="metric-box"><div class="num">${((m.accuracy || 0) * 100).toFixed(1)}%</div><div class="label">Accuracy</div></div>
-          <div class="metric-box"><div class="num">${((m.hit_at_5 || 0) * 100).toFixed(1)}%</div><div class="label">Hit@5</div></div>
-          <div class="metric-box"><div class="num">${(m.mrr || 0).toFixed(3)}</div><div class="label">MRR</div></div>
-          <div class="metric-box"><div class="num">${m.avg_latency_ms || 0}ms</div><div class="label">Avg Latency</div></div>`;
-        status.textContent = `Sessions: ${m.sessions || 0} | Questions: ${m.total_questions || 0} | Token estimate: ${m.token_estimate || 0}`;
-      } catch (e) {
-        status.textContent = "读取结果失败: " + e.message;
-      }
+          <div class="metric-box"><div class="num">${((m.accuracy||0)*100).toFixed(1)}%</div><div class="label">Accuracy</div></div>
+          <div class="metric-box"><div class="num">${((m.hit_at_5||0)*100).toFixed(1)}%</div><div class="label">Hit@5</div></div>
+          <div class="metric-box"><div class="num">${(m.mrr||0).toFixed(3)}</div><div class="label">MRR</div></div>
+          <div class="metric-box"><div class="num">${m.p95_latency_ms||m.avg_latency_ms||0}ms</div><div class="label">p95 Latency</div></div>
+          <div class="metric-box"><div class="num">${m.sessions||0}</div><div class="label">Sessions</div></div>
+          <div class="metric-box"><div class="num">${m.total_questions||0}</div><div class="label">Questions</div></div>`;
+        status.textContent = `Sessions: ${m.sessions||0} | Questions: ${m.total_questions||0}`;
+      } catch (e) { status.textContent = "读取失败: " + e.message; }
     }
 
-    function switchTab(id, btn) {
-      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-      document.getElementById(id).classList.add("active");
-      document.querySelectorAll(".tab-bar button").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      if (id === "tabExp") loadExperiences();
-      if (id === "tabSkill") loadSkills();
-    }
-
-    function escapeHtml(s) {
-      return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-    function fmtTime(ts) {
-      if (!ts) return "-";
-      try { return new Date(ts * 1000).toLocaleString("zh-CN"); } catch { return ts; }
-    }
-
+    // === Init ===
     window.onload = () => {
-      loadStats(); loadMemories(); renderGraph(); loadPersona(); loadLocomo();
-      setInterval(loadStats, 10000);
+      loadStats(); loadMemories(); renderGraph(); loadLocomo(); loadHistoryStats();
+      setInterval(loadStats, 15000);
     };
   </script>
 </body>

@@ -293,6 +293,7 @@ class CollaborationBroker:
     def _init_db(self):
         """Initialize collaboration tables."""
         with self._lock:
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
             db = sqlite3.connect(self.db_path)
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS collaboration_groups (
