@@ -34,9 +34,17 @@ from typing import Any, Dict, List, Optional
 from collections import defaultdict
 
 # ── Paths ──
-PROJECT_ROOT = Path(__file__).parent.parent
-BENCH_DIR = PROJECT_ROOT / "benchmark_data/GraphRAG-Bench/GraphRAG-Benchmark/Datasets"
-RESULTS_DIR = PROJECT_ROOT / "poc_results" / "benchmark_cmp"
+# Resolve paths: script is in hugegraph-llm/, data is in hugegraph-llm/benchmark_data/
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _SCRIPT_DIR.parent  # incubator-hugegraph-ai/
+# Support running from both project root and hugegraph-llm directory
+if (_SCRIPT_DIR / "benchmark_data").exists():
+    BENCH_DIR = _SCRIPT_DIR / "benchmark_data" / "GraphRAG-Bench" / "GraphRAG-Benchmark" / "Datasets"
+elif (_PROJECT_ROOT / "hugegraph-llm" / "benchmark_data").exists():
+    BENCH_DIR = _PROJECT_ROOT / "hugegraph-llm" / "benchmark_data" / "GraphRAG-Bench" / "GraphRAG-Benchmark" / "Datasets"
+else:
+    BENCH_DIR = Path("benchmark_data/GraphRAG-Bench/GraphRAG-Benchmark/Datasets")
+RESULTS_DIR = _SCRIPT_DIR / "poc_results" / "benchmark_cmp"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── LLM Config ──
@@ -90,7 +98,7 @@ def load_novel_corpus(max_chunks: int = 5) -> str:
 
 
 async def call_llm(prompt: str, max_tokens: int = 2048) -> str:
-    """Call MiMo LLM API."""
+    """Call MiMo LLM API with error handling."""
     import aiohttp
     headers = {
         "Content-Type": "application/json",
@@ -110,6 +118,11 @@ async def call_llm(prompt: str, max_tokens: int = 2048) -> str:
             timeout=aiohttp.ClientTimeout(total=120),
         ) as resp:
             result = await resp.json()
+            # Handle API errors (rate limit, auth failure, etc.)
+            if "choices" not in result:
+                err_msg = result.get("error", {}).get("message", str(result))
+                print(f"  [LLM API Error] {err_msg[:200]}")
+                return f"[ERROR] LLM API returned: {err_msg[:200]}"
             return result["choices"][0]["message"].get("content", "")
 
 
@@ -165,14 +178,14 @@ def parse_extraction_json(raw: str) -> tuple[list[dict], list[dict]]:
 
 BASELINE_PROMPT = """Extract entities and relationships from the following text.
 Return JSON format:
-{
+{{
   "entities": [
-    {"name": "...", "entity_type": "...", "description": "Brief description of this entity"}
+    {{"name": "...", "entity_type": "...", "description": "Brief description of this entity"}}
   ],
   "relationships": [
-    {"src": "entity_name", "tgt": "entity_name", "relation": "relationship_type", "description": "Description"}
+    {{"src": "entity_name", "tgt": "entity_name", "relation": "relationship_type", "description": "Description"}}
   ]
-}
+}}
 
 Text:
 {text}
@@ -195,10 +208,10 @@ Focus on:
 3. Relationships between entities that were missed
 
 Return ONLY new/improved items in the same JSON format:
-{
+{{
   "entities": [...],
   "relationships": [...]
-}
+}}
 
 JSON:"""
 

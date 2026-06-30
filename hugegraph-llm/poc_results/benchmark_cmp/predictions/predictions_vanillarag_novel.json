@@ -8,7 +8,7 @@
     "evidence": "Sir Launcelot was a knight of King Arthur.; Sir Launcelot was one of the Knights of the Round Table.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.2580239772796631
+    "latency": 0.02996993064880371
   },
   {
     "id": "Novel-322bb52d",
@@ -19,7 +19,7 @@
     "evidence": "King Arthur is associated with the Land of Lyonesse.; King Arthur was said to have sailed to the Land of Lyonesse.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.15734195709228516
+    "latency": 0.025990962982177734
   },
   {
     "id": "Novel-35fee661",
@@ -30,7 +30,7 @@
     "evidence": "King Arthur reminded the narrator of John Curgenven.; King Arthur was described as having a face like the stroke-oar.; The stroke-oar is the name given to John Curgenven.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.1561870574951172
+    "latency": 0.023975849151611328
   },
   {
     "id": "Novel-ade4b34a",
@@ -41,7 +41,7 @@
     "evidence": "Tintagel is said to be the birthplace of King Arthur.; King Arthur is associated with Tintagel.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.031768798828125
+    "latency": 0.024626970291137695
   },
   {
     "id": "Novel-462ecc23",
@@ -52,7 +52,7 @@
     "evidence": "Princess Frederica of Hanover visited the St. Aubyns at St. Michael's Mount.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.2324371337890625
+    "latency": 0.02375197410583496
   },
   {
     "id": "Novel-4f5a8531",
@@ -63,7 +63,7 @@
     "evidence": "Mont St. Michel is similar to St. Michael's Mount.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.16472697257995605
+    "latency": 0.02353501319885254
   },
   {
     "id": "Novel-0e2be889",
@@ -74,7 +74,7 @@
     "evidence": "Mary Mundy admired the Professor.; Mary Mundy sends her duty to the Professor.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.16337299346923828
+    "latency": 0.023994922637939453
   },
   {
     "id": "Novel-0d237b40",
@@ -85,7 +85,7 @@
     "evidence": "Charles would take others to Mullion.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.16445302963256836
+    "latency": 0.023662805557250977
   },
   {
     "id": "Novel-346b12e8",
@@ -96,7 +96,7 @@
     "evidence": "St. Michael's Mount was opposite Marazion.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.15492796897888184
+    "latency": 0.025109052658081055
   },
   {
     "id": "Novel-302a626f",
@@ -107,7 +107,117 @@
     "evidence": "John Curgenven rows on the Lizard coast.; John Curgenven is a Cornish boatman.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.030303955078125
+    "latency": 0.02434706687927246
+  },
+  {
+    "id": "Novel-e894a5f5",
+    "question": "In 'An Unsentimental Journey through Cornwall', what is the geographical relationship between the Devil's Frying-pan and Cadgwith?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The Devil's Frying-pan is near Cadgwith.",
+    "evidence": "The Devil's Frying-pan is near Cadgwith.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023509979248046875
+  },
+  {
+    "id": "Novel-f473bcb0",
+    "question": "In 'An Unsentimental Journey through Cornwall', what is the legend regarding King Arthur, Excalibur, and Dozmare Pool?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "King Arthur had Excalibur, which was thrown into Dozmare Pool.",
+    "evidence": "King Arthur had Excalibur.; Excalibur was thrown into Dozmare Pool.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023772001266479492
+  },
+  {
+    "id": "Novel-ade95016",
+    "question": "How is the sea described in relation to the Lizard in Cornwall in the narrative?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The sea was often rough at the Lizard.",
+    "evidence": "The sea was often rough at the Lizard.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.022823095321655273
+  },
+  {
+    "id": "Novel-8435c9f6",
+    "question": "What is the relationship between St. Rumon and Goonhilly Down as described in 'An Unsentimental Journey through Cornwall'?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "St. Rumon settled in Goonhilly Down and made a cell and oratory there.",
+    "evidence": "St. Rumon settled in Goonhilly Down.; St. Rumon made a cell in Goonhilly Down.; St. Rumon made an oratory in Goonhilly Down.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.02411484718322754
+  },
+  {
+    "id": "Novel-4124f00f",
+    "question": "How does 'An Unsentimental Journey through Cornwall' describe the association between King Arthur and Lyonesse, and what is said about the legendary location of Lyonesse off the coast of Cornwall?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "King Arthur is associated with Lyonesse, which is said to be located off Cornwall.",
+    "evidence": "King Arthur is associated with Lyonesse.; Lyonesse is said to be located off Cornwall.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023501157760620117
+  },
+  {
+    "id": "Novel-fbc9e7ec",
+    "question": "In the context of 'An Unsentimental Journey through Cornwall', what is the connection between the St. Aubyn family and St. Michael's Mount?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "St. Aubyns own St. Michael's Mount and live on St. Michael's Mount.",
+    "evidence": "St. Aubyns own St. Michael's Mount.; St. Aubyns live on St. Michael's Mount.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.025774717330932617
+  },
+  {
+    "id": "Novel-0cac7cc0",
+    "question": "How is Devil's Throat geographically connected to the Lizard area?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Devil's Throat is a feature of Kynance, which is near Lizard, and is part of Kynance Cove.",
+    "evidence": "Devil's Throat is a feature of Kynance.; Kynance is near Lizard.; Devil's Throat is part of Kynance Cove.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.021075010299682617
+  },
+  {
+    "id": "Novel-bbd22f83",
+    "question": "Through which sequence of locations is Lizard Lights ultimately connected to Cornwall according to the narrative chains?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Lizard Lights is near Housel Cove, which is near Lizard, which is near Kynance, but only Kynance Cove is stated to be in Cornwall.",
+    "evidence": "Lizard Lights is near Housel Cove.; Housel Cove is near Lizard.; Lizard is near Kynance.; Kynance Cove is stated to be in Cornwall.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023181915283203125
+  },
+  {
+    "id": "Novel-31203e12",
+    "question": "What multi-step connection exists between John Curgenven and the launce fish as described in the subgraph chains?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "John Curgenven is in a boat that ventures into a cave containing water that is home to fishes pursuing launce found at Lizard.",
+    "evidence": "John Curgenven is in a boat.; The boat ventures into a cave.; The cave contains water.; The water is home to fishes pursuing launce.; The launce is found at Lizard.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023658037185668945
+  },
+  {
+    "id": "Novel-4d52d441",
+    "question": "How is Devil's Throat connected to the Cornish coast in the narrative?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The Cornish coast has Kynance, which has the feature Devil's Throat.",
+    "evidence": "The Cornish coast has Kynance.; Kynance has the feature Devil's Throat.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023988008499145508
   },
   {
     "id": "Novel-ff793656",
@@ -118,7 +228,7 @@
     "evidence": "Sir John Arundel is associated with St. Michael's Mount.; Sir John Arundel was slain on the sands of St. Michael's Mount.; Henry de la Pomeroy is associated with St. Michael's Mount.; Henry de la Pomeroy caused himself to be bled to death on St. Michael's Mount.; The Giant Cormoran lived on St. Michael's Mount.; The St. Aubyn family lives on St. Michael's Mount.; St. Michael's Mount is noted for its similarity to Mont St. Michel in Normandy.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.1646728515625
+    "latency": 0.024400949478149414
   },
   {
     "id": "Novel-48edb564",
@@ -129,7 +239,7 @@
     "evidence": "The sea is described as having no other bound than America.; The sea is compared to the Mediterranean.; The tide was coming in at the cove.; The young folks got into a boat at the cove.; The young folks were heard of no more for a time after getting into the boat.; The boat was used to watch the sunset on the sea.; The boat was used to watch the moonrise on the sea.; Charles remarked it was a fine evening for a row on the sea.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.14847898483276367
+    "latency": 0.02381110191345215
   },
   {
     "id": "Novel-296c7595",
@@ -140,7 +250,7 @@
     "evidence": "Tintagel is traditionally considered the birthplace of King Arthur.; Tintagel is closely associated with the legend of King Arthur.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.15679621696472168
+    "latency": 0.024049997329711914
   },
   {
     "id": "Novel-733f63f7",
@@ -151,7 +261,7 @@
     "evidence": "John Curgenven is a Cornish boatman.; John Curgenven rows along the Lizard coast.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.029899120330810547
+    "latency": 0.024035930633544922
   },
   {
     "id": "Novel-2ab4a26d",
@@ -162,7 +272,7 @@
     "evidence": "St. Michael's Mount is located in England.; St. Michael's Mount is similar to Mont St. Michel in Normandy.; St. Michael's Mount is owned by the St. Aubyn family.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.17416119575500488
+    "latency": 0.02341294288635254
   },
   {
     "id": "Novel-f24f442f",
@@ -173,7 +283,7 @@
     "evidence": "Cornish is a language associated with Goonhilly Down.; Cornish heroes are celebrated at Tintagel.; Cornish cream can only be made from Cornish cows.; The Cornish chough is said to haunt Cornwall.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.16379785537719727
+    "latency": 0.02579498291015625
   },
   {
     "id": "Novel-3b90994e",
@@ -184,7 +294,7 @@
     "evidence": "Sir Bedevere is closely linked to King Arthur.; Sir Bedevere carried King Arthur.; Sir Bedevere threw Excalibur into Dozmare Pool.; The actions of Sir Bedevere reinforce the narrative bond between him and King Arthur.; The actions of Sir Bedevere reinforce the narrative bond between him and Excalibur.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.173583984375
+    "latency": 0.026897907257080078
   },
   {
     "id": "Novel-613d4e81",
@@ -195,7 +305,7 @@
     "evidence": "Cornwall's geography includes sites such as Lizard, Kynance, and Dozmare Pool.; Cornwall's geography is integrated into the exposition of Arthurian legend.; Arthur is linked to the locations of Lizard, Kynance, and Dozmare Pool.; Sir Bedevere is linked to the locations of Lizard, Kynance, and Dozmare Pool.; Excalibur is linked to the locations of Lizard, Kynance, and Dozmare Pool.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.17979907989501953
+    "latency": 0.02481365203857422
   },
   {
     "id": "Novel-69348684",
@@ -206,7 +316,7 @@
     "evidence": "John Curgenven ventures into a cave while in a boat near the Lizard region.; The cave contains water.; The water in the cave is inhabited by fishes.; The fishes in the cave are pursuing launce.; This episode illustrates the natural ecosystem near Lizard.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.1789247989654541
+    "latency": 0.024241924285888672
   },
   {
     "id": "Novel-19dda12f",
@@ -217,7 +327,117 @@
     "evidence": "The Lizard is part of the Cornish coast.; Kynance Cove is included in the Cornish coast.; Kynance Cove is located in Cornwall.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.031232118606567383
+    "latency": 0.026160717010498047
+  },
+  {
+    "id": "Novel-6aa2cc33",
+    "question": "How does the narrative chain connect Cornwall's legendary expression to Arthur and his associates, particularly through Arthur's relationship with Sir Bedevere and the pivotal event of Excalibur being thrown away?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Cornwall’s legendary spirit is vividly embodied in the figure of Arthur, whose story is intimately tied to the landscape through his final moments with Sir Bedevere. The narrative traces Arthur’s downfall—betrayed by his nephew Mordred and wounded at Camelford—culminating in the poignant scene where, sensing his end, Arthur entrusts his last loyal knight, Sir Bedevere, to cast Excalibur into the waters of a Cornish mere, believed to be Dozmare Pool. This act, followed by Arthur’s mysterious departure with the mourning queens across the water, weaves the mythic identity of Cornwall into the very fabric of Arthurian legend, making the region a living testament to the enduring tales of Arthur and his companions.",
+    "evidence": "Cornwall's legendary expression is connected to Arthur.; Arthur is associated with Sir Bedivere.; Arthur is linked to pivotal events like the throwing of Excalibur.; The narrative ties Cornwall's identity to Arthurian legend.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02479720115661621
+  },
+  {
+    "id": "Novel-b418b955",
+    "question": "Within the context of Cornwall's geography, how is the feature known as the Devil's Throat depicted in the narrative?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The Devil's Throat is depicted as a striking and memorable landmark within Kynance Cove, itself a dramatic and picturesque part of Cornwall's rugged coastline. Nestled in the broader Lizard region, the Devil's Throat stands out among the cove's unique geological formations, its presence contributing to the wild, untamed beauty that characterizes this stretch of the Cornish coast.",
+    "evidence": "The Devil's Throat is a prominent feature of Kynance Cove.; Kynance Cove is located in Cornwall.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.024557113647460938
+  },
+  {
+    "id": "Novel-b4e9ccdc",
+    "question": "How does the narrative depict the interrelationships among bodies of water, marine life, and local fishing practices near the Lizard area, particularly in scenes where boats venture into caves with waters inhabited by fishes that pursue launce found at Lizard?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Caves near Lizard contain water inhabited by fishes that pursue launce, which is found at Lizard, showing an interconnected aquatic environment relevant to local fishing.",
+    "evidence": "Caves near Lizard contain water inhabited by fishes.; Fishes in the caves pursue launce.; Launce is found at Lizard.; The narrative shows an interconnected aquatic environment relevant to local fishing.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02469611167907715
+  },
+  {
+    "id": "Novel-ec97d8c6",
+    "question": "In the depiction of the natural environment around the Lizard, what role do caves play, particularly in relation to exploration by boat, their watery interiors, and the presence of aquatic life such as fishes and launce?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Caves around the Lizard are depicted as mysterious and vital elements of the natural landscape, their watery interiors inviting exploration by boat. Within these shadowy chambers, clear springs and subterranean streams teem with aquatic life—shrimps, fishes, and especially the elusive launce, a sand-eel unique to these coasts. The presence of such life, coupled with the caves' hidden beauty and the thrill of venturing into their depths, enriches the sense of the Lizard as a place where nature's wonders are both abundant and intimately connected to the rhythms of the sea.",
+    "evidence": "Caves are significant natural features explored by boat.; Caves contain water.; Caves support aquatic life such as fishes and launce.; Caves enhance the depiction of the area's rich environment.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02444314956665039
+  },
+  {
+    "id": "Novel-5c7e2948",
+    "question": "How does the narrative structure establish a sense of journey or movement across Cornish locales by describing a sequence from Lizard Lights to Housel Cove, Lizard, and Kynance—with features such as the Devil's Throat at Kynance Cove—culminating in legendary or mythic events?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The structure describes a sequence from Lizard Lights to Housel Cove, Lizard, Kynance, and Kynance Cove, often culminating with legendary events, producing a sense of journey through both real and mythic landscapes.",
+    "evidence": "The narrative describes a sequence from Lizard Lights to Housel Cove.; The sequence includes Lizard and Kynance.; The sequence often culminates with legendary events.; The structure produces a sense of journey through real and mythic landscapes.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.025208234786987305
+  },
+  {
+    "id": "Novel-ded63238",
+    "question": "How does the narrative describe the relationship between natural features—such as caves with water and marine life—and human activity in the Lizard area, as exemplified by John Curgenven's boat explorations into these caves?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The narrative vividly portrays the natural features—caves with their vaulted, multicolored roofs, mysterious darkness, and teeming marine life—as both awe-inspiring and slightly forbidding realms that beckon human curiosity. John Curgenven’s boat explorations into these shadowy caverns exemplify the delicate interplay between human presence and the wild, untamed environment. The act of rowing into the cave, the echoing thunder of a pistol shot, and the mingled feelings of solemnity and delight among the explorers all underscore how human activity is both shaped by and responsive to the unique character of these natural spaces. The narrative thus weaves together the thrill of adventure, the beauty and danger of the caves, and the trust placed in local knowledge, embodied by John Curgenven, to highlight a profound integration of human and ecological elements along the Lizard coast.",
+    "evidence": "Natural features like caves with water and marine life are sites of exploration.; John Curgenven explores these caves by boat.; The exploration highlights the integration of human and ecological elements.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.024118900299072266
+  },
+  {
+    "id": "Novel-c3bb8d53",
+    "question": "How is the motif of proximity or nearness used in the narrative to construct the spatial logic among Cornish sites, specifically connecting landmarks such as Lizard Lights, Housel Cove, Lizard, and Kynance as closely related locations?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The motif of nearness links sites such as Lizard Lights, Housel Cove, Lizard, and Kynance, building a spatial logic that situates these landmarks in close relation to one another.",
+    "evidence": "The motif of nearness links sites such as Lizard Lights, Housel Cove, Lizard, and Kynance.; The motif builds a spatial logic among these landmarks.; The landmarks are situated in close relation to one another.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02588796615600586
+  },
+  {
+    "id": "Novel-dead7b52",
+    "question": "What does the narrative chain reveal about John Curgenven's connection to the Lizard region and Cornish nature, as seen in his exploration of caves by boat where the caves contain water and support populations of fishes?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "John Curgenven is associated with exploring caves by boat, where the caves have water that contains fishes, exemplifying the link between local characters and natural features.",
+    "evidence": "John Curgenven explores caves by boat.; The caves contain water that supports populations of fishes.; The exploration exemplifies the link between local characters and natural features.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.026207923889160156
+  },
+  {
+    "id": "Novel-ead123bc",
+    "question": "In the narrative, what connections are described between the region of Cilicia—located in Asia Minor and formerly a center of piracy until Pompey suppressed it—the poet Aratus, who was a native of Cilicia, and the critical view held by Quintilian, who condemned Aratus' work?",
+    "source": "Novel-47676",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Cilicia was located in Asia Minor, was a center of piracy until suppressed by Pompey, Aratus was a native of Cilicia, and Aratus was condemned by Quintilian.",
+    "evidence": "Cilicia was located in Asia Minor.; Cilicia was a center of piracy until suppressed by Pompey.; Aratus was a native of Cilicia.; Quintilian condemned Aratus' work.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.025304794311523438
+  },
+  {
+    "id": "Novel-aae429f4",
+    "question": "Within the narrative, how is the mistress symbolically represented through the imagery of a cow, and what is the significance of the crow pecking at the cow and the presence of the bull as the cow's companion in conveying her relationships?",
+    "source": "Novel-47676",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Within the narrative, the mistress is symbolically embodied by a snow-white cow, whose beauty and vulnerability are underscored by the vivid imagery of a crow pecking at her breast and a bull as her companion. The crow, with its sharp beak, represents the meddling and envious interference of an old procuress, threatening the mistress’s affections and peace. Meanwhile, the bull stands as the fitting mate, highlighting the mistress’s romantic entanglements. The cow’s own envy and her wandering among other bulls further reflect the complexities and inconstancy in her relationships, painting a nuanced portrait of desire, temptation, and emotional unrest.",
+    "evidence": "The mistress is symbolically represented by a cow.; A crow pecked at the cow.; The cow is accompanied by a bull.; The cow, crow, and bull indicate the mistress's complex relationships.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02635812759399414
   },
   {
     "id": "Novel-9d9b1ed1",
@@ -228,7 +448,7 @@
     "evidence": "A boat ventured into the watery cave.; John Curgenven was inside the boat.; The fish darted around, chasing launce.; Launce is swift and keeps to the waters near Lizard.; The presence of humans changed the currents.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.18117976188659668
+    "latency": 0.024682998657226562
   },
   {
     "id": "Novel-dca8ac49",
@@ -239,7 +459,7 @@
     "evidence": "A boat with John Curgenven aboard entered the cave.; The water stirred as the boat's shadow passed over the fish.; The other fishes seemed distracted by the newcomers.; The launce kept close to the rocks at Lizard.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.03039717674255371
+    "latency": 0.024628877639770508
   },
   {
     "id": "Novel-e89fa155",
@@ -250,7 +470,7 @@
     "evidence": "John Curgenven has been compared to the legendary King Arthur.; Witnesses along the Cornish coast made the comparison.; Curgenven was seen navigating the waters near Lizard.; Curgenven was recently near Housel Cove.; Curgenven was near the famed Lizard Lights.; The coastline features Kynance and Devil’s Throat.; The coastline inspires both legend and local pride.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.1831350326538086
+    "latency": 0.02418684959411621
   },
   {
     "id": "Novel-6956692c",
@@ -261,7 +481,7 @@
     "evidence": "John Curgenven was seen aboard his boat near the iconic Lizard Lights.; Curgenven is often compared to the legendary King Arthur.; Curgenven remarked on the beauty of the lights.; Curgenven was navigating waters close to Housel Cove.; The region is noted for the proximity of Kynance and the Devil’s Throat.; The region remains a hub for both history and natural wonders.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.029538869857788086
+    "latency": 0.02371501922607422
   },
   {
     "id": "Novel-27b6e451",
@@ -272,7 +492,7 @@
     "evidence": "The visitor went to Kynance Cove.; Kynance Cove is described as a place of wild beauty.; The Devil’s Throat is carved into the coastline.; The Devil’s Throat is described as awe-inspiring and eerie.; Locals say King Arthur once passed this way.; The cove’s position in Cornwall makes the legends come alive.; The visitor imagined ancient knights and mystical swords.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.18720793724060059
+    "latency": 0.023981094360351562
   },
   {
     "id": "Novel-a940228b",
@@ -283,7 +503,7 @@
     "evidence": "Corinna wrote a diary entry about her sorrow.; Corinna's beloved parrot was taken away by fate.; Corinna said her farewells with a heavy heart.; Corinna called upon Isis for comfort.; Corinna feels that the gods are distant.; Corinna believes her pain causes trouble for her lover.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.18596124649047852
+    "latency": 0.024884939193725586
   },
   {
     "id": "Novel-2e0ffce2",
@@ -294,7 +514,7 @@
     "evidence": "The parrot wrote a diary entry about life with its mistress.; The parrot's days with its mistress were filled with warmth and chatter.; The parrot said farewell to Corinna, who was sorrowful.; The parrot was snatched away by envy.; The parrot was separated from Corinna's gentle hands.; The parrot heard that its mistress causes trouble for her lover.; The parrot believes its loss affects the affairs of the heart.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.02727198600769043
+    "latency": 0.024820804595947266
   },
   {
     "id": "Novel-4334e7fc",
@@ -305,7 +525,7 @@
     "evidence": "Hippolytus is known for his tragic fate.; Metamorphoses recounts the story of Hippolytus.; Reports suggest that Hippolytus would become a Priapus.; The transformation of Hippolytus has captured the imagination of poets.; The tale of Hippolytus is preserved in myth.; Jupiter has utter hatred towards the Telchines.; The poetic pursuits of Naso are discussed alongside Hippolytus's tale.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.028419017791748047
+    "latency": 0.023314237594604492
   },
   {
     "id": "Novel-db4551ac",
@@ -316,7 +536,7 @@
     "evidence": "Dipsas wrote a diary entry about her knowledge of magic arts.; Dipsas is known as a mistress of the magic arts.; Dipsas's reputation precedes her.; The charms of Ææa are associated with Dipsas.; Stories about Dipsas are told in Metamorphoses.; Jupiter has utter hatred of the Telchines.; Ovid's words ensure Dipsas's legend endures.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.18422508239746094
+    "latency": 0.024271011352539062
   },
   {
     "id": "Novel-a4a83818",
@@ -327,7 +547,117 @@
     "evidence": "Governor Morock has officially charged Roxie.; The charge is in connection with recent events.; Cousin Cæsar delivered a note to the Governor.; Roxie conveyed news of the charge to Aunt Katy.; Aunt Katy is a close acquaintance of Tom Fairfield.; Tom Fairfield is married to Susan Lasco.; The Lasco family is linked by marriage to Tom Fairfield.; John A. Lasco is an emigrant who remained in the old country.; The circumstances leading to the charge remain under investigation.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.17992925643920898
+    "latency": 0.025233030319213867
+  },
+  {
+    "id": "Novel-e0a374bb",
+    "question": "Imagine you are Don Carlo. Narrate the events of traveling to headquarters and your partnership with Dan Carlo, including your encounter with Brindle Bill.",
+    "source": "Novel-47558",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The night air was thick with anticipation as I rode alongside my steadfast partner, Dan Carlo, both of us silent but resolute as we made our way toward headquarters—a place whispered about as Brindle Bill’s haunt. Every hoofbeat seemed to echo the tension simmering between us and the trouble that awaited. Brindle Bill, notorious for his bluster and strength, had made no secret of his intentions toward Simon, and I knew a confrontation was inevitable. When we arrived, the cabin was locked tight, shadows flickering behind the cracks of the door. I scaled the jutting logs and slipped down the chimney, landing in the midst of a tense gathering. Brindle Bill rose, cards in hand, his challenge unmistakable. The fight that followed was fierce—Bill’s brute force against my agility, the outcome uncertain with every blow. Blood was drawn, and the air was thick with the scent of sweat and fear. Through it all, Dan and I stood together, our partnership tested but unbroken, facing down the storm that Brindle Bill and his allies had conjured.",
+    "evidence": "I rode alongside my trusted partner, Dan Carlo.; We were heading towards headquarters.; The place was known as a resort for the notorious Brindle Bill.; Tensions ran high because Brindle Bill wanted Simon.; I confronted Brindle Bill at headquarters.; I ended up fighting Brindle Bill.; The partnership with Dan was put to the test.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.024282217025756836
+  },
+  {
+    "id": "Novel-11abd566",
+    "question": "Rewrite the events of Suza Fairfield's capture and journey as a diary entry from Suza's perspective.",
+    "source": "Novel-47558",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Dear Diary, My heart is still pounding from the day’s ordeal. I was riding beside Don Carlo, the road to Port William stretching ahead, when out of nowhere Tom Ditamus seized me. Fear gripped me as I thought of Aunt Katy, who had only just settled with me in Port William—her house so quiet, the fire burned low, and her gentle hands always ready to comfort me. As Tom’s captive, I felt small and powerless, but I clung to hope that Aunt Katy was safe and that Don Carlo would not abandon me. Tonight, I do not know what tomorrow will bring, but I pray for courage and for the strength to find my way back to those who love me.",
+    "evidence": "Suza Fairfield was riding side by side with Don Carlo toward Port William.; Tom Ditamus captured Suza Fairfield.; Suza had been living with Aunt Katy.; Aunt Katy had just moved to Port William with Suza.; Suza hopes Aunt Katy is safe.; Suza hopes Don Carlo can help her.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.024348974227905273
+  },
+  {
+    "id": "Novel-f847846c",
+    "question": "Imagine you are Young Simon. Write a diary entry about your family connections and your feelings about the events involving your cousin Cæsar and Roxie.",
+    "source": "Novel-47558",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "As the only son of S. S. Simon, I find myself tangled in the web of our family's history more than ever. Lately, my cousin Cæsar has been at the heart of everything—he delivered that important note to the Governor, and he’s the one who finally told me the truth about Roxie’s family and the old debt that shadows our estate. I can’t help but worry for Roxie, now that I’ve heard she’s been charged with something I don’t fully understand. The more I learn, the more I feel the weight of our connections: big-sis who raised Cæsar, our ties to the Carlow and Brindle families, and the secrets that seem to bind us all together. Sometimes it feels like every step I take is guided by the choices and mistakes of those who came before me. I wish I could do more for Roxie, but all I can do now is hope that the truth will come to light, and that our family can find peace after so much turmoil.",
+    "evidence": "I am the only son of S. S. Simon.; I often hear stories about my family.; My cousin, Cæsar, has been at the center of recent events.; Cæsar delivered a note to the Governor.; Cæsar helped Simon learn about Roxie's family.; I hear Roxie has been charged.; I worry for Roxie.; Our family feels interconnected.; Big-sis is raising Cæsar.; We have ties to the Carlow and Brindle families.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.024551868438720703
+  },
+  {
+    "id": "Novel-cabc388f",
+    "question": "Rewrite the events of Don Carlo as the hero of Shirt-Tail Bend and the crossing of the Mississippi as a newspaper story.",
+    "source": "Novel-47558",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Shirt-Tail Bend, a noted landmark on the Mississippi, has found its hero in Don Carlo. Recently, the area saw heightened activity as the barque crossed the Mississippi, heading for a remote cabin built by backwoodsmen. Don Carlo’s actions have drawn praise, though tensions remain with figures like Brindle Bill still at large.",
+    "evidence": "Shirt-Tail Bend is a noted landmark on the Mississippi.; Don Carlo is considered a hero of Shirt-Tail Bend.; The area saw heightened activity as the barque crossed the Mississippi.; The barque was heading for a remote cabin built by backwoodsmen.; Don Carlo’s actions have drawn praise.; Tensions remain with figures like Brindle Bill still at large.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.024257898330688477
+  },
+  {
+    "id": "Novel-8c4b4b2f",
+    "question": "Imagine you are Ruth. Write a diary entry about your relationship with Angeline Hall and how you are doing.",
+    "source": "Novel-58553",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Diary Entry — Living with Angeline Hall has been a blessing. She always looks out for me and ensures I am well cared for. I am happy to say that I am doing well, and I feel at home with her and the rest of the family. Watching the boys help Sam with their tasks has been heartwarming.",
+    "evidence": "Living with Angeline Hall has been a blessing for Ruth.; Angeline Hall looks out for Ruth.; Angeline Hall ensures Ruth is well cared for.; Ruth feels at home with Angeline Hall and the rest of the family.; Ruth finds it heartwarming to watch the boys help Sam with their tasks.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02408003807067871
+  },
+  {
+    "id": "Novel-65be7ca5",
+    "question": "Rewrite the sequence of C. A. S. Hall thinking of Asaph Hall and writing to Percival as a reflective diary entry.",
+    "source": "Novel-58553",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Diary Entry — Today, as I wrote to Percival, thoughts of Asaph Hall crossed my mind. His example inspires me to continue working diligently. Sam has been a great help lately, thanks to Angeline Hall's organization of the boys. Our family ties run deep, and I am grateful for their support.",
+    "evidence": "C. A. S. Hall thought of Asaph Hall while writing to Percival.; Asaph Hall's example inspires C. A. S. Hall to work diligently.; Sam has been a great help to C. A. S. Hall lately.; Angeline Hall organized the boys to help Sam.; C. A. S. Hall is grateful for the family's support.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.025352954864501953
+  },
+  {
+    "id": "Novel-f9d1c48a",
+    "question": "Imagine you are David, the musician. Write a diary entry describing your experience playing the lyre and the significance of the kinnor and harp in your performances, reflecting on how these instruments are preserved or depicted in later cultures.",
+    "source": "Novel-54537",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Diary Entry — Today, as I strummed my lyre, I felt the ancient melodies flow through me. The kinnor, which I often suspend with care, remains my companion in both joy and sorrow. Some now render the kinnor as a harp, and I hear that such harps are depicted in Anglo-Saxon manuscripts, far from my own land. It is humbling to know that the echoes of my music might linger in distant times, perhaps even preserved within the halls of the British Museum. I wonder what future musicians or scholars will think, seeing cymbals and harps together, imagining how we once played.",
+    "evidence": "David strummed his lyre.; David felt ancient melodies flow through him.; David often suspends the kinnor with care.; The kinnor is a companion to David in both joy and sorrow.; Some people render the kinnor as a harp.; Harps are depicted in Anglo-Saxon manuscripts.; David's music might linger in distant times.; David's music might be preserved in the British Museum.; Cymbals and harps are displayed together.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.028562068939208984
+  },
+  {
+    "id": "Novel-2352775b",
+    "question": "Rewrite the following events as a newspaper article reporting on the cultural journey of the harp from David's time to its appearance in British collections.",
+    "source": "Novel-54537",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "LONDON—A remarkable journey through time is on display at the British Museum, where visitors can view an Anglo-Saxon manuscript from the early eleventh century depicting harps—an instrument whose lineage traces back to the biblical era of King David. Scholars suggest that the harp, so beloved by German and Celtic bards and Scandinavian skalds, may have evolved from the ancient kinnor, the lyre-like instrument famously played and suspended by David himself. Over centuries, the kinnor was reimagined in art and literature as a harp, its form shifting as it traveled across cultures and epochs. The museum’s collection, which also features cymbals reminiscent of those used by the ancient Egyptians, weaves together a rich tapestry of musical heritage, illustrating how melodies and instruments from the distant past continue to resonate in the heart of modern-day London.",
+    "evidence": "The British Museum houses an Anglo-Saxon manuscript depicting harps.; The harps are believed to be derived from the ancient kinnor.; David played and suspended the kinnor.; David performed on the lyre.; The kinnor was later rendered as the harp in various cultural depictions.; The collection includes cymbals once used by Egyptians.; The collection highlights a rich tapestry of musical history.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02991175651550293
+  },
+  {
+    "id": "Novel-8df9d4bc",
+    "question": "Imagine you are an Egyptian musician. Write a first-person account of performing with cymbals and the dulcimer, and reflect on the cultural value of these instruments.",
+    "source": "Novel-54537",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "As an Egyptian musician, I am swept up in the clang of cymbals, their bright, metallic voices ringing through our halls and open courtyards, weaving a tapestry of rhythm that stirs both dancer and listener alike. The dulcimer—what some now call the santir—rests before me, its strings shimmering beneath my fingers as I coax out melodies that echo the pulse of our people. Together, these instruments are more than tools; they are vessels of memory and pride, carrying our songs across deserts and centuries. I find deep satisfaction in knowing that our music, and the very cymbals I play, may one day be admired in distant lands, perhaps even in the British Museum, where the legacy of our craft and culture endures for all to see.",
+    "evidence": "The clang of cymbals fills the halls with rhythmic energy.; The dulcimer is often accompanied by cymbals.; The dulcimer is also called the santir.; The music played by the Egyptian musician stretches across lands.; The musician is proud that their music is remembered in distant places.; Cymbals and stories endure in the British Museum.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.030306100845336914
+  },
+  {
+    "id": "Novel-f24b3922",
+    "question": "Rewrite the story of the harp as told in a diary entry by a medieval Anglo-Saxon scribe, who discovers its origins.",
+    "source": "Novel-54537",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Diary Entry — This day, as I bent over the vellum, my quill tracing the familiar script, my gaze lingered on an illustration of the harp. Its triangular form seemed both ancient and noble. I could not help but ask Brother Aldred about its origins, and he told me it is believed to descend from the kinnor, the very instrument played by the great King David, who soothed spirits with his music. How wondrous, to think that our own harp, beloved by bards and skalds, shares its lineage with such distant times and lands! In our museum, we now keep not only this precious manuscript but also curious cymbals, said to be of Egyptian make. Truly, the music of our age is woven from the threads of many peoples, binding us to the stories and songs of ages long past.",
+    "evidence": "The scribe was struck by the depiction of the harp.; The harp is said to be rendered from the ancient kinnor.; The kinnor was played and suspended by the legendary David.; The museum holds both the manuscript and cymbals.; The cymbals are supposedly of Egyptian origin.; There is a web of history that binds music to ages past.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.027777910232543945
   },
   {
     "id": "Novel-73586ddc",
@@ -338,7 +668,7 @@
     "evidence": "The plant known scientifically as Erica vagans is referred to as Cornish heath.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.028439998626708984
+    "latency": 0.025952816009521484
   },
   {
     "id": "Novel-74440a6a",
@@ -349,7 +679,7 @@
     "evidence": "Baron Von Pawel-Rammingen married Princess Frederica of Hanover.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.17679810523986816
+    "latency": 0.02448582649230957
   },
   {
     "id": "Novel-f80cbf85",
@@ -360,7 +690,7 @@
     "evidence": "Mont St. Michel is located in Normandy.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.17412805557250977
+    "latency": 0.024573802947998047
   },
   {
     "id": "Novel-b3c430ef",
@@ -371,7 +701,7 @@
     "evidence": "Henry de la Pomeroy caused himself to be bled to death at St. Michael's Mount.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.029474735260009766
+    "latency": 0.023836851119995117
   },
   {
     "id": "Novel-304b0354",
@@ -382,7 +712,7 @@
     "evidence": "Tregeagle was doomed to empty Dozmare Pool as a punishment.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.0293118953704834
+    "latency": 0.024188995361328125
   },
   {
     "id": "Novel-b1a95144",
@@ -393,7 +723,7 @@
     "evidence": "The Queen showed motherly kindness to Princess Frederica of Hanover during her stay.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.030386924743652344
+    "latency": 0.024179935455322266
   },
   {
     "id": "Novel-e05d0922",
@@ -404,7 +734,7 @@
     "evidence": "Kynance Sands is a specific feature included as part of Kynance Cove.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.031571149826049805
+    "latency": 0.025064945220947266
   },
   {
     "id": "Novel-dba48e64",
@@ -415,7 +745,7 @@
     "evidence": "Asparagus Island is located near or within Kynance Cove.; Gull Rock is located near or within Kynance Cove.; Bellows is located near or within Kynance Cove.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.18388986587524414
+    "latency": 0.023936986923217773
   },
   {
     "id": "Novel-ea3d4859",
@@ -426,7 +756,7 @@
     "evidence": "Penolver is located near Housel Cove.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.0314939022064209
+    "latency": 0.024088621139526367
   },
   {
     "id": "Novel-ba894e2c",
@@ -437,6 +767,116 @@
     "evidence": "Merlin produced King Arthur.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.029872894287109375
+    "latency": 0.02400517463684082
+  },
+  {
+    "id": "Novel-42f1975a",
+    "question": "According to the narrative's summary of Arthurian history, who became king following Uther Pendragon's death?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "King Arthur was proclaimed king after Uther Pendragon.",
+    "evidence": "King Arthur was proclaimed king after Uther Pendragon.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.024324893951416016
+  },
+  {
+    "id": "Novel-419cadfe",
+    "question": "Within the summary of Arthurian legend provided in the narrative, who was King Arthur's final adversary in battle?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "King Arthur fought with Mordred.",
+    "evidence": "King Arthur fought with Mordred.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.023532867431640625
+  },
+  {
+    "id": "Novel-9e7500a0",
+    "question": "In the context of the Arthurian story as recounted in the narrative, whose love for Ygrayne set important events in motion?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Uther Pendragon fell in love with Ygrayne.",
+    "evidence": "Uther Pendragon fell in love with Ygrayne.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.0239412784576416
+  },
+  {
+    "id": "Novel-bffd01c2",
+    "question": "In the novel's retelling of the end of King Arthur's story, which knight was given the task of returning Excalibur to the mere?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Sir Bedevere threw Excalibur.",
+    "evidence": "Sir Bedevere threw Excalibur.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.025170326232910156
+  },
+  {
+    "id": "Novel-ef451592",
+    "question": "What other notable landmark is mentioned as being near Housel Cove in the narrative?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Lizard Lights is near Housel Cove.",
+    "evidence": "Lizard Lights is near Housel Cove.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.024163007736206055
+  },
+  {
+    "id": "Novel-eab59fae",
+    "question": "According to the journey described in the narrative, where is the town of Marazion located?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Marazion is located in Cornwall.",
+    "evidence": "Marazion is located in Cornwall.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.022815227508544922
+  },
+  {
+    "id": "Novel-61cf41ee",
+    "question": "During the journey through Cornwall, who drove the carriage for the main party?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Charles is the driver of the carriage.",
+    "evidence": "Charles is the driver of the carriage.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.023378372192382812
+  },
+  {
+    "id": "Novel-09d21113",
+    "question": "After passing through Penzance in the narrative, where did Charles go with the carriage?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Charles went to Whitesand Bay after passing through Penzance.",
+    "evidence": "Charles went to Whitesand Bay after passing through Penzance.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.024210214614868164
+  },
+  {
+    "id": "Novel-1b7a0e02",
+    "question": "During the first evening at The Lizard, what did Charles exclaim when he saw the lights?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Charles called out 'The Lizard Lights'.",
+    "evidence": "Charles called out 'The Lizard Lights.'",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.023673057556152344
+  },
+  {
+    "id": "Novel-752ca0c2",
+    "question": "During the visit to Mullion in the story, whom did Mary Mundy express admiration for?",
+    "source": "Novel-44557",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Mary Mundy admired the Professor.",
+    "evidence": "Mary Mundy admired the Professor.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.023786067962646484
   }
 ]

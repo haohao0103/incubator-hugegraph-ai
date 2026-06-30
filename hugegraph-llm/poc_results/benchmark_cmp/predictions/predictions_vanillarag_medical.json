@@ -8,7 +8,7 @@
     "evidence": "Fair skin is an independent risk factor for basal cell carcinoma (BCC).; Immune suppression from organ transplant is an independent risk factor for basal cell carcinoma (BCC).",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.030718088150024414
+    "latency": 0.03302001953125
   },
   {
     "id": "Medical-df366063",
@@ -19,7 +19,7 @@
     "evidence": "A medical and family history should be performed to evaluate for basal cell carcinoma.; A physical and skin exam should be performed to evaluate for basal cell carcinoma.; A biopsy should be performed to evaluate for basal cell carcinoma.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.1761620044708252
+    "latency": 0.02646613121032715
   },
   {
     "id": "Medical-0a90f1f2",
@@ -30,7 +30,7 @@
     "evidence": "Management of recurrent basal cell carcinoma depends on risk.; Management of recurrent basal cell carcinoma depends on the recurrence site.; Treatment options for recurrent basal cell carcinoma are tailored accordingly.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.03030705451965332
+    "latency": 0.024515867233276367
   },
   {
     "id": "Medical-831bb1e6",
@@ -41,7 +41,7 @@
     "evidence": "Older age is a risk factor for basal cell carcinoma.; Fair skin is a risk factor for basal cell carcinoma.; Family history of skin cancer is a risk factor for basal cell carcinoma.; A combination of these risk factors should prompt more frequent skin exams.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.17871904373168945
+    "latency": 0.022867918014526367
   },
   {
     "id": "Medical-01e3a9ea",
@@ -52,7 +52,7 @@
     "evidence": "A shiny bump can be a symptom of basal cell carcinoma.; A history of radiation therapy is a risk factor for basal cell carcinoma.; Imaging is needed to help confirm the diagnosis of basal cell carcinoma.; A biopsy is needed to help confirm the diagnosis of basal cell carcinoma.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.030592918395996094
+    "latency": 0.02453780174255371
   },
   {
     "id": "Medical-c69c2732",
@@ -63,7 +63,7 @@
     "evidence": "Annual full skin exams are recommended for patients treated for basal cell carcinoma.; The purpose of annual full skin exams is to monitor for recurrence.; The purpose of annual full skin exams is to monitor for new lesions.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.18912816047668457
+    "latency": 0.02362203598022461
   },
   {
     "id": "Medical-f034d77d",
@@ -74,7 +74,7 @@
     "evidence": "UV radiation is a primary risk factor for basal cell carcinoma.; Continued exposure to UV radiation increases the risk of recurrence of basal cell carcinoma.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.19226408004760742
+    "latency": 0.02381610870361328
   },
   {
     "id": "Medical-1eab8fa2",
@@ -85,7 +85,7 @@
     "evidence": "A family history of skin cancer is a risk factor for basal cell carcinoma.; Light eye color is a risk factor for basal cell carcinoma.; These risk factors increase the overall risk of basal cell carcinoma.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.0290219783782959
+    "latency": 0.023560285568237305
   },
   {
     "id": "Medical-14016ce3",
@@ -96,7 +96,7 @@
     "evidence": "Basal cell carcinoma most commonly develops on sun-exposed areas.; Surgery is the most effective treatment for basal cell carcinoma lesions.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.02955484390258789
+    "latency": 0.02303314208984375
   },
   {
     "id": "Medical-5e530443",
@@ -107,7 +107,117 @@
     "evidence": "A flat pale area on sun-exposed skin is a symptom that may indicate basal cell carcinoma.; Fair-skinned patients with a history of sun exposure are at higher risk for basal cell carcinoma.; This combination of symptoms and risk factors strongly indicates the need for biopsy.",
     "question_type": "Complex Reasoning",
     "context": "",
-    "latency": 0.027469158172607422
+    "latency": 0.024363040924072266
+  },
+  {
+    "id": "Medical-c8dd3e29",
+    "question": "How do immune suppression and prior radiation therapy interact to affect BCC risk and management?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Both are risk factors that increase BCC risk and may necessitate more aggressive management.",
+    "evidence": "Immune suppression is a risk factor that increases basal cell carcinoma risk.; Prior radiation therapy is a risk factor that increases basal cell carcinoma risk.; Both factors may necessitate more aggressive management of basal cell carcinoma.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023252010345458984
+  },
+  {
+    "id": "Medical-a9a52704",
+    "question": "What combination of anatomical location and cell type defines basal cell carcinoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "BCC arises from basal cells in the lower part of the epidermis, often in sun-exposed locations.",
+    "evidence": "Basal cell carcinoma arises from basal cells.; Basal cells are located in the lower part of the epidermis.; Basal cell carcinoma often occurs in sun-exposed locations.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023683786392211914
+  },
+  {
+    "id": "Medical-346b12e8",
+    "question": "Why is annual follow-up with full skin exams critical for patients with a history of BCC?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Because recurrence can occur at the original site or spread, so annual full skin exams help detect new or returning lesions.",
+    "evidence": "Annual follow-up with full skin exams is critical for patients with a history of BCC.; Recurrence of BCC can occur at the original site.; BCC can spread to other areas.; Annual full skin exams help detect new lesions.; Annual full skin exams help detect returning lesions.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.024602174758911133
+  },
+  {
+    "id": "Medical-8ff5dd5a",
+    "question": "Why might systemic therapy be considered for a patient with BCC that has spread to distant sites?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Because systemic therapy is a treatment option for BCC that has recurred or spread to distant sites.",
+    "evidence": "Systemic therapy may be considered for patients with BCC that has spread to distant sites.; Systemic therapy is a treatment option for BCC.; Systemic therapy is used for BCC that has recurred.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.025866985321044922
+  },
+  {
+    "id": "Medical-322bb52d",
+    "question": "How do medical and family history contribute to the diagnostic process for BCC in a patient with a suspicious skin lesion?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Both are part of the diagnostic workup to assess risk and guide further testing like biopsy.",
+    "evidence": "Medical history contributes to the diagnostic process for BCC.; Family history contributes to the diagnostic process for BCC.; Medical and family history are part of the diagnostic workup.; The diagnostic workup assesses risk for BCC.; The diagnostic workup guides further testing like biopsy.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.023545265197753906
+  },
+  {
+    "id": "Medical-35fee661",
+    "question": "Which diagnostic procedures would be prioritized for a patient with primary CNS lymphoma presenting with blurry vision and suspected eye involvement?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Eye exam, slit lamp, and vitrectomy would be prioritized for suspected eye involvement.",
+    "evidence": "Eye exam is prioritized for a patient with primary CNS lymphoma and suspected eye involvement.; Slit lamp examination is prioritized for suspected eye involvement.; Vitrectomy is prioritized for suspected eye involvement.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.0240020751953125
+  },
+  {
+    "id": "Medical-f473bcb0",
+    "question": "What is the main chemotherapy agent used during the induction phase of primary CNS lymphoma treatment and which diagnostic procedure confirms the diagnosis?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "High-dose methotrexate is the main chemotherapy agent, and stereotactic biopsy is the standard diagnostic procedure.",
+    "evidence": "High-dose methotrexate is the main chemotherapy agent used during the induction phase of primary CNS lymphoma treatment.; Stereotactic biopsy is the standard diagnostic procedure for primary CNS lymphoma.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.02425694465637207
+  },
+  {
+    "id": "Medical-f3af6f24",
+    "question": "For a patient with primary CNS lymphoma and cerebrospinal fluid involvement, which specialized treatment is indicated and how is the involvement detected?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Intrathecal chemotherapy is indicated, with CSF involvement detected by lumbar puncture.",
+    "evidence": "Intrathecal chemotherapy is indicated for a patient with primary CNS lymphoma and cerebrospinal fluid involvement.; CSF involvement is detected by lumbar puncture.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.024316787719726562
+  },
+  {
+    "id": "Medical-ade4b34a",
+    "question": "If a patient with primary CNS lymphoma presents with memory problems and confusion, what imaging modality is most useful and why?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "MRI with gadolinium contrast is most useful because it best identifies CNS lesions causing these symptoms.",
+    "evidence": "MRI with gadolinium contrast is the most useful imaging modality for a patient with primary CNS lymphoma presenting with memory problems and confusion.; MRI with gadolinium contrast best identifies CNS lesions causing memory problems and confusion.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.024172067642211914
+  },
+  {
+    "id": "Medical-ade95016",
+    "question": "Which risk factors should be considered for an older adult with a history of organ transplant who develops primary CNS lymphoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Older age and organ transplant are both risk factors for primary CNS lymphoma.",
+    "evidence": "Older age is a risk factor for primary CNS lymphoma.; Organ transplant is a risk factor for primary CNS lymphoma.",
+    "question_type": "Complex Reasoning",
+    "context": "",
+    "latency": 0.02506232261657715
   },
   {
     "id": "Medical-5fd3c02d",
@@ -118,7 +228,7 @@
     "evidence": "Basal cell carcinoma risk is increased by UV radiation.; Basal cell carcinoma risk is increased by sun exposure.; Basal cell carcinoma risk is increased by tanning beds.; Basal cell carcinoma risk is increased by having fair skin.; Basal cell carcinoma risk is increased by having light hair and eye color.; Basal cell carcinoma risk is increased by older age.; Basal cell carcinoma risk is increased by prior or family history of skin cancer.; Basal cell carcinoma risk is increased by radiation therapy.; Basal cell carcinoma risk is increased by immune suppression.; Basal cell carcinoma risk is increased by organ transplant.; Basal cell carcinoma risk is increased by autoimmune disease.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.025372743606567383
+    "latency": 0.022994041442871094
   },
   {
     "id": "Medical-b8b22d33",
@@ -129,7 +239,7 @@
     "evidence": "Basal cell carcinoma arises from basal cells in the lower part of the epidermis.; Basal cell carcinoma most commonly develops in sun-exposed areas such as the face.; Basal cell carcinoma most commonly develops in sun-exposed areas such as the head.; Basal cell carcinoma most commonly develops in sun-exposed areas such as the neck.; Basal cell carcinoma can occur anywhere on the body.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.02830982208251953
+    "latency": 0.02283191680908203
   },
   {
     "id": "Medical-9c85110b",
@@ -140,7 +250,7 @@
     "evidence": "Basal cell carcinoma typically presents as flat pale or yellow areas.; Basal cell carcinoma typically presents as red patches.; Basal cell carcinoma typically presents as shiny bumps.; Basal cell carcinoma typically presents as open sores.; Basal cell carcinoma typically presents as brown or glossy black bumps with rolled borders.; Basal cell carcinoma often appears as skin lesions.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.18983197212219238
+    "latency": 0.02303910255432129
   },
   {
     "id": "Medical-fcf87025",
@@ -151,7 +261,7 @@
     "evidence": "Diagnosis of basal cell carcinoma involves a combination of medical history and family history.; Diagnosis of basal cell carcinoma involves physical exams.; Diagnosis of basal cell carcinoma involves skin exams.; Diagnosis of basal cell carcinoma involves biopsy.; Diagnosis of basal cell carcinoma sometimes involves imaging.; The process confirms the presence and extent of the disease.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.027946949005126953
+    "latency": 0.02433609962463379
   },
   {
     "id": "Medical-6baf8bff",
@@ -162,7 +272,7 @@
     "evidence": "Surgery is the most common treatment for basal cell carcinoma.; Radiation therapy is used in selected cases for basal cell carcinoma.; Systemic therapy is used in selected cases for basal cell carcinoma.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.20425081253051758
+    "latency": 0.021257877349853516
   },
   {
     "id": "Medical-643b2b9d",
@@ -173,7 +283,7 @@
     "evidence": "Recurrence in basal cell carcinoma refers to the cancer returning to the original site.; Recurrence in basal cell carcinoma can involve spreading to lymph nodes.; Recurrence in basal cell carcinoma can involve spreading to distant sites.; Management of recurrence involves treatment options based on risk.; Management of recurrence involves treatment options based on recurrence.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.02768111228942871
+    "latency": 0.02367377281188965
   },
   {
     "id": "Medical-25f8ca5e",
@@ -184,7 +294,7 @@
     "evidence": "Follow-up after basal cell carcinoma includes a full skin exam with a doctor.; Follow-up should occur at least once a year.; The purpose of follow-up is to monitor for recurrence.; The purpose of follow-up is to monitor for new lesions.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.19966411590576172
+    "latency": 0.02367115020751953
   },
   {
     "id": "Medical-d961b796",
@@ -195,7 +305,7 @@
     "evidence": "A patient's medical history is used to assess risk for basal cell carcinoma.; A patient's family history is used to assess risk for basal cell carcinoma.; Medical and family history are part of the diagnostic process.; Medical and family history help identify individuals at higher risk.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.02920985221862793
+    "latency": 0.026586055755615234
   },
   {
     "id": "Medical-915df475",
@@ -206,7 +316,7 @@
     "evidence": "Basal cell carcinoma most often affects sun-exposed areas.; Common sun-exposed areas include the face, head, and neck.; Risk factors for basal cell carcinoma include UV radiation.; Risk factors for basal cell carcinoma include fair skin.; Basal cell carcinoma typically presents with flat pale or yellow areas.; Basal cell carcinoma typically presents with red patches.; Basal cell carcinoma typically presents with shiny bumps.; Basal cell carcinoma typically presents with open sores.; Basal cell carcinoma typically presents with brown or black bumps with rolled borders.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.02668905258178711
+    "latency": 0.02360701560974121
   },
   {
     "id": "Medical-e0e8fd6d",
@@ -217,7 +327,117 @@
     "evidence": "Primary CNS lymphoma most commonly affects the brain.; Primary CNS lymphoma most commonly affects the spinal cord.; Primary CNS lymphoma most commonly affects cerebrospinal fluid.; Primary CNS lymphoma most commonly affects the eyes.; Risk factors for primary CNS lymphoma include immunodeficiency disorders.; Risk factors for primary CNS lymphoma include HIV infection.; Risk factors for primary CNS lymphoma include Epstein-Barr virus.; Risk factors for primary CNS lymphoma include autoimmune diseases such as lupus.; Risk factors for primary CNS lymphoma include organ transplant.; Risk factors for primary CNS lymphoma include older age.",
     "question_type": "Contextual Summarize",
     "context": "",
-    "latency": 0.0276029109954834
+    "latency": 0.023489952087402344
+  },
+  {
+    "id": "Medical-d7012112",
+    "question": "Which diagnostic methods are used to identify primary CNS lymphoma and what are their specific roles?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The diagnosis of primary CNS lymphoma involves a combination of clinical evaluation and specialized diagnostic tests. A neurological exam is performed to assess neurological function and identify deficits. Imaging studies, particularly MRI of the brain with gadolinium contrast, are the most useful for detecting lesions characteristic of primary CNS lymphoma; CT scans may be used if MRI is unavailable. If imaging suggests lymphoma, a stereotactic biopsy is the standard and most definitive diagnostic procedure, allowing for precise sampling of tumor tissue for pathological confirmation. Additional diagnostic methods include blood tests (such as HIV testing, as immunosuppression is a risk factor), a thorough eye examination to detect ocular involvement, and lumbar puncture to analyze cerebrospinal fluid for malignant cells. Each method plays a specific role: imaging identifies and localizes lesions, biopsy confirms the diagnosis and guides treatment, and ancillary tests assess disease extent and associated risk factors.",
+    "evidence": "Diagnosis of primary CNS lymphoma involves a neurological exam.; Diagnosis of primary CNS lymphoma involves imaging with MRI.; MRI is especially useful with gadolinium contrast.; Diagnosis of primary CNS lymphoma involves CT imaging.; Diagnosis of primary CNS lymphoma involves stereotactic biopsy.; Diagnosis of primary CNS lymphoma involves blood tests.; Diagnosis of primary CNS lymphoma involves an eye exam.; Diagnosis of primary CNS lymphoma involves a lumbar puncture.; MRI with gadolinium is the most useful imaging method.; Stereotactic biopsy is the standard procedure for diagnosis.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.023855209350585938
+  },
+  {
+    "id": "Medical-6bb8a85b",
+    "question": "What are the common neurological and systemic symptoms observed in patients with primary CNS lymphoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Patients with primary CNS lymphoma may experience neurological symptoms such as leg or arm weakness, coordination and movement difficulties, personality or behavior changes, depression, confusion, memory problems, incontinence, difficulty speaking or swallowing, headaches, nausea, vomiting, seizures, and vision changes.",
+    "evidence": "Patients with primary CNS lymphoma may experience leg or arm weakness.; Patients with primary CNS lymphoma may experience coordination difficulties.; Patients with primary CNS lymphoma may experience movement difficulties.; Patients with primary CNS lymphoma may experience personality changes.; Patients with primary CNS lymphoma may experience behavior changes.; Patients with primary CNS lymphoma may experience depression.; Patients with primary CNS lymphoma may experience confusion.; Patients with primary CNS lymphoma may experience memory problems.; Patients with primary CNS lymphoma may experience incontinence.; Patients with primary CNS lymphoma may experience difficulty speaking.; Patients with primary CNS lymphoma may experience difficulty swallowing.; Patients with primary CNS lymphoma may experience headaches.; Patients with primary CNS lymphoma may experience nausea.; Patients with primary CNS lymphoma may experience vomiting.; Patients with primary CNS lymphoma may experience seizures.; Patients with primary CNS lymphoma may experience vision changes.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.023918867111206055
+  },
+  {
+    "id": "Medical-0a87d395",
+    "question": "What are the main treatment modalities and phases for primary CNS lymphoma, and which drugs are commonly used?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "The main treatment modalities for primary CNS lymphoma include corticosteroids to reduce inflammation and symptoms, high-dose methotrexate-based chemotherapy as the cornerstone of therapy, whole-brain radiation therapy (WBRT) particularly for patients who cannot tolerate chemotherapy or as consolidation, targeted therapies that attack specific cancer cell mechanisms, immunotherapy with rituximab (the primary immunotherapy agent), autologous stem cell rescue following high-dose chemotherapy, and supportive care to manage symptoms and side effects. Treatment is typically structured in two main phases: induction, which aims to eliminate as many lymphoma cells as possible, and consolidation, which seeks to eradicate any remaining disease and prevent relapse. Multidisciplinary care and consideration of clinical trials are also important aspects of management.",
+    "evidence": "Treatment for primary CNS lymphoma includes corticosteroids.; Treatment for primary CNS lymphoma includes chemotherapy.; High-dose methotrexate is a notable chemotherapy drug for primary CNS lymphoma.; Treatment for primary CNS lymphoma includes radiation therapy.; Whole-brain radiation therapy is particularly used for primary CNS lymphoma.; Treatment for primary CNS lymphoma includes targeted therapy.; Treatment for primary CNS lymphoma includes immunotherapy.; Rituximab is a main drug used in immunotherapy for primary CNS lymphoma.; Treatment for primary CNS lymphoma includes stem cell rescue.; Treatment for primary CNS lymphoma includes supportive care.; Treatment is typically administered in induction phases.; Treatment is typically administered in consolidation phases.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.0240478515625
+  },
+  {
+    "id": "Medical-23285edf",
+    "question": "How is treatment tailored for primary CNS lymphoma involving the cerebrospinal fluid or eyes?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "For primary CNS lymphoma with cerebrospinal fluid involvement, intrathecal chemotherapy may be used, while intraocular chemotherapy or radiation therapy is considered if the eyes are affected.",
+    "evidence": "Intrathecal chemotherapy may be used for primary CNS lymphoma with cerebrospinal fluid involvement.; Intraocular chemotherapy is considered if the eyes are affected in primary CNS lymphoma.; Radiation therapy is considered if the eyes are affected in primary CNS lymphoma.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02386188507080078
+  },
+  {
+    "id": "Medical-a1adaecd",
+    "question": "What is the role of supportive care and follow-up in the management of primary CNS lymphoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Supportive care in the management of primary CNS lymphoma is aimed at relieving symptoms, managing side effects of cancer and its treatments, and maintaining or improving quality of life at any stage of the disease. This includes interventions such as pain management, nutritional support, psychological counseling, rehabilitation therapies, and palliative care. Supportive care is provided alongside active cancer treatments and may be the primary focus for patients with significant comorbidities or reduced ability to perform daily activities. Follow-up care is essential for monitoring disease status and treatment effects, and typically includes repeat MRI scans to assess for recurrence or progression, comprehensive eye examinations to detect ocular involvement, blood tests to monitor for treatment-related complications, and regular assessment of performance status to guide ongoing management and eligibility for further therapies or clinical trials. Multidisciplinary care teams coordinate these efforts to ensure holistic patient support.",
+    "evidence": "Supportive care in primary CNS lymphoma focuses on symptom management.; Supportive care in primary CNS lymphoma focuses on quality of life.; Follow-up for primary CNS lymphoma involves repeat MRI.; Follow-up for primary CNS lymphoma involves eye exams.; Follow-up for primary CNS lymphoma involves blood tests.; Follow-up for primary CNS lymphoma involves performance status assessment.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.025297164916992188
+  },
+  {
+    "id": "Medical-ead123bc",
+    "question": "What are the recommendations regarding clinical trial participation and how does performance status influence treatment for primary CNS lymphoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Participation in clinical trials is recommended for all patients with primary CNS lymphoma, as these studies provide access to new and potentially more effective treatment options that are being evaluated for safety and efficacy. Clinical trials are considered a key component of both induction and consolidation phases of treatment. Performance status, which measures a patient's ability to carry out daily activities, is routinely assessed to help determine the most appropriate treatment approach and to establish eligibility for clinical trials. Patients with better performance status are more likely to tolerate intensive therapies and meet the inclusion criteria for clinical studies, while those with reduced performance status may require modified treatment plans or supportive care. Thus, performance status plays a critical role in guiding individualized treatment decisions and access to investigational therapies.",
+    "evidence": "Clinical trial participation is recommended for all patients with primary CNS lymphoma.; Performance status is assessed to guide treatment decisions for primary CNS lymphoma.; Performance status is assessed to determine eligibility for clinical trials in primary CNS lymphoma.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02536606788635254
+  },
+  {
+    "id": "Medical-ce5815bf",
+    "question": "How does primary CNS lymphoma typically progress and where is relapse most likely to occur?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Primary central nervous system (CNS) lymphoma is a rare and aggressive cancer that originates within the CNS, most commonly in the brain, but it can also involve the spinal cord, cerebrospinal fluid, and eyes. The disease typically remains confined to the CNS and rarely spreads to other parts of the body. Relapse most often occurs within the CNS compartments, specifically in the brain, spinal cord, or eyes. Surveillance after treatment focuses on monitoring these areas for signs of recurrence, as relapse outside the CNS is uncommon.",
+    "evidence": "Primary CNS lymphoma rarely spreads outside the central nervous system.; Primary CNS lymphoma can relapse in the brain.; Primary CNS lymphoma can relapse in the spinal cord.; Primary CNS lymphoma can relapse in the eyes.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.024824857711791992
+  },
+  {
+    "id": "Medical-17444c2c",
+    "question": "What are the major risk factors and genetic syndromes associated with cutaneous squamous cell carcinoma (CSCC)?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Major risk factors for cutaneous squamous cell carcinoma (CSCC) include chronic sun exposure, especially in fair-skinned individuals, and the use of indoor tanning devices. Additional risk factors are exposure to environmental toxins such as arsenic and tobacco smoke, the presence of actinic keratoses (precancerous skin lesions caused by sun damage), immunosuppression (such as in organ transplant recipients), and chronic wounds or scars (including nonhealing ulcers and burns, known as Marjolin’s ulcer). Certain genetic syndromes, notably xeroderma pigmentosum (a condition with defective DNA repair leading to increased sensitivity to UV light) and recessive dystrophic epidermolysis bullosa (RDEB, a rare inherited disorder causing fragile skin), significantly increase the risk of developing CSCC.",
+    "evidence": "Major risk factors for cutaneous squamous cell carcinoma (CSCC) include chronic sun exposure.; Indoor tanning is a major risk factor for CSCC.; Environmental toxins are a major risk factor for CSCC.; Actinic keratoses are a major risk factor for CSCC.; Genetic syndromes such as xeroderma pigmentosum are associated with CSCC.; Genetic syndromes such as RDEB are associated with CSCC.; Immunosuppression is a major risk factor for CSCC.; Chronic wounds or scars are a major risk factor for CSCC.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.023903846740722656
+  },
+  {
+    "id": "Medical-9e04431e",
+    "question": "Which diagnostic methods are used for CSCC at different stages, and how do they differ between local, regional, and metastatic disease?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "CSCC diagnosis involves clinical examination and skin biopsy for local disease, with imaging (CT, MRI, PET/CT) used when deeper invasion or spread is suspected; regional CSCC requires lymph node exams and biopsies, while metastatic CSCC relies on advanced imaging techniques.",
+    "evidence": "CSCC diagnosis involves clinical examination for local disease.; CSCC diagnosis involves skin biopsy for local disease.; Imaging techniques such as CT, MRI, and PET/CT are used when deeper invasion or spread is suspected in CSCC.; Regional CSCC requires lymph node exams.; Regional CSCC requires lymph node biopsies.; Metastatic CSCC relies on advanced imaging techniques.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.024037837982177734
+  },
+  {
+    "id": "Medical-0170eecb",
+    "question": "What are the main symptoms and typical clinical presentations of cutaneous squamous cell carcinoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Cutaneous squamous cell carcinoma (CSCC) most commonly presents as scaly patches or plaques, solid or misshapen skin lesions, and lesions that may develop in areas of chronic wounds or scars. These lesions often arise in sun-exposed areas, particularly in fair-skinned individuals, and may appear as persistent, rough, or thickened areas of skin. CSCC can also develop in sites of chronic skin damage, such as old scars or ulcers. Early recognition of these typical clinical presentations is important for prompt diagnosis and management.",
+    "evidence": "CSCC typically presents as scaly patches.; CSCC typically presents as solid or misshapen skin lesions.; CSCC lesions can develop in areas of chronic wounds or scars.",
+    "question_type": "Contextual Summarize",
+    "context": "",
+    "latency": 0.02315211296081543
   },
   {
     "id": "Medical-fe3240a4",
@@ -228,7 +448,7 @@
     "evidence": "The patient presents with a suspicious lesion on the left cheek.; Key risk factors for basal cell carcinoma include significant sun exposure.; Key risk factors for basal cell carcinoma include fair skin.; Key risk factors for basal cell carcinoma include a personal history of skin cancer.; The lesion appears as a shiny, pearly bump with rolled borders.; The diagnostic plan includes a thorough skin exam.; The diagnostic plan includes a detailed medical and family history.; The diagnostic plan includes performing a skin biopsy to confirm basal cell carcinoma.; Imaging may be considered if there is suspicion of deep tissue involvement.; Surgical excision is proposed as the first-line treatment if basal cell carcinoma is confirmed.; The patient will be counseled on recurrence risk.; The patient will be advised on the importance of annual full skin exams for follow-up.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.18300700187683105
+    "latency": 0.023312807083129883
   },
   {
     "id": "Medical-8f5233d5",
@@ -239,7 +459,7 @@
     "evidence": "The patient was diagnosed with basal cell carcinoma of the scalp.; The patient presented with a shiny bump with rolled borders on the scalp.; The lesion is located in a sun-exposed area.; Risk factors for basal cell carcinoma include prolonged UV radiation exposure.; Risk factors for basal cell carcinoma include fair skin.; Risk factors for basal cell carcinoma include older age.; Diagnostic evaluation included a physical and skin exam.; Diagnostic evaluation included a skin biopsy confirming basal cell carcinoma.; The patient underwent surgical excision of the lesion.; No evidence of recurrence or metastasis was found.; The patient is advised to attend full skin exams at least annually for follow-up.; The patient is advised to practice sun protection to reduce recurrence risk.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.20114517211914062
+    "latency": 0.023441076278686523
   },
   {
     "id": "Medical-c9c108e1",
@@ -250,7 +470,7 @@
     "evidence": "The patient has been diagnosed with basal cell carcinoma.; Basal cell carcinoma is the most common type of skin cancer.; Basal cell carcinoma develops from basal cells in the lower part of the skin’s outer layer.; Basal cell carcinoma usually occurs in areas exposed to the sun, like the face or scalp.; Risk factors for basal cell carcinoma include fair skin.; Risk factors for basal cell carcinoma include significant sun or UV exposure.; Risk factors for basal cell carcinoma include family history.; The diagnosis was made after a skin exam and biopsy.; Surgery is the standard treatment for basal cell carcinoma.; The patient will need regular full skin exams at least once a year to monitor for recurrence.; The patient plans to be extra careful about sun protection.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.20179009437561035
+    "latency": 0.025037050247192383
   },
   {
     "id": "Medical-bf68d23e",
@@ -261,7 +481,7 @@
     "evidence": "There has been an increase in basal cell carcinoma diagnoses in the community.; The increase is particularly among older adults with fair skin.; Basal cell carcinoma is the most common type of skin cancer.; Basal cell carcinoma typically develops in sun-exposed areas such as the face, head, and neck.; The risk of basal cell carcinoma increases with UV radiation exposure.; Individuals with a personal or family history of skin cancer are at higher risk.; Individuals who have undergone radiation therapy are at higher risk for basal cell carcinoma.; Individuals with immune suppression are at higher risk for basal cell carcinoma.; The community is urged to practice sun protection.; The community is urged to avoid tanning beds.; The community is urged to seek medical evaluation for new or changing skin lesions.; Annual full skin exams with a healthcare provider are recommended for early detection.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.026919841766357422
+    "latency": 0.023633956909179688
   },
   {
     "id": "Medical-fd1b07be",
@@ -272,7 +492,7 @@
     "evidence": "The patient has a history of basal cell carcinoma (BCC).; The patient presents with recurrence at the original site.; The patient has evidence of spread to regional lymph nodes.; The patient has multiple risk factors, including fair skin.; The patient has significant UV exposure.; The patient has a prior history of skin cancer.; The current diagnosis was established via physical and skin examination.; A confirmatory biopsy was performed.; Imaging studies were conducted.; The referral is for expertise regarding systemic therapy or radiation options.; The referral seeks advice on further staging and treatment recommendations.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.19302821159362793
+    "latency": 0.023832082748413086
   },
   {
     "id": "Medical-ea29b9d8",
@@ -283,7 +503,7 @@
     "evidence": "The patient is 62 years old.; The patient presents with progressive leg weakness.; The patient has memory problems.; The patient experiences blurry vision.; The initial diagnostic workup includes a neurological examination.; The neurological examination assesses the extent of neurological deficits.; An MRI of the brain with gadolinium contrast is included in the workup.; MRI is the most sensitive imaging modality for identifying CNS lesions.; An eye examination using a slit lamp is part of the workup.; Vitrectomy may be performed if ocular involvement is suspected.; A stereotactic biopsy of the brain lesion is necessary for histopathologic confirmation.; Laboratory assessments include complete blood count and comprehensive metabolic panel.; Lactate dehydrogenase (LDH) levels are assessed.; HIV and hepatitis B testing are included in the laboratory assessments.; A lumbar puncture is performed to analyze cerebrospinal fluid for malignant cells.; Performance status evaluation is conducted to guide further decisions.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.20313715934753418
+    "latency": 0.0252077579498291
   },
   {
     "id": "Medical-c2658ea4",
@@ -294,7 +514,7 @@
     "evidence": "The patient is an immunocompetent adult.; The patient has newly diagnosed primary CNS lymphoma confined to the brain.; The treatment plan consists of an induction phase.; The induction phase includes high-dose methotrexate-based chemotherapy.; Rituximab is combined with chemotherapy to enhance response.; Temozolomide or vincristine may be added based on protocol and patient tolerance.; Supportive corticosteroids may be used to reduce cerebral edema.; The consolidation phase follows the induction phase.; Consolidation includes whole-brain radiation therapy (WBRT).; High-dose chemotherapy followed by hematopoietic stem cell rescue may be considered.; Supportive care is provided throughout treatment.; A multidisciplinary team is involved in supportive care.; Performance status is monitored regularly.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.028699159622192383
+    "latency": 0.023547887802124023
   },
   {
     "id": "Medical-e6da7d3c",
@@ -305,7 +525,7 @@
     "evidence": "The patient is 58 years old.; The patient has recent onset progressive arm weakness.; The patient experiences confusion.; The patient has double vision.; MRI with gadolinium contrast revealed a solitary enhancing lesion in the right frontal lobe.; The patient has no known history of immunodeficiency.; Primary CNS lymphoma is strongly suspected.; A stereotactic biopsy is recommended to confirm the diagnosis.; Comprehensive laboratory tests are recommended, including CBC, CMP, LDH, HIV, and hepatitis B.; A lumbar puncture is recommended to assess for cerebrospinal fluid involvement.; A detailed eye examination is necessary due to reported visual symptoms.; Performance status assessment is essential for treatment planning.; High-dose methotrexate-based chemotherapy should be initiated as induction therapy.; Rituximab should be considered for induction therapy.; Consolidation may involve whole-brain radiation therapy or high-dose chemotherapy with stem cell rescue.; Supportive care should be provided throughout treatment.; Clinical trial enrollment should be considered if available.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.20429301261901855
+    "latency": 0.024518728256225586
   },
   {
     "id": "Medical-96352a3c",
@@ -316,7 +536,7 @@
     "evidence": "The patient has primary central nervous system lymphoma (PCNSL).; The patient presented with headaches, nausea, and coordination difficulties.; MRI with gadolinium contrast demonstrated multifocal enhancing lesions in the brain.; Stereotactic biopsy confirmed the diagnosis of PCNSL.; Laboratory evaluation included CBC, CMP, LDH, and HIV testing.; An eye examination showed no evidence of ocular involvement.; A lumbar puncture showed no evidence of cerebrospinal fluid involvement.; Performance status was assessed throughout the hospital course.; The patient completed induction chemotherapy with high-dose methotrexate and rituximab.; Corticosteroids were used for symptom management.; The patient tolerated therapy well.; The patient showed improvement in neurological symptoms.; The patient will transition to consolidation therapy with whole-brain radiation therapy (WBRT).; Supportive care will continue to address ongoing symptoms.; The patient is encouraged to consider clinical trial participation.; Regular follow-up will include repeat MRI, blood tests, and performance status assessments.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.030844926834106445
+    "latency": 0.02501821517944336
   },
   {
     "id": "Medical-3396b459",
@@ -327,7 +547,117 @@
     "evidence": "Primary CNS lymphoma is a rare but aggressive cancer.; Primary CNS lymphoma originates from lymphocytes within the central nervous system.; It most commonly affects the brain.; Primary CNS lymphoma can also affect the spinal cord, cerebrospinal fluid, and eyes.; Individuals at increased risk include those with impaired immune systems.; Risk factors include immunodeficiency disorders, HIV infection, and Epstein-Barr virus.; Autoimmune diseases and organ transplants are also risk factors.; Older adults are at increased risk for primary CNS lymphoma.; Key symptoms include leg or arm weakness.; Other symptoms include difficulties with coordination or movement.; Changes in personality or behavior can occur.; Memory problems are a symptom of primary CNS lymphoma.; Headaches, nausea, vomiting, seizures, and vision changes are also symptoms.; Early and accurate diagnosis is critical for improving outcomes.; Diagnostic evaluation includes neurological examination and MRI with gadolinium contrast.; Stereotactic biopsy is part of the diagnostic evaluation.; Laboratory tests, eye examination, and lumbar puncture are included in the evaluation.; Prompt referral to a neuro-oncology specialist is essential for timely diagnosis.; Evidence-based therapy typically involves high-dose methotrexate-based chemotherapy.; Whole-brain radiation therapy may also be part of the treatment.; Participation in clinical trials and supportive care are recommended.",
     "question_type": "Creative Generation",
     "context": "",
-    "latency": 0.20165705680847168
+    "latency": 0.024521827697753906
+  },
+  {
+    "id": "Medical-beb1f30e",
+    "question": "Imagine you are a dermatology attending preparing a referral letter for a patient with a newly diagnosed high-risk cutaneous squamous cell carcinoma (CSCC) on the scalp. Summarize the case, risk assessment, diagnostic findings, and recommend next steps, incorporating relevant guideline recommendations.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Dear Colleague,\n\nI am referring a 68-year-old fair-skinned male recently diagnosed with high-risk cutaneous squamous cell carcinoma (CSCC) of the scalp. The patient has a history of chronic sun exposure and presented with a 2.5 cm solid, irregular lesion on an area of chronic scarring. Clinical examination and excision biopsy confirmed invasive CSCC with perineural invasion and poorly defined borders. Imaging (CT) did not reveal nodal or distant metastasis. Risk assessment classified the tumor as high-risk due to its size, location (scalp), perineural invasion, and history of recurrence. \n\nGuidelines recommend Mohs surgery/PDEMA as the preferred treatment for high-risk local CSCC, with consideration of adjuvant radiation therapy if surgical margins are inadequate or perineural invasion is extensive. Regular skin and lymph node exams every 3-6 months for the first 2 years are advised for surveillance. Please see attached pathology and imaging reports for further details.\n\nSincerely,\nDermatology Attending",
+    "evidence": "The patient is a 68-year-old fair-skinned male.; The patient has been diagnosed with high-risk cutaneous squamous cell carcinoma (CSCC) of the scalp.; The patient has a history of chronic sun exposure.; The patient presented with a 2.5 cm solid, irregular lesion on an area of chronic scarring.; Clinical examination confirmed invasive CSCC with perineural invasion.; The tumor has poorly defined borders.; Imaging (CT) did not reveal nodal or distant metastasis.; Risk assessment classified the tumor as high-risk due to its size and location.; Mohs surgery/PDEMA is the preferred treatment for high-risk local CSCC.; Adjuvant radiation therapy may be considered if surgical margins are inadequate.; Regular skin and lymph node exams every 3-6 months for the first 2 years are advised.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02440810203552246
+  },
+  {
+    "id": "Medical-9e9cc51b",
+    "question": "You are an oncology nurse tasked with drafting a patient-friendly discharge summary for a person with regional CSCC (lymph node involvement) who has completed surgery and adjuvant radiation. Use the guideline to summarize their diagnosis, treatment, risk factors, and follow-up plan.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Discharge Summary for Regional Cutaneous Squamous Cell Carcinoma (CSCC)\n\nDiagnosis: You have been diagnosed with cutaneous squamous cell carcinoma (CSCC) that had spread to a nearby lymph node, which is known as regional CSCC. Major risk factors for this type of skin cancer include chronic sun exposure and a weakened immune system.\n\nTreatment: Your treatment included surgery to remove both the skin tumor and the affected lymph node(s). After surgery, you received radiation therapy to the area to help lower the risk of the cancer coming back. Imaging tests after treatment did not show any further spread of the cancer.\n\nRisk Factors: The main risk factors for CSCC are long-term sun exposure, a weakened immune system, and a history of chronic wounds or scarring. These factors can increase the chance of developing skin cancer or having it return.\n\nFollow-up Plan: Regular follow-up is important to monitor for any signs of recurrence. You will have skin and lymph node checks every 2–3 months during the first year after treatment, then every 2–4 months in the second year, and less frequently in the following years. Imaging may be used as part of your ongoing surveillance. Please continue to protect your skin from the sun and promptly report any new or changing skin lesions to your care team.\n\nThank you for your cooperation and commitment to your follow-up care.",
+    "evidence": "The patient has regional cutaneous squamous cell carcinoma (CSCC) with lymph node involvement.; Major risk factors include chronic sun exposure and a weakened immune system.; The patient underwent surgery to remove the skin tumor and the affected lymph node.; The patient received radiation therapy to reduce the risk of recurrence.; No evidence of further spread was found on imaging.; Follow-up will include skin and lymph node checks every 2–3 months in the first year.; Follow-up will include checks every 2–4 months in the second year.; Follow-up will be less frequent after the second year.; Imaging will be used for ongoing surveillance.; The patient is advised to continue sun protection.; The patient should report any new skin changes promptly.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02526712417602539
+  },
+  {
+    "id": "Medical-970792d6",
+    "question": "Assume the role of a medical intern on the dermatology service. You are asked to write a SOAP progress note for a patient with actinic keratosis and a history of immunosuppression, referencing both diagnosis and management per guidelines.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "SOAP Note\n\nSubjective: Patient reports several rough, scaly patches on sun-exposed areas of the face and forearms. Denies pain or bleeding. Notable history includes chronic immunosuppression following organ transplantation, which increases the risk for skin malignancies.\n\nObjective: Physical examination reveals multiple erythematous, scaly papules on the left cheek and dorsal hands, consistent with actinic keratoses. No palpable lymphadenopathy is present. Skin biopsy confirms the diagnosis of actinic keratosis. No evidence of invasive disease at this time.\n\nAssessment: Actinic keratosis in a patient with chronic immunosuppression. Immunosuppressed individuals are at significantly increased risk for progression of actinic keratosis to cutaneous squamous cell carcinoma (CSCC), as well as for developing additional lesions.\n\nPlan: Initiate cryotherapy for discrete, visible lesions and prescribe topical 5-fluorouracil for field treatment of affected areas, in accordance with current guidelines. Provide education on strict photoprotection, including use of broad-spectrum sunscreen, protective clothing, and avoidance of peak sun exposure. Emphasize the importance of regular self-skin examinations and schedule dermatologic follow-up every 3–6 months for comprehensive skin and lymph node exams, given the elevated risk of progression to CSCC. Advise prompt evaluation of any new, changing, or symptomatic lesions.",
+    "evidence": "The patient has actinic keratosis.; The patient has a history of immunosuppression due to organ transplant.; The patient reports several rough, scaly patches on sun-exposed areas of the face and forearms.; The patient reports no pain or bleeding.; The examination reveals multiple erythematous, scaly papules on the left cheek and dorsal hands.; There is no palpable lymphadenopathy.; A biopsy confirms the diagnosis of actinic keratosis.; The assessment indicates an increased risk for progression to cutaneous squamous cell carcinoma (CSCC).; Cryotherapy will be initiated for visible lesions.; Topical 5-fluorouracil will be used for field treatment.; The patient will be educated on strict photoprotection.; Regular skin exams will be scheduled every 3–6 months due to increased risk.; The patient will be monitored for any new or changing lesions.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.023560285568237305
+  },
+  {
+    "id": "Medical-5b2de94d",
+    "question": "You are a public health official drafting an advisory for primary care providers about prevention, early detection, and high-risk populations for cutaneous squamous cell carcinoma (CSCC). Use guideline facts to inform your advisory.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Public Health Advisory: Prevention and Early Detection of Cutaneous Squamous Cell Carcinoma (CSCC)\n\nPrimary care providers should be vigilant for CSCC, the second most common skin cancer, particularly in fair-skinned individuals and those with extensive sun exposure. High-risk populations include patients with chronic sun exposure, indoor tanning history, actinic keratosis, genetic syndromes (e.g., xeroderma pigmentosum, RDEB), immunosuppression, and chronic wounds or scars. \n\nEarly detection relies on clinical examination for scaly patches or misshapen skin lesions, especially in sun-exposed or chronically damaged areas. Biopsy is essential for suspicious lesions. Encourage sun protection and routine skin exams, especially for high-risk patients. Prompt referral for dermatologic evaluation is recommended for new, persistent, or changing lesions.\n",
+    "evidence": "CSCC is the second most common skin cancer.; Primary care providers should be vigilant for CSCC.; Fair-skinned individuals are at higher risk for CSCC.; Individuals with extensive sun exposure are at higher risk for CSCC.; High-risk populations include patients with chronic sun exposure.; Indoor tanning history is a risk factor for CSCC.; Actinic keratosis is a precursor to CSCC.; Genetic syndromes such as xeroderma pigmentosum increase risk for CSCC.; Immunosuppression is a risk factor for CSCC.; Chronic wounds or scars are associated with increased risk for CSCC.; Early detection relies on clinical examination for scaly patches or misshapen skin lesions.; Biopsy is essential for suspicious lesions.; Sun protection and routine skin exams are encouraged for high-risk patients.; Prompt referral for dermatologic evaluation is recommended for new, persistent, or changing lesions.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.024033069610595703
+  },
+  {
+    "id": "Medical-22918f14",
+    "question": "Imagine you are a hematology fellow receiving a new referral for a patient with suspected chronic myeloid leukemia (CML). Draft a detailed diagnostic workup plan, including key laboratory and molecular studies, and explain how you would confirm the diagnosis and characterize the disease phase.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "For a patient with suspected chronic myeloid leukemia (CML), the diagnostic workup should be comprehensive and systematic. I would begin with a detailed medical history and physical examination, including assessment for symptoms such as fatigue, weight loss, night sweats, and splenomegaly. Laboratory evaluation would start with a complete blood count (CBC) with differential to identify leukocytosis, particularly increased granulocytes, and to assess platelet and red blood cell levels. A peripheral blood smear would be performed to evaluate the spectrum of granulocyte maturation and to detect any abnormal or immature cells. Bone marrow aspiration and biopsy would be considered to assess cellularity, myeloid proliferation, and the percentage of blasts, which is critical for distinguishing between chronic, accelerated, and blast phases of CML. Cytogenetic analysis (karyotyping) would be performed to detect the Philadelphia chromosome (Ph), resulting from the t(9;22)(q34;q11) translocation. Fluorescence in situ hybridization (FISH) or reverse transcriptase polymerase chain reaction (RT-PCR) would be used to confirm the presence of the BCR::ABL1 fusion gene, which is required for a definitive diagnosis. The disease phase is characterized by the proportion of blasts in blood or marrow: chronic phase (<10% blasts), accelerated phase (10–19% blasts), or blast phase (≥20% blasts). This integrated approach confirms the diagnosis, distinguishes CML from other myeloproliferative neoplasms, and guides subsequent management.",
+    "evidence": "The diagnostic workup for suspected chronic myeloid leukemia (CML) begins with a complete blood count (CBC).; The CBC assesses for increased white blood cell (WBC) counts, particularly granulocytes.; The CBC evaluates platelet (PLT) and red blood cell (RBC) levels.; A peripheral blood smear is ordered to characterize granulocyte lineage.; The peripheral blood smear helps identify abnormal cells.; A bone marrow aspiration and biopsy are requested to assess myeloid progenitor cell proliferation.; The bone marrow evaluation looks for any increase in blasts.; An increase in blasts could indicate blast phase CML (BP-CML).; Cytogenetic analysis is performed to detect the presence of the Philadelphia chromosome (Ph).; The Philadelphia chromosome is the abnormal chromosome 22 resulting from the translocation between chromosomes 9 and 22.; Molecular testing for the BCR::ABL1 fusion gene is conducted.; The presence of the BCR::ABL1 fusion gene is required for a definitive diagnosis of CML.; The combination of clinical, morphologic, cytogenetic, and molecular findings confirms CML.; The findings help differentiate CML from other myeloproliferative neoplasms.; The findings determine if the disease is in chronic or blast phase.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.027333974838256836
+  },
+  {
+    "id": "Medical-c5176f5c",
+    "question": "You are an oncologist preparing a treatment initiation summary for a patient newly diagnosed with chronic phase CML. Summarize the pathogenesis, diagnostic criteria, and first-line therapeutic strategy, referencing relevant biomarkers and molecular targets.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Chronic myeloid leukemia (CML) is a blood cancer caused by the BCR::ABL1 fusion gene, which arises from a translocation between chromosomes 9 and 22, forming the Philadelphia chromosome (Ph). Diagnosis is established by detecting either the Ph chromosome or the BCR::ABL1 fusion gene, typically via cytogenetic and molecular testing of blood or bone marrow samples. The disease originates in blood stem cells, leading to excessive production of myeloid progenitor cells and increased granulocyte (white blood cell) counts, often accompanied by abnormal platelet levels. The primary therapeutic approach targets the BCR::ABL1 protein, whose abnormal tyrosine kinase activity drives disease progression. Initiation of treatment with a BCR::ABL1 protein inhibitor is recommended as first-line therapy for chronic phase CML, with ongoing monitoring of molecular response.",
+    "evidence": "Chronic myeloid leukemia (CML) is caused by the BCR::ABL1 fusion gene.; The BCR::ABL1 fusion gene arises from a translocation between chromosomes 9 and 22.; The translocation forms the Philadelphia chromosome (Ph).; Diagnosis of CML is established by detecting the Ph chromosome or the BCR::ABL1 fusion gene.; Detection is typically done via cytogenetic and molecular testing of blood or bone marrow samples.; CML originates in blood stem cells.; CML leads to excessive production of myeloid progenitor cells.; CML is associated with increased granulocyte (white blood cell) counts.; CML is often accompanied by abnormal platelet levels.; The primary therapeutic approach targets the BCR::ABL1 protein.; The BCR::ABL1 protein has abnormal tyrosine kinase activity.; The abnormal tyrosine kinase activity drives disease progression.; Initiation of treatment with a BCR::ABL1 protein inhibitor is recommended as first-line therapy for chronic phase CML.; Ongoing monitoring of molecular response is necessary.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.025388002395629883
+  },
+  {
+    "id": "Medical-3aed2370",
+    "question": "Transform the core clinical facts about chronic myeloid leukemia (CML) into a structured discharge summary for a patient completing diagnostic evaluation and beginning therapy.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "**Discharge Summary**\n\nDiagnosis: Chronic Myeloid Leukemia (CML)\n\nSummary of Hospital Course:\nThe patient underwent evaluation for persistent leukocytosis and abnormal platelet counts identified on routine laboratory testing. Further assessment included blood and bone marrow analyses, which demonstrated marked proliferation of granulocytes and myeloid progenitor cells. Cytogenetic testing revealed the presence of the Philadelphia chromosome (Ph), resulting from a translocation between chromosomes 9 and 22. Molecular studies confirmed the BCR::ABL1 fusion gene, establishing the diagnosis of CML. The disease is currently classified as being in the chronic phase, with no evidence of accelerated or blast phase transformation.\n\nKey Diagnostic Findings:\n- Hematology: Elevated white blood cell count (predominantly granulocytes) and abnormal platelet counts\n- Bone Marrow: Hypercellularity with increased myeloid progenitor cells\n- Cytogenetics: Philadelphia chromosome (t(9;22)(q34;q11)) detected\n- Molecular: BCR::ABL1 fusion gene present\n\nManagement Plan:\n- Initiate BCR::ABL1 tyrosine kinase inhibitor therapy as first-line treatment\n- Arrange for regular monitoring of complete blood counts and molecular response (BCR::ABL1 transcript levels)\n- Provide education on disease process, treatment expectations, and the importance of adherence and follow-up\n- Encourage the patient to maintain organized medical records and communicate any new symptoms promptly\n- Recommend ongoing support from family, caregivers, and the healthcare team\n\nThe patient and family have been counseled regarding the diagnosis, treatment plan, and the need for close follow-up with the hematology/oncology team.",
+    "evidence": "The diagnosis is chronic myeloid leukemia (CML).; The patient was evaluated for elevated white blood cell counts.; The patient had abnormal platelet counts.; Blood analyses revealed increased granulocytes.; Bone marrow analyses revealed increased myeloid progenitor cells.; Cytogenetic studies confirmed the presence of the Philadelphia chromosome (Ph).; The Philadelphia chromosome results from a translocation between chromosome 9 and 22.; Molecular studies confirmed the presence of the BCR::ABL1 fusion gene.; The findings fulfill diagnostic criteria for CML.; The disease is currently in the chronic phase.; Initiation of BCR::ABL1 protein inhibitor therapy is planned.; Ongoing monitoring of blood counts and molecular response will occur.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02458786964416504
+  },
+  {
+    "id": "Medical-fbacfb98",
+    "question": "Reframe the guideline information into a referral note addressed to a specialist, clearly stating the clinical suspicion, supporting laboratory findings, and rationale for specialist input.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Dear Hematology Specialist,\n\nI am referring a patient with clinical and laboratory findings suggestive of chronic myeloid leukemia (CML). The patient presents with persistent leukocytosis, notably increased granulocytes, and abnormal platelet counts identified on routine blood tests. Bone marrow evaluation demonstrated hypercellularity with expansion of myeloid progenitor cells. Cytogenetic analysis revealed the Philadelphia chromosome (Ph), resulting from a translocation between chromosomes 9 and 22. Molecular studies confirmed the presence of the BCR::ABL1 fusion gene. Given these findings, CML is strongly suspected and I am seeking your expertise for confirmation of diagnosis, disease phase classification, and initiation of targeted therapy.",
+    "evidence": "The patient is being referred for suspected chronic myeloid leukemia (CML).; The patient presents with persistent leukocytosis.; The patient has notably increased granulocytes.; The patient has abnormal platelet counts identified on routine blood tests.; Bone marrow evaluation demonstrated hypercellularity.; The hypercellularity indicates expansion of myeloid progenitor cells.; Cytogenetic analysis revealed the Philadelphia chromosome (Ph).; The Philadelphia chromosome results from a translocation between chromosomes 9 and 22.; Molecular studies confirmed the presence of the BCR::ABL1 fusion gene.; CML is strongly suspected based on these findings.; The referral seeks confirmation of diagnosis.; The referral seeks disease phase classification.; The referral seeks initiation of targeted therapy.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02484416961669922
+  },
+  {
+    "id": "Medical-70301a25",
+    "question": "You are a public health officer tasked with writing an educational advisory on the importance of genetic and molecular testing in diagnosing chronic myeloid leukemia (CML). Summarize the key genetic mechanisms, diagnostic requirements, and implications for treatment.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "**Public Health Advisory: The Role of Genetic and Molecular Testing in CML Diagnosis**\n\nChronic myeloid leukemia (CML) is a blood cancer defined by a specific genetic alteration: the BCR::ABL1 fusion gene, formed by a translocation between chromosomes 9 and 22, leading to the formation of the Philadelphia chromosome (Ph). Accurate diagnosis requires laboratory confirmation of either the Ph chromosome or the BCR::ABL1 fusion gene through cytogenetic and molecular testing of blood or bone marrow samples. These tests distinguish CML from other blood disorders and are critical for selecting appropriate therapy. Targeted treatments that inhibit the BCR::ABL1 protein have dramatically improved outcomes. Public health initiatives should ensure access to advanced molecular diagnostics for all suspected CML patients.",
+    "evidence": "Chronic myeloid leukemia (CML) is defined by the BCR::ABL1 fusion gene.; The BCR::ABL1 fusion gene is formed by a translocation between chromosomes 9 and 22.; The translocation leads to the formation of the Philadelphia chromosome (Ph).; Accurate diagnosis of CML requires laboratory confirmation of the Ph chromosome or the BCR::ABL1 fusion gene.; Laboratory confirmation is done through cytogenetic and molecular testing of blood or bone marrow samples.; These tests distinguish CML from other blood disorders.; The tests are critical for selecting appropriate therapy.; Targeted treatments that inhibit the BCR::ABL1 protein have improved outcomes.; Public health initiatives should ensure access to advanced molecular diagnostics for suspected CML patients.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.02614283561706543
+  },
+  {
+    "id": "Medical-0f84be73",
+    "question": "As a pulmonologist, you are seeing a 62-year-old patient with a 40 pack-year smoking history who presents with a persistent cough. Imaging has revealed a solitary lung nodule. Using the clinical practice guidelines provided, draft a detailed diagnostic and initial management plan, including risk assessment, confirmatory steps, and early treatment considerations.",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "This 62-year-old patient with a 40 pack-year smoking history and a persistent cough is at high risk for lung cancer, as tobacco use is the most significant risk factor. The discovery of a solitary lung nodule on imaging requires a structured diagnostic approach. First, a comprehensive risk assessment should be performed, considering the patient's age, smoking history, and nodule characteristics. Multidisciplinary evaluation by a pulmonologist, thoracic radiologist, and thoracic surgeon is recommended. Further imaging, such as a high-resolution CT scan, may be obtained to better characterize the nodule and assess for additional lesions or lymphadenopathy. If the nodule is suspicious for malignancy, a tissue diagnosis via biopsy (e.g., CT-guided, bronchoscopic, or surgical) is essential to confirm cancer and determine the histologic subtype, most commonly non-small cell lung cancer (NSCLC). Staging investigations, including PET-CT and brain imaging if indicated, should be performed to assess for local or distant spread. For early-stage NSCLC, surgical resection is the preferred treatment, with radiation therapy as an alternative for patients who are not surgical candidates. In cases of locally advanced disease, a combination of chemotherapy and radiation, and possibly surgery, may be considered. Throughout the process, supportive care should address symptoms such as cough and chest pain, and a plan for post-treatment surveillance should be established to monitor for recurrence.",
+    "evidence": "The patient has a significant tobacco smoking history.; The patient is at high risk for lung cancer.; A solitary lung nodule was detected on imaging.; A biopsy is recommended to confirm malignancy.; The biopsy is essential for diagnosis.; If the biopsy confirms non-small cell lung cancer (NSCLC), the subtype will be determined.; The likely subtypes of NSCLC include adenocarcinoma, squamous cell carcinoma, or large cell carcinoma.; The disease will be staged after biopsy confirmation.; For early-stage (Stage 1) NSCLC, surgery is the primary treatment.; Radiation therapy may be an option in some cases for early-stage NSCLC.; If the disease is locally advanced (Stage 2 or 3), chemoradiation and possibly surgery would be considered.; Supportive care should be integrated to address symptoms such as cough and chest pain.; Follow-up care with surveillance will be planned after initial treatment.",
+    "question_type": "Creative Generation",
+    "context": "",
+    "latency": 0.024305105209350586
   },
   {
     "id": "Medical-73586ddc",
@@ -338,7 +668,7 @@
     "evidence": "Basal cell carcinoma (BCC) is the most common type of skin cancer.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.20123791694641113
+    "latency": 0.02028203010559082
   },
   {
     "id": "Medical-a8bad1cf",
@@ -349,7 +679,7 @@
     "evidence": "Basal cell carcinoma arises from basal cells.; Basal cells are located in the lower part of the epidermis.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.21176409721374512
+    "latency": 0.020568132400512695
   },
   {
     "id": "Medical-422500d5",
@@ -360,7 +690,7 @@
     "evidence": "BCC most commonly develops in sun-exposed areas.; Common sun-exposed areas for BCC include the face.; Common sun-exposed areas for BCC include the head.; Common sun-exposed areas for BCC include the neck.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.02875375747680664
+    "latency": 0.023836851119995117
   },
   {
     "id": "Medical-6d2a190d",
@@ -371,7 +701,7 @@
     "evidence": "UV radiation exposure is a primary risk factor for BCC.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.02550506591796875
+    "latency": 0.02072286605834961
   },
   {
     "id": "Medical-5ad931db",
@@ -382,7 +712,7 @@
     "evidence": "Fair skin increases the risk of BCC.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.024376630783081055
+    "latency": 0.02089977264404297
   },
   {
     "id": "Medical-6b0f8bc4",
@@ -393,7 +723,7 @@
     "evidence": "Older age is associated with a higher risk of BCC.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.024837255477905273
+    "latency": 0.021011829376220703
   },
   {
     "id": "Medical-75c9949b",
@@ -404,7 +734,7 @@
     "evidence": "Family history of skin cancer increases the risk of BCC.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.027660131454467773
+    "latency": 0.023537874221801758
   },
   {
     "id": "Medical-ec091b24",
@@ -415,7 +745,7 @@
     "evidence": "Immune suppression is a risk factor for BCC.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.024699926376342773
+    "latency": 0.021245956420898438
   },
   {
     "id": "Medical-8d39da2e",
@@ -426,7 +756,7 @@
     "evidence": "BCC presents as flat, pale areas.; BCC presents as yellow areas.; BCC presents as red patches.; BCC presents as shiny bumps.; BCC presents as open sores.; BCC presents as brown bumps.; BCC presents as black bumps.; BCC presents as bumps with rolled borders.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.19820713996887207
+    "latency": 0.021409034729003906
   },
   {
     "id": "Medical-88c0b2ba",
@@ -437,6 +767,116 @@
     "evidence": "Diagnosis of BCC involves medical history.; Diagnosis of BCC involves family history.; Diagnosis of BCC involves a physical exam.; Diagnosis of BCC involves a skin exam.; Diagnosis of BCC involves a biopsy.; Diagnosis of BCC may involve imaging.",
     "question_type": "Fact Retrieval",
     "context": "",
-    "latency": 0.21295404434204102
+    "latency": 0.0207211971282959
+  },
+  {
+    "id": "Medical-a8ee8ba1",
+    "question": "What is the most common treatment for basal cell carcinoma?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Surgery is the most common treatment for BCC.",
+    "evidence": "Surgery is the most common treatment for basal cell carcinoma.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.02118706703186035
+  },
+  {
+    "id": "Medical-ec7d8801",
+    "question": "When might radiation therapy be used in BCC?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Radiation therapy may be used in some cases of BCC.",
+    "evidence": "Radiation therapy may be used in some cases of basal cell carcinoma.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.019874095916748047
+  },
+  {
+    "id": "Medical-9797af69",
+    "question": "What is recurrence in the context of BCC?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Recurrence refers to BCC returning to the original site or spreading to lymph nodes or distant sites.",
+    "evidence": "Recurrence refers to basal cell carcinoma returning to the original site.; Recurrence refers to basal cell carcinoma spreading to lymph nodes.; Recurrence refers to basal cell carcinoma spreading to distant sites.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.020242929458618164
+  },
+  {
+    "id": "Medical-6884d3fa",
+    "question": "What does follow-up for BCC typically include?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Follow-up includes full skin exams with a doctor at least once a year.",
+    "evidence": "Follow-up for basal cell carcinoma includes full skin exams with a doctor.; Follow-up for basal cell carcinoma occurs at least once a year.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.021043062210083008
+  },
+  {
+    "id": "Medical-fc6d1c33",
+    "question": "Which skin cancer subtype arises from basal cells?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Basal cell carcinoma is the skin cancer subtype that arises from basal cells.",
+    "evidence": "Basal cell carcinoma is the skin cancer subtype that arises from basal cells.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.020676851272583008
+  },
+  {
+    "id": "Medical-97abee55",
+    "question": "What anatomical layer do basal cells belong to?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Basal cells are located in the lower part of the epidermis.",
+    "evidence": "Basal cells are located in the lower part of the epidermis.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.01951003074645996
+  },
+  {
+    "id": "Medical-28d1e2d7",
+    "question": "Is sun exposure a risk factor for BCC?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Sun exposure is a risk factor for BCC.",
+    "evidence": "Sun exposure is a risk factor for basal cell carcinoma.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.020368099212646484
+  },
+  {
+    "id": "Medical-4cf524cb",
+    "question": "Do tanning beds increase the risk of BCC?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Tanning beds are a risk factor for BCC.",
+    "evidence": "Tanning beds are a risk factor for basal cell carcinoma.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.021188974380493164
+  },
+  {
+    "id": "Medical-df1408f4",
+    "question": "What hair and eye colors are associated with increased BCC risk?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Red hair, blond hair, and light eye color increase the risk of BCC.",
+    "evidence": "Red hair increases the risk of basal cell carcinoma.; Blond hair increases the risk of basal cell carcinoma.; Light eye color increases the risk of basal cell carcinoma.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.02086186408996582
+  },
+  {
+    "id": "Medical-17ae12cd",
+    "question": "Can a history of radiation therapy increase BCC risk?",
+    "source": "Medical",
+    "generated_answer": "ERROR: name 'faiss' is not defined",
+    "ground_truth": "Radiation therapy is a risk factor for BCC.",
+    "evidence": "A history of radiation therapy is a risk factor for basal cell carcinoma.",
+    "question_type": "Fact Retrieval",
+    "context": "",
+    "latency": 0.020795822143554688
   }
 ]
