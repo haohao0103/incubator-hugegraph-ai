@@ -69,14 +69,14 @@ def test_api_connection(url, method="GET", headers=None, params=None, body=None,
     log.debug("Request URL: %s", url)
     try:
         if method.upper() == "GET":
-            resp = requests.get(url, headers=headers, params=params, timeout=(1.0, 5.0), auth=auth)
+            resp = requests.get(url, headers=headers, params=params, timeout=(5.0, 30.0), auth=auth)
         elif method.upper() == "POST":
             resp = requests.post(
                 url,
                 headers=headers,
                 params=params,
                 json=body,
-                timeout=(1.0, 5.0),
+                timeout=(5.0, 30.0),
                 auth=auth,
             )
         else:
@@ -184,10 +184,19 @@ def apply_embedding_config(arg1, arg2, arg3, origin_call=None) -> int:
     embedding_option = llm_settings.embedding_type
     if embedding_option == "openai":
         llm_settings.openai_embedding_api_key = arg1
-        llm_settings.openai_embedding_api_base = arg2
+        # Check if arg2 is a full endpoint URL (like http://.../embedding)
+        if arg2.endswith("/embedding") or arg2.endswith("/embeddings"):
+            llm_settings.openai_embedding_url = arg2
+        else:
+            llm_settings.openai_embedding_api_base = arg2
         llm_settings.openai_embedding_model = arg3
-        test_url = llm_settings.openai_embedding_api_base + "/embeddings"
+        # Use custom URL if set, otherwise use standard path
+        test_url = llm_settings.openai_embedding_url or (llm_settings.openai_embedding_api_base + "/embeddings")
         headers = {"Authorization": f"Bearer {arg1}"}
+        # Include custom default headers from config
+        from hugegraph_llm.models.llms.init_llm import _parse_headers
+        custom_headers = _parse_headers(getattr(llm_settings, "openai_default_headers", "") or "")
+        headers.update(custom_headers)
         data = {"model": arg3, "input": "test"}
         status_code = test_api_connection(test_url, method="POST", headers=headers, body=data, origin_call=origin_call)
     elif embedding_option == "ollama/local":
@@ -291,6 +300,10 @@ def apply_llm_config(
             "messages": [{"role": "user", "content": "test"}],
         }
         headers = {"Authorization": f"Bearer {api_key_or_host}"}
+        # Include custom default headers from config (e.g. hller, etc.)
+        from hugegraph_llm.models.llms.init_llm import _parse_headers
+        custom_headers = _parse_headers(getattr(llm_settings, "openai_default_headers", "") or "")
+        headers.update(custom_headers)
         status_code = test_api_connection(test_url, method="POST", headers=headers, body=data, origin_call=origin_call)
 
     elif llm_option == "ollama/local":
@@ -597,6 +610,8 @@ def create_configs_block() -> list:
             llm_settings.embedding_type = embedding_type
             if embedding_type == "openai":
                 with gr.Row():
+                    # Show custom URL if configured, otherwise show api_base
+                    embedding_api_value = llm_settings.openai_embedding_url or llm_settings.openai_embedding_api_base
                     embedding_config_input = [
                         gr.Textbox(
                             value=llm_settings.openai_embedding_api_key,
@@ -604,8 +619,8 @@ def create_configs_block() -> list:
                             type="password",
                         ),
                         gr.Textbox(
-                            value=llm_settings.openai_embedding_api_base,
-                            label="api_base",
+                            value=embedding_api_value,
+                            label="api_base_or_url",
                         ),
                         gr.Textbox(
                             value=llm_settings.openai_embedding_model,

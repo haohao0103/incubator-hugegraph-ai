@@ -116,6 +116,10 @@ def rag_http_api(
     apply_embedding_conf,
     apply_reranker_conf,
     gremlin_generate_selective_func,
+    agent_answer_func=None,
+    community_build_func=None,
+    global_search_func=None,
+    graph_rag_search_func=None,
 ):
     @contextmanager
     def request_graph_config(req):
@@ -249,6 +253,7 @@ def rag_http_api(
 
             if req.llm_type in ("openai", "litellm"):
                 res = apply_llm_conf(
+                    "chat",
                     req.api_key,
                     req.api_base,
                     req.language_model,
@@ -256,7 +261,7 @@ def rag_http_api(
                     origin_call="http",
                 )
             else:
-                res = apply_llm_conf(req.host, req.port, req.language_model, None, origin_call="http")
+                res = apply_llm_conf("chat", req.host, req.port, req.language_model, None, origin_call="http")
             return generate_response(RAGResponse(status_code=res, message="Missing Value"))
         except Exception:
             _restore_settings(llm_settings, original_values)

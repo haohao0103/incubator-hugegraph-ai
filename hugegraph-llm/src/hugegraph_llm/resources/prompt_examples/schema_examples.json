@@ -1,47 +1,51 @@
 {
-"vertexlabels": [
+  "vertexlabels": [
     {
-    "id": 1,
-    "name": "person",
-    "id_strategy": "PRIMARY_KEY",
-    "primary_keys": [
-        "name"
-    ],
-    "properties": [
-        "name",
-        "age",
-        "occupation"
-    ]
+      "id": 1,
+      "name": "company",
+      "id_strategy": "PRIMARY_KEY",
+      "primary_keys": ["name"],
+      "properties": ["name"]
     },
     {
-    "id": 2,
-    "name": "webpage",
-    "id_strategy": "PRIMARY_KEY",
-    "primary_keys": [
-        "name"
-    ],
-    "properties": [
-        "name",
-        "url"
-    ]
-    }
-],
-"edgelabels": [
-    {
-    "id": 1,
-    "name": "roommate",
-    "source_label": "person",
-    "target_label": "person",
-    "properties": [
-        "date"
-    ]
+      "id": 2,
+      "name": "technology",
+      "id_strategy": "PRIMARY_KEY",
+      "primary_keys": ["name"],
+      "properties": ["name"]
     },
     {
-    "id": 2,
-    "name": "link",
-    "source_label": "webpage",
-    "target_label": "person",
-    "properties": []
+      "id": 3,
+      "name": "policy",
+      "id_strategy": "PRIMARY_KEY",
+      "primary_keys": ["name"],
+      "properties": ["name"]
     }
-]
+  ],
+  "edgelabels": [
+    {
+      "id": 1,
+      "name": "uses",
+      "source_label": "company",
+      "target_label": "technology",
+      "properties": []
+    },
+    {
+      "id": 2,
+      "name": "competes_with",
+      "source_label": "company",
+      "target_label": "company",
+      "properties": []
+    },
+    {
+      "id": 3,
+      "name": "regulates",
+      "source_label": "policy",
+      "target_label": "company",
+      "properties": []
+    }
+  ],
+  "propertykeys": [
+    {"name": "name", "data_type": "TEXT", "cardinality": "SINGLE"}
+  ]
 }
