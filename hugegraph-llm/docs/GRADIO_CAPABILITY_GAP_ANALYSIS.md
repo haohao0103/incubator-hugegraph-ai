@@ -26,6 +26,7 @@
 | 7 | Advanced GraphRAG | DRIFT 多跳、Schema 校验、实体消解、社区报告、RRF 融合、Token Budget |
 | 8 | GraphRAG Enhancement | PPR、Cascade 传播、Identity Edge、Dual Keyword、Community Summary、HyDE、Gleaning、Provenance、BM25 |
 | 9 | Capability Map | 能力矩阵、覆盖率概览、缺失工具快速演示（Fetch Graph Summary、Get Schema、Validate Gremlin、Incremental Index） |
+| 10 | Capability Closure | 补齐的缺失能力：多模态 RAG、属性图抽取、增量索引、Gremlin 自纠错、Query Classifier、同义词管理、Chunk 相似边 |
 
 ## 3. 项目能力全景（按类别）
 
@@ -40,7 +41,7 @@
 | BM25 索引查询 | `index_op/bm25_index_query.py` | Tab 8 | 已展示 |
 | 语义 ID 查询 | `index_op/semantic_id_query.py` | Tab 4 Graph RAG Search | 部分展示 |
 | 向量索引查询 | `index_op/vector_index_query.py` | Tab 2 | 已展示 |
-| 增量索引更新 | `graph_op/incremental_utils.py`, `flows/incremental_index_flow.py` | Tab 7（仅状态） | **未充分展示** |
+| 增量索引更新 | `graph_op/incremental_utils.py`, `flows/incremental_index_flow.py` | Tab 10 | 已展示 | 简化版增量流程 |
 
 ### 3.2 图操作（Graph Operators）
 
@@ -54,21 +55,21 @@
 | RRF 融合 | `graph_op/rrf_fusion.py` | Tab 7 | 已展示 |
 | Token Budget | `graph_op/token_budget.py` | Tab 7 | 已展示 |
 | Schema 校验 | `graph_op/schema_validator.py` | Tab 7 | 已展示 |
-| 同义词管理 | `graph_op/synonym_manager.py` | 无 | **缺失** |
-| Chunk 相似边 | `graph_op/chunk_sim_edges.py` | 无 | **缺失** |
-| 增量图更新 | `graph_op/incremental_utils.py` | 无 | **缺失** |
+| 同义词管理 | `graph_op/synonym_manager.py` | Tab 10 | 已展示 |
+| Chunk 相似边 | `graph_op/chunk_sim_edges.py` | Tab 10 | 已展示 |
+| 增量图更新 | `graph_op/incremental_utils.py` | Tab 10 | 已展示 |
 
 ### 3.3 LLM 操作（LLM Operators）
 
 | 能力 | 代码位置 | UI 状态 | 备注 |
 |------|---------|---------|------|
 | 信息抽取（三元组） | `llm_op/info_extract.py` | Tab 1 | 已展示 |
-| 属性图抽取 | `llm_op/property_graph_extract.py` | 无 | **缺失** |
+| 属性图抽取 | `llm_op/property_graph_extract.py` | Tab 10 | 已展示 |
 | 关键词抽取 | `llm_op/keyword_extract.py` | Tab 2 | 已展示 |
 | 双层关键词抽取 | `llm_op/dual_keyword_extract.py` | Tab 8 | 已展示 |
 | 答案合成 | `llm_op/answer_synthesize.py` | Tab 2 | 已展示 |
 | Gremlin 生成 | `llm_op/gremlin_generate.py` | Tab 3 | 已展示 |
-| Gremlin 校验 | `llm_op/gremlin_validator.py` | 无 | **缺失** |
+| Gremlin 校验 | `llm_op/gremlin_validator.py` | Tab 10 | 已展示 |
 | HyDE 生成 | `llm_op/hyde_generate.py` | Tab 8 | 已展示 |
 | DRIFT 搜索 | `llm_op/drift_search.py` | Tab 7 | 已展示 |
 | Gleaning 追问 | `llm_op/gleaning_extractor.py` | Tab 8 | 已展示 |
@@ -103,10 +104,10 @@
 
 | 能力 | 代码位置 | UI 状态 | 备注 |
 |------|---------|---------|------|
-| 多模态 KG 构建 | `multimodal/multimodal_kg_builder.py` | 无 | **缺失** |
-| 多模态检索 | `multimodal/multimodal_retriever.py` | 无 | **缺失** |
-| PDF/图片提取 | `multimodal/pdf_image_extractor.py` | 无 | **缺失** |
-| VLM 描述 | `multimodal/vlm_descriptor.py` | 无 | **缺失** |
+| 多模态 KG 构建 | `multimodal/multimodal_kg_builder.py` | Tab 10 | 已展示 |
+| 多模态检索 | `multimodal/multimodal_retriever.py` | Tab 10 | 已展示 |
+| PDF/图片提取 | `multimodal/pdf_image_extractor.py` | Tab 10 | 已展示 |
+| VLM 描述 | `multimodal/vlm_descriptor.py` | Tab 10 | 已展示 |
 
 ### 3.7 Agent 与工具（Agents & Tools）
 
@@ -116,7 +117,7 @@
 | 工具注册 | `agents/tool_registry.py` | Tab 4 | 已展示 |
 | MCP 适配器 | `agents/mcp_adapter.py` | 无 | **缺失** |
 | Agent 记忆 | `agents/memory/`（空） | 无 | **缺失** |
-| 查询分类器 | `nodes/query_classifier_node.py` | 无 | **缺失** |
+| 查询分类器 | `nodes/query_classifier_node.py` | Tab 10 | 已展示 |
 | 工具执行节点 | `nodes/tool_execution_node.py` | 无 | **缺失** |
 
 ### 3.8 RAG 流程与节点（Flows & Nodes）
@@ -126,7 +127,7 @@
 | 端到端 RAG 流程 | `rag_op/e2e_rag_pipeline.py` | 无 | **缺失** |
 | 实体消解流程 | `flows/entity_resolution_flow.py` | Tab 7 | 已展示 |
 | 溯源流程 | `flows/provenance_flow.py` | Tab 8 | 已展示 |
-| 增量索引流程 | `flows/incremental_index_flow.py` | 无 | **缺失** |
+| 增量索引流程 | `flows/incremental_index_flow.py` | Tab 10 | 已展示 |
 
 ## 4. 其他分支未合并能力（无法在 feature/graphrag-baseline UI 中展示）
 
@@ -141,36 +142,38 @@
 
 ## 5. 缺口优先级矩阵
 
-| 优先级 | 缺口 | 原因 | 实现难度 |
-|--------|------|------|----------|
-| P0 | 多模态 RAG | 当前分支代码已存在，完全未展示 | 中 |
-| P0 | 属性图抽取 | 当前分支代码已存在，与 Tab 1 互补 | 低 |
-| P0 | 增量索引/图更新 | 当前分支代码已存在，生产必需 | 中 |
-| P0 | Agent 记忆 | 工作记忆明确，有完整分支和 Demo | 高（需合并分支） |
-| P0 | Code Graph + MCP | 工作记忆明确，有完整分支和 Demo | 高（需合并分支） |
-| P1 | Query Classifier / MCP 适配器 | Agent 能力增强 | 中 |
-| P1 | Gremlin 校验 / Claim 抽取 / 共指消解 | LLM 操作增强 | 中 |
-| P1 | 同义词管理 / Chunk 相似边 | 图质量增强 | 中 |
-| P1 | 供应链 Agent 路由 | 有 PoC 分支 | 高（需合并分支） |
-| P2 | Skills Graph / Code-Review-Graph | 有 PoC 分支 | 高（需合并分支） |
-| P2 | 文档关键词提取 | 文档处理增强 | 低 |
-| P2 | 图数据获取 / Schema 管理 | 图谱管理增强 | 中 |
+| 优先级 | 缺口 | 原因 | 实现难度 | 状态 |
+|--------|------|------|----------|------|
+| P0 | 多模态 RAG | 当前分支代码已存在，完全未展示 | 中 | ✅ 已补齐（Tab 10） |
+| P0 | 属性图抽取 | 当前分支代码已存在，与 Tab 1 互补 | 低 | ✅ 已补齐（Tab 10） |
+| P0 | 增量索引/图更新 | 当前分支代码已存在，生产必需 | 中 | ✅ 已补齐（Tab 10） |
+| P0 | Agent 记忆 | 工作记忆明确，有完整分支和 Demo | 高（需合并分支） | 待分支合并 |
+| P0 | Code Graph + MCP | 工作记忆明确，有完整分支和 Demo | 高（需合并分支） | 待分支合并 |
+| P1 | Query Classifier / MCP 适配器 | Agent 能力增强 | 中 | Query Classifier ✅ 已补齐（Tab 10） |
+| P1 | Gremlin 校验 / Claim 抽取 / 共指消解 | LLM 操作增强 | 中 | Gremlin 校验 ✅ 已补齐（Tab 10） |
+| P1 | 同义词管理 / Chunk 相似边 | 图质量增强 | 中 | ✅ 已补齐（Tab 10） |
+| P1 | 供应链 Agent 路由 | 有 PoC 分支 | 高（需合并分支） | 待分支合并 |
+| P2 | Skills Graph / Code-Review-Graph | 有 PoC 分支 | 高（需合并分支） | 待分支合并 |
+| P2 | 文档关键词提取 | 文档处理增强 | 低 | 待补齐 |
+| P2 | 图数据获取 / Schema 管理 | 图谱管理增强 | 中 | Tab 9 已提供快捷入口 |
 
 ## 6. 关键结论
 
-1. **当前 8 个 Tab 已覆盖 GraphRAG 核心能力**：索引构建、检索、问答、Text2Gremlin、Agent、Global Search、Advanced GraphRAG、GraphRAG Enhancement 等。
+1. **当前 10 个 Tab 已覆盖 GraphRAG 核心能力**：索引构建、检索、问答、Text2Gremlin、Agent、Global Search、Advanced GraphRAG、GraphRAG Enhancement、Capability Map、Capability Closure 等。
 2. **已新增 Tab 9 Capability Map**：用于可视化展示能力矩阵和部分缺失工具的快捷演示（Fetch Graph Summary、Get Schema、Validate Gremlin、Incremental Index）。
-3. **GraphRAG 内部仍有未暴露能力**：多模态、属性图抽取、增量索引完整流程、Gremlin 校验独立入口、Claim/共指消解、同义词管理等。
-4. **最大缺口来自其他分支**：Agent Memory、Code Graph、Skills Graph、供应链 Agent 是工作记忆中明确的高投入 PoC，但尚未合并到 `feature/graphrag-baseline`，因此无法在 Gradio 中展示。
-5. **建议**：若要让 Gradio 真正“完全展示”能力，需要：
-   - 在当前分支内补齐 P0/P1 缺失的 UI 入口；
+3. **已新增 Tab 10 Capability Closure**：补齐当前分支内此前未在 Gradio 中展示的 7 大类能力：多模态 RAG、属性图抽取、增量索引完整流程、Gremlin 自纠错、Query Classifier、同义词管理、Chunk 相似边。
+4. **GraphRAG 内部仍有少量未暴露能力**：Claim 抽取、共指消解、MCP 适配器、Agent 记忆、E2E RAG Pipeline 等。
+5. **最大缺口来自其他分支**：Agent Memory、Code Graph、Skills Graph、供应链 Agent 是工作记忆中明确的高投入 PoC，但尚未合并到 `feature/graphrag-baseline`，因此无法在 Gradio 中展示。
+6. **建议**：若要让 Gradio 真正“完全展示”能力，需要：
+   - 在当前分支内补齐剩余 P1/P2 缺失的 UI 入口（Claim/共指消解、MCP 适配器等）；
    - 将 `feature/agent-memory-collection`、`poc/0614-codegraph-hugegraph-mcp`、`poc/0618-skills-graph-code-review-wiki`、`poc/0615-supply-chain-agent-router` 等分支评估合并或 cherry-pick 到 `feature/graphrag-baseline`；
-   - 在 Gradio 中新增对应 Tab（如 Tab 10 Agent Memory、Tab 11 Code Graph、Tab 12 Skills Graph、Tab 13 Supply Chain）。
+   - 在 Gradio 中新增对应 Tab（如 Tab 11 Agent Memory、Tab 12 Code Graph、Tab 13 Skills Graph、Tab 14 Supply Chain）。
 
 ## 7. 下一步建议
 
 1. **短期（当前分支）**：
-   - ✅ 已完成：新增 Capability Map Tab，展示能力矩阵并提供缺失工具快捷入口。
-   - 待补齐：多模态 RAG、属性图抽取、增量索引完整流程、Query Classifier 等 UI 入口。
+   - ✅ 已完成：新增 Capability Map Tab（Tab 9），展示能力矩阵并提供缺失工具快捷入口。
+   - ✅ 已完成：新增 Capability Closure Tab（Tab 10），补齐多模态 RAG、属性图抽取、增量索引完整流程、Gremlin 自纠错、Query Classifier、同义词管理、Chunk 相似边。
+   - 待补齐：Claim 抽取、共指消解、MCP 适配器、E2E RAG Pipeline 等剩余入口。
 2. **中期（分支合并）**：合并 Agent Memory 和 Code Graph 分支，新增对应 Tab。
 3. **长期**：建立 Gradio 能力矩阵自动化检查机制，确保新能力开发时同步添加 UI 入口。
