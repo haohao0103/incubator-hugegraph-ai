@@ -74,6 +74,28 @@ from hugegraph_llm.engines.memory.hybrid_scoring import (
     score_and_rank,
 )
 from hugegraph_llm.engines.memory.query_rewrite import QueryRewriteEngine, rewrite_query
+from hugegraph_llm.engines.memory.llm_query_rewrite import LLMQueryRewriteEngine, llm_rewrite_query
+from hugegraph_llm.engines.memory.sub_store_routing import RouteStore, compute_routing_key, ShardMetadata
+from hugegraph_llm.engines.memory.user_profile import (
+    UserProfile,
+    UserProfileStore,
+    TopicExtractor,
+    ProfileInjector,
+)
+from hugegraph_llm.engines.memory.faiss_deletable import FaissDeletableIndex
+from hugegraph_llm.engines.memory.memory_compressor import (
+    MemoryCompressor,
+    ClusterFinder,
+    SummaryGenerator,
+    PruningEngine,
+)
+from hugegraph_llm.engines.memory.agent_collaboration import (
+    AgentMemoryManager,
+    PermissionChecker,
+    PrivacyFilter,
+    CollaborationBroker,
+    PermissionRule,
+)
 
 __all__ = [
     "MemoryBase",
@@ -126,4 +148,23 @@ __all__ = [
     "get_bm25_params",
     "normalize_bm25",
     "score_and_rank",
+    "LLMQueryRewriteEngine",
+    "llm_rewrite_query",
+    "RouteStore",
+    "compute_routing_key",
+    "ShardMetadata",
+    "UserProfile",
+    "UserProfileStore",
+    "TopicExtractor",
+    "ProfileInjector",
+    "FaissDeletableIndex",
+    "MemoryCompressor",
+    "ClusterFinder",
+    "SummaryGenerator",
+    "PruningEngine",
+    "AgentMemoryManager",
+    "PermissionChecker",
+    "PrivacyFilter",
+    "CollaborationBroker",
+    "PermissionRule",
 ]
