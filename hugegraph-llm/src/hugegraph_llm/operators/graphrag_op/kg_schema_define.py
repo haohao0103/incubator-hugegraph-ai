@@ -241,11 +241,41 @@ class KGSchemaDefineOperator:
             context["define_call_count"] = 0
             return context
 
-        # Collect example text for each new type
+        # Apply manual overrides: types with human definitions skip LLM call
+        definitions: Dict[str, Dict[str, Any]] = {}
+        override_count = 0
+        if self.config.allow_manual_override and self.config.manual_type_definitions:
+            remaining_new = set()
+            for type_name in new_types:
+                if type_name in self.config.manual_type_definitions:
+                    definitions[type_name] = self.config.manual_type_definitions[type_name]
+                    registry[type_name] = definitions[type_name]
+                    override_count += 1
+                    log.info("Manual override applied for type '%s' (skipped LLM Define)", type_name)
+                else:
+                    remaining_new.add(type_name)
+            new_types = remaining_new
+
+        if not new_types:
+            log.info(
+                "All %d new types covered by manual overrides — no LLM calls needed",
+                override_count,
+            )
+            context["known_type_registry"] = registry
+            context["type_definitions"] = definitions
+            context["define_call_count"] = 0
+            self.config.known_type_registry = registry
+            context["graph_rag_schema_config"] = self.config
+            return context
+
+        # Collect example text for each new type (those not covered by override)
         type_examples = self._collect_type_examples(new_types, context)
 
-        # Generate definitions via LLM
-        definitions, call_count = self._generate_definitions(new_types, type_examples, registry)
+        # Generate definitions via LLM for remaining new types
+        llm_definitions, call_count = self._generate_definitions(new_types, type_examples, registry)
+
+        # Merge LLM definitions with any manual override definitions
+        definitions.update(llm_definitions)
 
         # Update registry
         for type_name, type_def in definitions.items():

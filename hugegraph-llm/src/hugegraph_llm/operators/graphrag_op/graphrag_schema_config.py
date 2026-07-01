@@ -19,17 +19,18 @@
 GraphRAG Schema Configuration — EDC + Guided mode orchestration.
 
 Implements the schema strategy decided for HugeGraph-AI:
-- **Evolving (default)**: EDC three-phase pipeline (Extract → Define → Canonicalize).
-  LLM freely extracts entities/relations, then Define generates semantic
-  definitions for new types, then Canonicalize aligns them to existing
-  relationship graph vertex types via embedding similarity.
+- **Evolving (default)**: EDC three-phase pipeline (Extract → Define → Canonicalize)
+  for the KG's own schema evolution. LLM freely extracts entities/relations,
+  Define generates semantic definitions for new types, then Canonicalize
+  deduplicates/merges synonym types within the KG's own evolving schema
+  (e.g., 嫌疑人/嫌疑犯/suspect all map to one unified type).
 - **Guided (optional enhancement)**: Schema-constrained extraction with
   Pydantic ResponseModel. Useful for well-defined domains (risk control,
-  code graph) where the ontology is known a priori.
+  code graph) where the KG ontology is known a priori.
 
 NOT supported as standalone: Schema-free (no canonicalization) because
-it produces type noise that conflicts with the relationship graph's
-existing vertex type namespace.
+it produces type noise that leads to type explosion in the KG's evolving
+schema — the same concept gets many names across runs.
 
 Reference: EDC Framework (EMNLP 2024), OpenSPG concept/type separation.
 
@@ -39,7 +40,7 @@ Context keys used by this module:
     schema                — Optional[Dict] HugeGraph schema dict (vertexlabels/edgelabels)
     graph_rag_schema_mode — Optional[str] "evolving" | "guided" (default: evolving)
     known_type_registry   — Optional[Dict] cached type definitions from prior runs
-    relationship_graph_types — Optional[List[str]] vertex type names from existing cluster
+    known_vertex_types    — Optional[List[str]] known vertex types from the KG's type registry
 
   OUT:
     graph_rag_schema_mode — Confirmed schema mode
@@ -64,13 +65,15 @@ class SchemaMode(str, Enum):
     """GraphRAG schema extraction mode.
 
     EVOLVING: EDC three-phase pipeline (default).
-        Extract → Define (for new types) → Canonicalize (align to relationship graph).
-        Compatible with existing billion-edge relationship graph cluster.
+        Extract → Define (for new types) → Canonicalize (deduplicate/merge
+        synonym types within the KG's own evolving schema). This is the EDC
+        pipeline for KG's own schema evolution — preventing type explosion
+        where the LLM calls the same concept by different names across runs.
 
     GUIDED: Schema-constrained extraction.
-        LLM output is constrained by Pydantic ResponseModel derived from
-        the relationship graph's existing schema. Best for domain-specific
-        scenarios (risk control enhancement, code graph).
+        LLM output is constrained by Pydantic ResponseModel for well-defined
+        domains where the KG ontology is known a priori (risk control,
+        code graph, financial regulation).
 
     NOTE: Schema-free (no canonicalization) is NOT a standalone mode.
     It is the intermediate state within EVOLVING before Canonicalize phase.
@@ -84,18 +87,23 @@ class SchemaMode(str, Enum):
 # ============================================================
 
 class CanonicalizeStrategy(str, Enum):
-    """How to align LLM-generated types to existing relationship graph types.
+    """How to deduplicate/merge synonym types within the KG's own type registry.
+
+    The Canonicalize phase prevents type explosion: when the LLM calls the
+    same concept by different names across runs (嫌疑人/嫌疑犯/suspect),
+    Canonicalize merges them into one unified type using known types in the
+    KG's own type registry as the reference set.
 
     EMBEDDING_SIM: Vector embedding similarity between type name/description
-        and pre-computed relationship graph vertex type embeddings.
-        Requires: relationship_graph_type_embeddings in context or config.
+        and pre-computed known type embeddings from the KG's type registry.
+        Requires: known_type_embeddings in context or config.
 
     EXACT_MATCH: Only exact string match (case-insensitive) is accepted.
-        New types that don't match any existing type are kept as-is.
-        Lowest cost, but lowest alignment quality.
+        New types that don't match any known type are kept as-is.
+        Lowest cost, but lowest deduplication quality.
 
     LLM_CLASSIFY: LLM classifies each new type into one of the existing
-        relationship graph vertex types. Highest accuracy, highest cost.
+        known types in the KG's type registry. Highest accuracy, highest cost.
     """
     EMBEDDING_SIM = "embedding_sim"
     EXACT_MATCH = "exact_match"
@@ -177,17 +185,17 @@ class GraphRAGSchemaConfig:
     # Dict mapping: type_name → {description, properties, parent_types}
     known_type_registry: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
-    # --- Relationship Graph Vertex Types ---
-    # List of vertex type names from the existing relationship graph cluster.
-    # Used by Canonicalize to align LLM-generated types.
-    # In production, these are the ~50 vertex types in the risk control graph.
-    relationship_graph_types: List[str] = field(default_factory=list)
+    # --- Known Vertex Types ---
+    # Known vertex type names from the KG's own type registry (previously
+    # extracted types from prior runs). Used by Canonicalize to deduplicate
+    # synonym types within the KG's evolving schema.
+    known_vertex_types: List[str] = field(default_factory=list)
 
-    # --- Relationship Graph Type Embeddings ---
-    # Pre-computed embedding vectors for each relationship graph vertex type.
+    # --- Known Type Embeddings ---
+    # Pre-computed embedding vectors for each known type in the KG's registry.
     # Dict mapping: type_name → embedding_vector (List[float])
-    # Loaded once at initialization from HugeGraph vertex type properties.
-    relationship_graph_type_embeddings: Dict[str, List[float]] = field(default_factory=dict)
+    # Loaded once at initialization; enables EMBEDDING_SIM canonicalize.
+    known_type_embeddings: Dict[str, List[float]] = field(default_factory=dict)
 
     # --- Embedding Model for Canonicalize ---
     # Name of the embedding model to use for computing type embedding similarity.
@@ -197,6 +205,19 @@ class GraphRAGSchemaConfig:
     # --- LLM Role for Define ---
     # Which LLM role to use for the Define phase (defaults to "extractor")
     define_llm_role: str = "extractor"
+
+    # --- Human Override ---
+    # Whether human-provided definitions override LLM-generated ones
+    allow_manual_override: bool = True
+    # Human-provided type definitions that pre-seed the registry.
+    # Dict mapping: type_name → {description, properties, parent_types, ...}
+    # When allow_manual_override=True and this contains a definition for a new
+    # type, the Define phase skips the LLM call and uses this definition instead.
+    manual_type_definitions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # Canonicalize mappings with confidence below this threshold require human
+    # approval. Suggested mappings are already recorded; this adds a gate for
+    # what MUST be explicitly approved before being applied.
+    require_human_approval_below: float = 0.70
 
     # --- Misc ---
     # Whether to preserve raw_type alongside canonicalized type
@@ -210,20 +231,20 @@ class GraphRAGSchemaConfig:
         issues = []
 
         if self.mode == SchemaMode.GUIDED:
-            # Guided mode requires relationship_graph_types for ResponseModel
-            if not self.relationship_graph_types:
+            # Guided mode requires known_vertex_types for ResponseModel
+            if not self.known_vertex_types:
                 issues.append(
-                    "Guided mode requires relationship_graph_types to build "
-                    "Pydantic ResponseModel. Provide the vertex type list from "
-                    "the existing relationship graph."
+                    "Guided mode requires known_vertex_types to build "
+                    "Pydantic ResponseModel. Provide the known vertex types "
+                    "from the KG's type registry."
                 )
 
         if self.canonicalize_strategy == CanonicalizeStrategy.EMBEDDING_SIM:
-            if not self.relationship_graph_type_embeddings and not self.relationship_graph_types:
+            if not self.known_type_embeddings and not self.known_vertex_types:
                 issues.append(
                     "EMBEDDING_SIM canonicalize strategy requires either "
-                    "relationship_graph_type_embeddings (pre-computed) or "
-                    "relationship_graph_types (to compute embeddings at runtime)."
+                    "known_type_embeddings (pre-computed) or "
+                    "known_vertex_types (to compute embeddings at runtime)."
                 )
 
         if self.define_trigger_policy == DefineTriggerPolicy.THRESHOLD:
@@ -260,8 +281,11 @@ class GraphRAGSchemaConfig:
             "embedding_model_name": self.embedding_model_name,
             # Do NOT serialize large dicts (registry, embeddings) by default
             "known_type_registry_count": len(self.known_type_registry),
-            "relationship_graph_types_count": len(self.relationship_graph_types),
-            "relationship_graph_type_embeddings_count": len(self.relationship_graph_type_embeddings),
+            "known_vertex_types_count": len(self.known_vertex_types),
+            "known_type_embeddings_count": len(self.known_type_embeddings),
+            "allow_manual_override": self.allow_manual_override,
+            "manual_type_definitions_count": len(self.manual_type_definitions),
+            "require_human_approval_below": self.require_human_approval_below,
         }
 
     @classmethod
@@ -281,16 +305,19 @@ class GraphRAGSchemaConfig:
             "guided_allow_dynamic", "define_threshold_ratio",
             "preserve_raw_type", "verbose_logging",
             "define_llm_role", "embedding_model_name",
+            "allow_manual_override", "require_human_approval_below",
         ]:
             if key in data:
                 setattr(config, key, data[key])
         # Large dicts — only deserialize if explicitly provided
         if "known_type_registry" in data:
             config.known_type_registry = data["known_type_registry"]
-        if "relationship_graph_types" in data:
-            config.relationship_graph_types = data["relationship_graph_types"]
-        if "relationship_graph_type_embeddings" in data:
-            config.relationship_graph_type_embeddings = data["relationship_graph_type_embeddings"]
+        if "known_vertex_types" in data:
+            config.known_vertex_types = data["known_vertex_types"]
+        if "known_type_embeddings" in data:
+            config.known_type_embeddings = data["known_type_embeddings"]
+        if "manual_type_definitions" in data:
+            config.manual_type_definitions = data["manual_type_definitions"]
         return config
 
     def merge_from_context(self, context: Dict[str, Any]) -> "GraphRAGSchemaConfig":
@@ -314,15 +341,23 @@ class GraphRAGSchemaConfig:
                     if type_name not in self.known_type_registry:
                         self.known_type_registry[type_name] = type_def
 
-        if "relationship_graph_types" in context:
-            types = context["relationship_graph_types"]
+        if "known_vertex_types" in context:
+            types = context["known_vertex_types"]
             if isinstance(types, list):
-                self.relationship_graph_types = types
+                self.known_vertex_types = types
 
-        if "relationship_graph_type_embeddings" in context:
-            embeddings = context["relationship_graph_type_embeddings"]
+        if "known_type_embeddings" in context:
+            embeddings = context["known_type_embeddings"]
             if isinstance(embeddings, dict):
-                self.relationship_graph_type_embeddings = embeddings
+                self.known_type_embeddings = embeddings
+
+        if "manual_type_definitions" in context:
+            defs = context["manual_type_definitions"]
+            if isinstance(defs, dict):
+                # Merge: manual definitions augment existing ones
+                for type_name, type_def in defs.items():
+                    if type_name not in self.manual_type_definitions:
+                        self.manual_type_definitions[type_name] = type_def
 
         return self
 
@@ -357,11 +392,11 @@ class GraphRAGSchemaConfig:
 
         log.info(
             "GraphRAGSchemaConfig initialized: mode=%s, canonicalize=%s, "
-            "define_trigger=%s, known_types=%d, relationship_types=%d",
+            "define_trigger=%s, known_types=%d, known_vertex_types=%d",
             self.mode.value,
             self.canonicalize_strategy.value,
             self.define_trigger_policy.value,
             len(self.known_type_registry),
-            len(self.relationship_graph_types),
+            len(self.known_vertex_types),
         )
         return context
