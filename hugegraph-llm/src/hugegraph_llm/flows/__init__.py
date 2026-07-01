@@ -41,4 +41,4 @@ class FlowName(str, Enum):
     DRIFT_SEARCH = "drift_search"
     SCHEMA_VALIDATION = "schema_validation"
     MULTIMODAL_RAG_INDEX = "multimodal_rag_index"
-    MULTIMODAL_RAG_SEARCH = "multimodal_rag_search"
+    # MULTIMODAL_RAG_SEARCH removed — search uses MultiModalRetriever directly, not a separate Flow

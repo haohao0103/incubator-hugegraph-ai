@@ -395,16 +395,15 @@ class TestFlowNameMultimodal:
     """Tests for FlowName enum multimodal entries."""
 
     def test_multimodal_flow_names_exist(self):
-        """FlowName enum should have multimodal entries."""
+        """FlowName enum should have multimodal INDEX entry."""
         from hugegraph_llm.flows import FlowName
         assert hasattr(FlowName, "MULTIMODAL_RAG_INDEX")
-        assert hasattr(FlowName, "MULTIMODAL_RAG_SEARCH")
+        # MULTIMODAL_RAG_SEARCH removed — search uses MultiModalRetriever directly
 
     def test_multimodal_flow_names_values(self):
         """FlowName values should match expected strings."""
         from hugegraph_llm.flows import FlowName
         assert FlowName.MULTIMODAL_RAG_INDEX.value == "multimodal_rag_index"
-        assert FlowName.MULTIMODAL_RAG_SEARCH.value == "multimodal_rag_search"
 
 
 # ── Multimodal Block Demo Data Tests ────────────────────────────
