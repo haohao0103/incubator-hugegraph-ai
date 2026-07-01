@@ -95,6 +95,15 @@ class WkFlowInput(GParam):
     drift_max_depth: Optional[int] = None  # Max iteration depth
     drift_communities_top_k: Optional[int] = None  # Top-K communities to match
 
+    # Multimodal fields (pipeline integration)
+    pdf_file_path: Optional[str] = None  # PDF file path for multimodal extraction
+    pdf_max_pages: Optional[int] = None  # Max pages to extract from PDF
+    pdf_max_image_size_kb: Optional[int] = None  # Max image size in KB
+    vlm_provider: Optional[str] = None  # VLM provider (xiaomimo/openai/etc)
+    vlm_max_images: Optional[int] = None  # Max images to send to VLM
+    multimodal_kg_name: Optional[str] = None  # Target graph name for multimodal KG
+    multimodal_mode: Optional[str] = None  # Search mode: auto/text_only/image_aware
+
     def reset(self, _: CStatus) -> None:
         self.texts = None
         self.language = None
@@ -156,6 +165,15 @@ class WkFlowInput(GParam):
         self.hyde_max_query_length = None
         self.drift_max_depth = None
         self.drift_communities_top_k = None
+
+        # Multimodal fields
+        self.pdf_file_path = None
+        self.pdf_max_pages = None
+        self.pdf_max_image_size_kb = None
+        self.vlm_provider = None
+        self.vlm_max_images = None
+        self.multimodal_kg_name = None
+        self.multimodal_mode = None
 
 
 class WkFlowState(GParam):
@@ -261,6 +279,19 @@ class WkFlowState(GParam):
     drift_depth_reached: Optional[int] = None  # Actual depth reached
     drift_primer: Optional[Dict[str, Any]] = None  # Primer output
 
+    # Multimodal fields (pipeline integration)
+    pdf_extraction_result: Optional[Dict[str, Any]] = None  # Serialized PDF extraction
+    multimodal_extracted: Optional[bool] = None  # Whether PDF extraction happened
+    total_images: Optional[int] = None  # Total images extracted
+    total_text_blocks: Optional[int] = None  # Total text blocks extracted
+    vlm_descriptions: Optional[List[Dict[str, Any]]] = None  # VLM description results
+    vlm_success_count: Optional[int] = None  # VLM success count
+    vlm_total_images: Optional[int] = None  # VLM total images processed
+    vlm_success_rate: Optional[float] = None  # VLM success rate
+    multimodal_kg_built: Optional[bool] = None  # Whether multimodal KG was built
+    multimodal_kg_stats: Optional[Dict[str, Any]] = None  # Multimodal KG build stats
+    multimodal_search_result: Optional[Dict[str, Any]] = None  # Multimodal search results
+
     def setup(self) -> CStatus:
         self.schema = None
         self.simple_schema = None
@@ -347,6 +378,19 @@ class WkFlowState(GParam):
         self.resolution_threshold = None
         self.resolution_batch_size = None
         self.resolution_vertex_labels = None
+
+        # Multimodal fields reset
+        self.pdf_extraction_result = None
+        self.multimodal_extracted = None
+        self.total_images = None
+        self.total_text_blocks = None
+        self.vlm_descriptions = None
+        self.vlm_success_count = None
+        self.vlm_total_images = None
+        self.vlm_success_rate = None
+        self.multimodal_kg_built = None
+        self.multimodal_kg_stats = None
+        self.multimodal_search_result = None
         return CStatus()
 
     def to_json(self):

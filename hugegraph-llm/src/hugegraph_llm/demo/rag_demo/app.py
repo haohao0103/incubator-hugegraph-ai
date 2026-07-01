@@ -59,6 +59,7 @@ from hugegraph_llm.demo.rag_demo.vector_graph_block import create_vector_graph_b
 from hugegraph_llm.demo.rag_demo.graphrag_enhancement_block import (
     create_graphrag_enhancement_block,
 )
+from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
 from hugegraph_llm.resources.demo.css import CSS
 from hugegraph_llm.utils.log import log
 
@@ -134,12 +135,18 @@ def init_rag_ui() -> gr.Interface:
             create_capability_map_block()
         with gr.Tab(label="10. Capability Closure 🔧"):
             create_capability_closure_block()
+        with gr.Tab(label="11. Multimodal GraphRAG 🎨"):
+            mm_demo_outputs, mm_load_demo = create_multimodal_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
             # settings.from_env()
             huge_settings.__init__()  # type: ignore[misc] # pylint: disable=C2801
             prompt.ensure_yaml_file_exists()
+
+            # Load multimodal demo data
+            mm_demo = mm_load_demo()
+
             return (
                 huge_settings.graph_url,
                 huge_settings.graph_name,
@@ -156,7 +163,7 @@ def init_rag_ui() -> gr.Interface:
                 prompt.default_question,
                 huge_settings.graph_name,
                 prompt.gremlin_generate_prompt,
-            )
+            ) + tuple(mm_demo)
 
         hugegraph_llm_ui.load(  # pylint: disable=E1101
             fn=refresh_ui_config_prompt,
@@ -176,7 +183,7 @@ def init_rag_ui() -> gr.Interface:
                 textbox_gremlin_inp,
                 textbox_gremlin_schema,
                 textbox_gremlin_prompt,
-            ],
+            ] + mm_demo_outputs,
         )
 
     return hugegraph_llm_ui
