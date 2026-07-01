@@ -361,6 +361,14 @@ def run_mm_search(query, mode, top_k):
             enable_vision_channel=True,
         )
         result = retriever.search(query, mode=mode)
+        # If real search returns empty results, fall back to demo data
+        if not result.results or len(result.results) == 0:
+            demo_result = DEMO_SEARCH_RESULTS.copy()
+            demo_result["query"] = query
+            demo_result["mode"] = mode
+            demo_result["demo"] = True
+            demo_result["fallback_reason"] = "No results from live graph (graph may be empty)"
+            return json.dumps(demo_result, ensure_ascii=False, indent=2)
         search_dict = {
             "query": result.query,
             "query_type": result.query_type,

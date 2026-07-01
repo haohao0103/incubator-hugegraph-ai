@@ -17,8 +17,21 @@
 
 import argparse
 import os
+from functools import wraps
 
 import gradio as gr
+
+# ── Gradio 6.x compat: show_copy_button was removed ──
+# Monkey-patch Textbox/Markdown/Code to silently accept and ignore this param
+def _strip_copy_button(orig_init):
+    @wraps(orig_init)
+    def patched_init(self, *args, **kwargs):
+        kwargs.pop("show_copy_button", None)
+        return orig_init(self, *args, **kwargs)
+    return patched_init
+
+for _cls in (gr.Textbox, gr.Markdown, gr.Code):
+    _cls.__init__ = _strip_copy_button(_cls.__init__)
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
