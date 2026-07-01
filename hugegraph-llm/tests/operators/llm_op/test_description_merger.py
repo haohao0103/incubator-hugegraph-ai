@@ -211,9 +211,9 @@ class TestPartition:
         assert len(partitions[0]) == 3
 
     def test_partition_splits_on_budget(self):
-        # Each "x" * 30 → ~10 tokens by heuristic. budget=20 → 2 per partition
-        descs = ["x" * 30, "x" * 30, "x" * 30]
-        partitions = _partition_descriptions(descs, max_tokens_per_partition=20)
+        # Each "word word word..." → ~1 token per word. budget=10 tokens → need more words
+        descs = ["word " * 30, "word " * 30, "word " * 30]  # ~30 tokens each
+        partitions = _partition_descriptions(descs, max_tokens_per_partition=50)
         assert len(partitions) >= 2
 
     def test_partition_single_oversized(self):
