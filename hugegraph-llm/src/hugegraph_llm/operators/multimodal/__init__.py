@@ -1,10 +1,9 @@
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
@@ -17,6 +16,9 @@
 """HugeGraph-AI Multimodal operators for GraphRAG pipeline.
 
 Adapted from LightRAG sidecar IR + placeholders + multimodal_context architecture.
+
+New modules (unified_document_parser, vlm_provider_registry, multimodal_retrieval_channel)
+are available via lazy import to avoid pulling the full HG-AI dependency chain.
 """
 
 from hugegraph_llm.operators.multimodal.sidecar_ir import (
@@ -61,4 +63,32 @@ __all__ = [
     "SurroundingContextEnricher",
     "build_surrounding",
     "MultimodalEntityInjector",
+    # Lazy-access modules (import via full path to avoid dependency chain):
+    #   from hugegraph_llm.operators.multimodal.unified_document_parser import ...
+    #   from hugegraph_llm.operators.multimodal.vlm_provider_registry import ...
+    #   from hugegraph_llm.operators.multimodal.multimodal_retrieval_channel import ...
 ]
+
+
+def __getattr__(name: str):
+    """Lazy import for new modules that depend on HG-AI framework.
+
+    This avoids pulling the full dependency chain (pyhugegraph, etc.)
+    when only the core multimodal operators are needed.
+    """
+    _LAZY_MAP = {
+        "UnifiedDocumentParser": "hugegraph_llm.operators.multimodal.unified_document_parser",
+        "DocumentExtractionResult": "hugegraph_llm.operators.multimodal.unified_document_parser",
+        "ContentBlock": "hugegraph_llm.operators.multimodal.unified_document_parser",
+        "ParserRegistry": "hugegraph_llm.operators.multimodal.unified_document_parser",
+        "NormalizedVLMImage": "hugegraph_llm.operators.multimodal.vlm_provider_registry",
+        "VLMProviderRegistry": "hugegraph_llm.operators.multimodal.vlm_provider_registry",
+        "VLMMultiBackendCaller": "hugegraph_llm.operators.multimodal.vlm_provider_registry",
+        "MultimodalRetrievalChannel": "hugegraph_llm.operators.multimodal.multimodal_retrieval_channel",
+        "MultimodalRetrievalConfig": "hugegraph_llm.operators.multimodal.multimodal_retrieval_channel",
+    }
+    if name in _LAZY_MAP:
+        import importlib
+        mod = importlib.import_module(_LAZY_MAP[name])
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
