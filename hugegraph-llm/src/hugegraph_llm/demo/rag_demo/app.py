@@ -72,6 +72,7 @@ from hugegraph_llm.demo.rag_demo.graphrag_enhancement_block import (
     create_graphrag_enhancement_block,
 )
 from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
+from hugegraph_llm.demo.rag_demo.edc_schema_block import create_edc_schema_block
 from hugegraph_llm.resources.demo.css import CSS
 from hugegraph_llm.utils.log import log
 
@@ -147,6 +148,8 @@ def init_rag_ui() -> gr.Interface:
             create_capability_map_block()
         with gr.Tab(label="10. Multimodal GraphRAG 🎨"):
             mm_demo_outputs, mm_load_demo = create_multimodal_block()
+        with gr.Tab(label="11. Schema EDC Pipeline 🧬"):
+            edc_demo_outputs, edc_load_demo = create_edc_schema_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
@@ -156,6 +159,9 @@ def init_rag_ui() -> gr.Interface:
 
             # Load multimodal demo data
             mm_demo = mm_load_demo()
+
+            # Load EDC schema demo data
+            edc_demo = edc_load_demo()
 
             return (
                 huge_settings.graph_url,
@@ -173,7 +179,7 @@ def init_rag_ui() -> gr.Interface:
                 prompt.default_question,
                 huge_settings.graph_name,
                 prompt.gremlin_generate_prompt,
-            ) + tuple(mm_demo)
+            ) + tuple(mm_demo) + tuple(edc_demo)
 
         hugegraph_llm_ui.load(  # pylint: disable=E1101
             fn=refresh_ui_config_prompt,
@@ -193,7 +199,7 @@ def init_rag_ui() -> gr.Interface:
                 textbox_gremlin_inp,
                 textbox_gremlin_schema,
                 textbox_gremlin_prompt,
-            ] + mm_demo_outputs,
+            ] + mm_demo_outputs + edc_demo_outputs,
         )
 
     return hugegraph_llm_ui
