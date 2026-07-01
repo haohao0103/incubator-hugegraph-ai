@@ -567,11 +567,15 @@ def test_backend_query_rewrite_used_in_search(memory_backend):
     import hugegraph_llm.poc.memory_backend as mb
     mb.HAS_GRAPHRAG_OPS = True
     try:
+        # fast_eval=True skips LLM rewrite; test that rewrite is NOT called
         result = memory_backend.search_memory("Alice", user_id="demo_user", fast_eval=True)
         assert "results" in result
-        memory_backend._query_rewrite.rewrite.assert_called_once()
-        call_kwargs = memory_backend._query_rewrite.rewrite.call_args.kwargs
-        assert call_kwargs.get("user_profile") == ""
+        # In fast_eval mode, LLM query rewrite should be skipped
+        memory_backend._query_rewrite.rewrite.assert_not_called()
+        # Verify trace shows fast_eval_skip method in detail string
+        rewrite_traces = [t for t in result.get("trace", []) if t.get("step") == 1.5]
+        assert rewrite_traces, "Query rewrite trace should exist"
+        assert "fast_eval_skip" in rewrite_traces[0]["detail"]
     finally:
         mb.HAS_GRAPHRAG_OPS = False
 

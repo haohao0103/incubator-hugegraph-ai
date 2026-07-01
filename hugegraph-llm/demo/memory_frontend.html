@@ -3,832 +3,659 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HugeGraph AI Memory · 演示平台</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<title>HugeGraph AI Memory · 交互式演示</title>
+<script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
 <style>
-:root {
-  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
-  --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
-  --blue:#58a6ff;--green:#3fb950;--orange:#d29922;--red:#f85149;
-  --purple:#bc8cff;--cyan:#39d2c0;--pink:#f778ba;
-  --node-person:#58a6ff;--node-org:#f0883e;--node-location:#3fb950;
-  --node-skill:#bc8cff;--node-concept:#39d2c0;
-}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
-
-/* Header */
-.header{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg2);flex-shrink:0;}
-.header h1{font-size:15px;font-weight:600;}
-.header h1 span{color:var(--blue);}
-.header .badge{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg3);color:var(--text2);}
-.header .badge.new{color:var(--cyan);border:1px solid var(--cyan);}
-.header .status{margin-left:auto;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;}
-.header .dot{width:8px;height:8px;border-radius:50%;}
-.header .dot.online{background:var(--green);box-shadow:0 0 6px var(--green);}
-.header .dot.offline{background:var(--red);}
-.demo-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--cyan);background:transparent;color:var(--cyan);font-size:12px;cursor:pointer;font-weight:500;transition:all .2s;}
-.demo-btn:hover{background:rgba(57,210,192,0.15);}
-.demo-btn.running{opacity:.6;cursor:wait;}
-
-/* Main Layout */
-.main{display:grid;grid-template-columns:320px 1fr 360px;height:calc(100vh - 42px);overflow:hidden;}
-
-/* Left Panel */
-.left-panel{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.panel-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);flex-wrap:wrap;}
-.panel-tab{padding:8px 6px;font-size:11px;text-align:center;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;transition:all .2s;flex:1;min-width:50px;}
-.panel-tab:hover{color:var(--text);}
-.panel-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
-.panel-tab.new-tab{color:var(--cyan);}
-.panel-content{flex:1;overflow-y:auto;padding:10px;}
-.panel-content::-webkit-scrollbar{width:5px;}
-.panel-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-
-/* Memory Item */
-.memory-item{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all .2s;}
-.memory-item:hover{border-color:var(--blue);}
-.mem-content{font-size:13px;line-height:1.4;margin-bottom:4px;}
-.mem-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text2);}
-.mem-meta .retention{font-weight:600;}
-.retention-bar{height:3px;background:var(--bg3);border-radius:2px;margin-top:4px;}
-.retention-bar-fill{height:100%;border-radius:2px;transition:width .5s;}
-.mem-hash{font-size:10px;color:var(--text3);margin-top:2px;}
-
-/* Center: Chat */
-.center-panel{display:flex;flex-direction:column;overflow:hidden;}
-.chat-messages{flex:1;overflow-y:auto;padding:16px;min-height:0;}
-.chat-messages::-webkit-scrollbar{width:5px;}
-.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-.chat-msg{margin-bottom:14px;display:flex;gap:10px;max-width:88%;}
-.chat-msg.user{margin-left:auto;flex-direction:row-reverse;}
-.chat-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
-.chat-msg.assistant .chat-avatar{background:var(--blue);}
-.chat-msg.user .chat-avatar{background:var(--bg3);}
-.chat-bubble{padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.6;}
-.chat-msg.user .chat-bubble{background:var(--blue);color:#fff;border-bottom-right-radius:4px;}
-.chat-msg.assistant .chat-bubble{background:var(--bg2);border:1px solid var(--border);border-bottom-left-radius:4px;}
-.chat-evidence{margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:11px;color:var(--text2);border-left:2px solid var(--blue);}
-.chat-evidence b{color:var(--blue);}
-.chat-pipeline{margin-top:8px;}
-.pipeline-step{display:flex;align-items:center;gap:6px;font-size:11px;padding:3px 0;color:var(--text2);}
-.pipeline-step .step-num{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;background:var(--bg3);}
-.pipeline-step.active .step-num{background:var(--blue);color:#fff;animation:pulse 1s infinite;}
-.pipeline-step.done .step-num{background:var(--green);color:#fff;}
-.pipeline-step .step-detail{font-size:11px;color:var(--text2);}
-.pipeline-step.new-step .step-num{background:var(--cyan);color:#000;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
-.typing-indicator{display:flex;gap:4px;padding:10px;}
-.typing-indicator span{width:7px;height:7px;border-radius:50%;background:var(--text2);animation:typing 1.2s infinite;}
-.typing-indicator span:nth-child(2){animation-delay:.2s;}
-.typing-indicator span:nth-child(3){animation-delay:.4s;}
-@keyframes typing{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-6px);}}
-
-/* Chat Input */
-.chat-input-area{padding:12px 16px;border-top:1px solid var(--border);background:var(--bg2);}
-.chat-input-row{display:flex;gap:8px;}
-.chat-input-row input{flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none;}
-.chat-input-row input:focus{border-color:var(--blue);}
-.chat-input-row button{padding:9px 18px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:14px;cursor:pointer;font-weight:500;}
-.chat-input-row button:hover{opacity:.9;}
-.chat-input-row button:disabled{opacity:.5;cursor:not-allowed;}
-.input-hints{margin-top:4px;font-size:11px;color:var(--text2);}
-.input-hints span{margin-right:10px;}
-.clear-btn{background:none;border:1px solid var(--border);color:var(--red);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;}
-.clear-btn:hover{background:rgba(248,81,73,0.1);}
-
-/* Right Panel */
-.right-panel{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.right-header{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.graph-container{flex:1;position:relative;overflow:hidden;min-height:0;}
-.graph-container canvas{width:100%;height:100%;}
-.graph-controls{padding:8px 14px;border-top:1px solid var(--border);background:var(--bg2);display:flex;gap:6px;flex-shrink:0;}
-.graph-btn{padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;transition:all .2s;}
-.graph-btn:hover{border-color:var(--cyan);color:var(--cyan);}
-.graph-btn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(57,210,192,0.1);}
-
-/* Stats cards */
-.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px;}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;}
-.stat-card .stat-val{font-size:20px;font-weight:700;color:var(--blue);}
-.stat-card .stat-label{font-size:10px;color:var(--text2);margin-top:1px;}
-.stat-card.highlight .stat-val{color:var(--cyan);}
-
-/* Entity badge */
-.entity-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;margin:1px;font-weight:500;}
-.entity-badge.person{background:rgba(88,166,255,0.2);color:var(--node-person);}
-.entity-badge.org{background:rgba(240,136,62,0.2);color:var(--node-org);}
-.entity-badge.location{background:rgba(63,185,80,0.2);color:var(--node-location);}
-.entity-badge.skill{background:rgba(188,140,255,0.2);color:var(--node-skill);}
-.entity-badge.concept{background:rgba(57,210,192,0.2);color:var(--node-concept);}
-
-/* Relation tag */
-.relation-tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;margin:1px;background:var(--bg3);color:var(--text2);}
-
-/* Ebbinghaus chart */
-.ebbinghaus-chart{height:180px;margin:6px 0;}
-
-/* Welcome */
-.welcome{text-align:center;padding:50px 30px;}
-.welcome h2{font-size:18px;margin-bottom:6px;color:var(--text);}
-.welcome p{color:var(--text2);font-size:13px;line-height:1.6;margin-bottom:16px;}
-.example-queries{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
-.example-btn{padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px;cursor:pointer;transition:all .2s;}
-.example-btn:hover{border-color:var(--blue);color:var(--blue);}
-.example-btn.new-ex{border-color:var(--cyan);color:var(--cyan);}
-.example-btn.new-ex:hover{background:rgba(57,210,192,0.1);}
-
-/* Profile item */
-.profile-item{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;}
-.profile-field{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;}
-.profile-field .pf-label{color:var(--text2);}
-.profile-field .pf-val{color:var(--text);font-weight:500;}
-
-/* History item */
-.history-item{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:4px;font-size:12px;}
-.history-op{font-weight:600;margin-right:6px;}
-.history-op.ADD{color:var(--green);}
-.history-op.UPDATE{color:var(--blue);}
-.history-op.DELETE{color:var(--red);}
-.history-op.SEARCH{color:var(--orange);}
-.history-ts{color:var(--text3);font-size:10px;}
-
-/* Privacy demo */
-.privacy-demo{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
-.privacy-demo .pd-label{font-size:11px;color:var(--text2);margin-bottom:4px;}
-.privacy-demo .pd-original{font-size:13px;color:var(--red);padding:4px 8px;background:rgba(248,81,73,0.1);border-radius:4px;}
-.privacy-demo .pd-filtered{font-size:13px;color:var(--green);padding:4px 8px;background:rgba(63,185,80,0.1);border-radius:4px;margin-top:4px;}
-
-/* Collab */
-.collab-group{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;}
-.collab-group .cg-name{font-size:13px;font-weight:600;color:var(--purple);}
-.collab-group .cg-members{font-size:11px;color:var(--text2);margin-top:4px;}
-.collab-group .cg-perm{font-size:10px;color:var(--text3);}
-
-/* Responsive */
-@media(max-width:1200px){.main{grid-template-columns:280px 1fr 300px;}}
+:root{--bg:#0a0c10;--bg2:#12141c;--bg3:#1a1d28;--card:#161923;--text:#e2e4ea;--text2:#8b90a0;--text3:#555a6a;--border:#252838;--accent:#3b82f6;--accent2:#8b5cf6;--accent3:#06b6d4;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--pink:#ec4899;--orange:#f97316;--gradient:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899);--shadow:0 4px 20px rgba(0,0,0,.5);--radius:10px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"SF Pro Display","PingFang SC","Inter",sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;overflow:hidden;height:100vh;}
+/* ===== Layout ===== */
+.app{display:flex;height:100vh;gap:0;}
+.left-panel{flex:0 0 420px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--bg2);}
+.right-panel{flex:1;display:flex;flex-direction:column;background:var(--bg);}
+/* ===== Header ===== */
+.header{background:var(--bg);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:10;}
+.header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--gradient);opacity:.4;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:32px;height:32px;border-radius:8px;background:var(--gradient);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;box-shadow:0 0 15px rgba(59,130,246,.3);}
+.logo h1{font-size:15px;font-weight:700;letter-spacing:-.3px;}
+.logo h1 span{color:var(--accent);}
+.logo-sub{font-size:10px;color:var(--text3);margin-top:1px;}
+.conn-status{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 4px rgba(16,185,129,.5);}
+.conn-dot.err{background:var(--red);}
+.demo-btn{background:var(--gradient);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:5px;}
+.demo-btn:hover{transform:translateY(-1px);box-shadow:0 0 20px rgba(59,130,246,.3);}
+.demo-btn.running{opacity:.6;pointer-events:none;}
+/* ===== Chat ===== */
+.chat-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;}
+.chat-msg{display:flex;gap:8px;animation:slideIn .3s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.chat-msg.user{flex-direction:row-reverse;}
+.msg-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.msg-avatar.ai{background:var(--gradient);}
+.msg-avatar.user{background:var(--accent3);}
+.msg-body{max-width:320px;}
+.msg-bubble{padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;}
+.chat-msg.ai .msg-bubble{background:var(--card);border:1px solid var(--border);}
+.chat-msg.user .msg-bubble{background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.2);}
+.msg-time{font-size:10px;color:var(--text3);margin-top:3px;text-align:right;}
+.chat-msg.ai .msg-time{text-align:left;}
+/* ===== Pipeline Steps in Chat ===== */
+.pipeline-step{display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:8px;margin:3px 0;background:var(--bg);border:1px solid var(--border);animation:stepIn .4s ease;}
+@keyframes stepIn{from{opacity:0;transform:scale(.95);}to{opacity:1;transform:scale(1);}}
+.step-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;}
+.step-icon.extract{background:var(--accent);}
+.step-icon.dedup{background:var(--yellow);}
+.step-icon.store{background:var(--green);}
+.step-icon.search{background:var(--accent3);}
+.step-icon.score{background:var(--accent2);}
+.step-icon.rerank{background:var(--pink);}
+.step-icon.answer{background:var(--orange);}
+.step-icon.graph{background:#6366f1;}
+.step-detail{font-size:12px;line-height:1.4;}
+.step-detail .step-name{font-weight:700;color:var(--text);font-size:13px;}
+.step-detail .step-info{color:var(--text2);font-size:11px;}
+.step-detail .step-data{color:var(--accent3);font-size:11px;margin-top:2px;}
+/* ===== Input ===== */
+.input-area{padding:12px 16px;border-top:1px solid var(--border);background:var(--bg);}
+.input-row{display:flex;gap:8px;}
+.input-field{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:none;transition:border-color .2s;}
+.input-field:focus{border-color:var(--accent);}
+.input-field::placeholder{color:var(--text3);}
+.send-btn{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;}
+.send-btn:hover{background:#2563eb;}
+.send-btn:disabled{opacity:.4;pointer-events:none;}
+.action-btns{display:flex;gap:6px;margin-top:8px;}
+.action-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .2s;font-family:inherit;}
+.action-btn:hover{border-color:var(--accent);color:var(--accent);}
+/* ===== Right Panel ===== */
+.right-top{flex:0 0 56px;display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);gap:16px;background:var(--bg2);}
+.right-top .stat{display:flex;align-items:center;gap:5px;}
+.stat .stat-val{font-size:16px;font-weight:800;}
+.stat .stat-val.blue{color:var(--accent);}.stat .stat-val.green{color:var(--green);}
+.stat .stat-val.purple{color:var(--accent2);}.stat .stat-val.teal{color:var(--accent3);}
+.stat .stat-label{font-size:10px;color:var(--text3);}
+.right-main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+/* ===== Pipeline Flow ===== */
+.flow-section{flex:0 0 auto;padding:12px 20px;}
+.flow-title{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.flow-title .flow-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);}
+.flow-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.flow-node{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;transition:all .3s;border:1px solid var(--border);background:var(--card);}
+.flow-node.active{border-color:var(--accent);background:rgba(59,130,246,.12);color:var(--accent);box-shadow:0 0 8px rgba(59,130,246,.2);}
+.flow-node.done{border-color:var(--green);background:rgba(16,185,129,.1);color:var(--green);}
+.flow-node .flow-emoji{font-size:14px;}
+.flow-arrow{color:var(--text3);font-size:12px;}
+/* ===== Graph + Stats ===== */
+.content-area{flex:1;display:grid;grid-template-columns:1fr 280px;gap:0;overflow:hidden;}
+.graph-area{position:relative;border-right:1px solid var(--border);}
+.graph-area #cy{width:100%;height:100%;}
+.graph-overlay{position:absolute;top:10px;right:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text2);z-index:5;}
+.stats-area{padding:12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.stats-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;}
+.stats-card .card-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:4px;}
+.stats-card .card-title .emoji{font-size:13px;}
+.stat-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px;}
+.stat-row .stat-key{color:var(--text3);}
+.stat-row .stat-val2{color:var(--text);font-weight:600;}
+.entity-list{display:flex;flex-direction:column;gap:3px;}
+.entity-item{padding:3px 8px;border-radius:4px;font-size:11px;background:rgba(59,130,246,.08);color:var(--accent);display:flex;align-items:center;gap:4px;}
+.entity-item .entity-type{font-size:9px;color:var(--text3);background:var(--bg);padding:1px 4px;border-radius:3px;}
+/* ===== Welcome ===== */
+.welcome{padding:20px;text-align:center;}
+.welcome-icon{font-size:48px;margin-bottom:8px;}
+.welcome-title{font-size:18px;font-weight:800;margin-bottom:6px;}
+.welcome-title span{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.welcome-desc{font-size:13px;color:var(--text2);line-height:1.7;max-width:340px;margin:0 auto;}
+.welcome-features{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center;}
+.welcome-feature{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;transition:all .2s;}
+.welcome-feature:hover{border-color:var(--accent);color:var(--accent);}
+.welcome-feature .emoji{font-size:14px;}
+/* ===== Toast ===== */
+.toast{position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:12px;color:var(--text);z-index:999;animation:toastIn .3s ease;box-shadow:var(--shadow);}
+@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
+.toast.success{border-color:var(--green);}
+.toast.error{border-color:var(--red);}
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);}
 </style>
 </head>
 <body>
-
-<div class="header">
-  <h1><span>HugeGraph</span> Memory</h1>
-  <div class="badge">LLM-Powered</div>
-  <div class="badge">Ebbinghaus</div>
-  <div class="badge">Graph Store</div>
-  <div class="badge new">V3 Pipeline</div>
-  <button class="demo-btn" id="demoBtn" onclick="runAutoDemo()">🚀 自动演示</button>
-  <div class="status" id="serverStatus">
-    <span class="dot offline" id="statusDot"></span>
-    <span id="statusText">连接中...</span>
-  </div>
-</div>
-
-<div class="main">
-  <!-- Left Panel -->
+<div class="app">
+  <!-- Left: Chat Panel -->
   <div class="left-panel">
-    <div class="panel-tabs">
-      <div class="panel-tab active" onclick="switchTab(this,'memories')">记忆</div>
-      <div class="panel-tab" onclick="switchTab(this,'relations')">关系</div>
-      <div class="panel-tab new-tab" onclick="switchTab(this,'profile')">画像</div>
-      <div class="panel-tab new-tab" onclick="switchTab(this,'history')">版本</div>
-      <div class="panel-tab" onclick="switchTab(this,'stats')">统计</div>
-      <div class="panel-tab" onclick="switchTab(this,'ebbinghaus')">遗忘</div>
-    </div>
-    <div class="panel-content" id="panelContent">
-      <div id="tab-memories"><p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">暂无记忆，开始对话吧！</p></div>
-      <div id="tab-relations" style="display:none"><p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">暂无关系数据</p></div>
-      <div id="tab-profile" style="display:none"><p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">点击「画像」标签提取用户画像</p></div>
-      <div id="tab-history" style="display:none"><p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">暂无版本历史</p></div>
-      <div id="tab-stats" style="display:none"></div>
-      <div id="tab-ebbinghaus" style="display:none">
-        <p style="color:var(--text2);font-size:11px;margin-bottom:6px;">遗忘曲线 R(t) = e<sup>-0.821t</sup> + access×0.3</p>
-        <canvas id="ebbinghausChart" class="ebbinghaus-chart"></canvas>
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">HG</div>
+        <div>
+          <h1>HugeGraph <span>AI Memory</span></h1>
+          <div class="logo-sub">货拉拉 · 图谱团队 · 交互式演示</div>
+        </div>
       </div>
+      <div class="conn-status">
+        <div class="conn-dot" id="connDot"></div>
+        <span id="connText">连接中...</span>
+      </div>
+      <button class="demo-btn" id="demoBtn" onclick="runAutoDemo()">
+        <span>🎬</span> 一键演示
+      </button>
     </div>
-  </div>
-
-  <!-- Center: Chat -->
-  <div class="center-panel">
-    <div class="chat-messages" id="chatMessages">
-      <div class="welcome" id="welcomeScreen">
-        <h2>HugeGraph AI Memory</h2>
-        <p>对话即记忆：陈述→提取+存储，提问→检索+回答<br>新增 V3 管线：ADD去重、LLM改写、评分分解、隐私过滤、画像提取</p>
-        <div class="example-queries">
-          <div class="example-btn" onclick="useExample(this)">我叫张敏，在货拉拉深圳做风控图谱</div>
-          <div class="example-btn" onclick="useExample(this)">我的同事王强负责供应链风控Agent</div>
-          <div class="example-btn" onclick="useExample(this)">我偏好用HugeGraph做图存储底座</div>
-          <div class="example-btn new-ex" onclick="useExample(this)">那个图谱项目进展如何？</div>
-          <div class="example-btn new-ex" onclick="useExample(this)">我的同事有哪些？</div>
-          <div class="example-btn new-ex" onclick="useExample(this)">我有什么偏好？</div>
+    <div class="chat-area" id="chatArea">
+      <div class="welcome" id="welcomeMsg">
+        <div class="welcome-icon">🧠</div>
+        <div class="welcome-title">AI <span>Memory</span> 演示平台</div>
+        <div class="welcome-desc">
+          基于 HugeGraph 1.7.0 的生产级 AI 记忆系统。<br>
+          实体提取 → 去重 → 图谱存储 → 混合检索 → 评分排序 → 答案生成。<br>
+          每一步可视化，每一秒可交互。
+        </div>
+        <div class="welcome-features">
+          <div class="welcome-feature" onclick="demoAddMemory()">
+            <span class="emoji">💾</span> 存入记忆
+          </div>
+          <div class="welcome-feature" onclick="demoSearch()">
+            <span class="emoji">🔍</span> 检索问答
+          </div>
+          <div class="welcome-feature" onclick="demoGraphExplore()">
+            <span class="emoji">🕸️</span> 图谱探索
+          </div>
+          <div class="welcome-feature" onclick="runAutoDemo()">
+            <span class="emoji">🎬</span> 全流程演示
+          </div>
         </div>
       </div>
     </div>
-    <div class="chat-input-area">
-      <div class="chat-input-row">
-        <input type="text" id="chatInput" placeholder="输入消息... (陈述→存储 / 提问→检索)" onkeydown="if(event.key==='Enter')sendMessage()" />
-        <button id="sendBtn" onclick="sendMessage()">发送</button>
+    <div class="input-area">
+      <div class="input-row">
+        <textarea class="input-field" id="inputField" placeholder="输入对话内容（存入记忆）或提问（检索记忆）..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
       </div>
-      <div class="input-hints">
-        <span>陈述→提取+图谱存储</span>
-        <span>提问→多通道检索+回答</span>
-        <button class="clear-btn" onclick="clearAll()" style="float:right;">清空</button>
+      <div class="action-btns">
+        <button class="action-btn" onclick="clearChat()">清空对话</button>
+        <button class="action-btn" onclick="clearMemory()">清空记忆</button>
+        <button class="action-btn" onclick="refreshStats()">刷新统计</button>
+        <button class="action-btn" onclick="refreshGraph()">刷新图谱</button>
       </div>
     </div>
   </div>
-
-  <!-- Right Panel: Graph -->
+  <!-- Right: Visualization -->
   <div class="right-panel">
-    <div class="right-header">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="4" r="3"/><circle cx="3" cy="12" r="3"/><circle cx="13" cy="12" r="3"/><line x1="8" y1="7" x2="4" y2="9.5" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="7" x2="12" y2="9.5" stroke="currentColor" stroke-width="1.5"/></svg>
-      知识图谱
-      <span id="nodeCount" style="margin-left:auto;color:var(--text2);font-size:11px;">0 nodes</span>
+    <div class="right-top">
+      <div class="stat"><div class="stat-val blue" id="statMemories">0</div><div class="stat-label">记忆数</div></div>
+      <div class="stat"><div class="stat-val green" id="statEntities">0</div><div class="stat-label">实体数</div></div>
+      <div class="stat"><div class="stat-val purple" id="statEdges">0</div><div class="stat-label">关系数</div></div>
+      <div class="stat"><div class="stat-val teal" id="statLatency">0ms</div><div class="stat-label">延迟</div></div>
     </div>
-    <div class="graph-container">
-      <canvas id="graphCanvas"></canvas>
-    </div>
-    <div class="graph-controls">
-      <button class="graph-btn" onclick="refreshGraph()">刷新</button>
-      <button class="graph-btn" onclick="graphMultiHop()">多跳遍历</button>
-      <button class="graph-btn" onclick="graphSearch()">图谱检索</button>
+    <div class="right-main">
+      <!-- Pipeline Flow -->
+      <div class="flow-section">
+        <div class="flow-title"><div class="flow-dot"></div> 记忆管线流程</div>
+        <div class="flow-row" id="flowRow">
+          <div class="flow-node" id="f-input"><span class="flow-emoji">📝</span> 输入</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node" id="f-extract"><span class="flow-emoji">🔬</span> 提取</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node" id="f-dedup"><span class="flow-emoji">🧹</span> 去重</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node" id="f-store"><span class="flow-emoji">💾</span> 存储</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node" id="f-search"><span class="flow-emoji">🔍</span> 检索</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node" id="f-score"><span class="flow-emoji">📊</span> 评分</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node" id="f-answer"><span class="flow-emoji">💬</span> 回答</div>
+        </div>
+      </div>
+      <!-- Graph + Stats -->
+      <div class="content-area">
+        <div class="graph-area">
+          <div id="cy"></div>
+          <div class="graph-overlay" id="graphOverlay">图谱数据 (Cytoscape.js)</div>
+        </div>
+        <div class="stats-area" id="statsArea">
+          <div class="stats-card">
+            <div class="card-title"><span class="emoji">📊</span> 系统状态</div>
+            <div class="stat-row"><span class="stat-key">记忆总数</span><span class="stat-val2" id="s-memories">-</span></div>
+            <div class="stat-row"><span class="stat-key">向量索引</span><span class="stat-val2" id="s-faiss">-</span></div>
+            <div class="stat-row"><span class="stat-key">全文索引</span><span class="stat-val2" id="s-bm25">-</span></div>
+            <div class="stat-row"><span class="stat-key">图存储</span><span class="stat-val2" id="s-graph">-</span></div>
+          </div>
+          <div class="stats-card">
+            <div class="card-title"><span class="emoji">🧬</span> 最近实体</div>
+            <div class="entity-list" id="entityList">
+              <div style="color:var(--text3);font-size:11px;">暂无数据</div>
+            </div>
+          </div>
+          <div class="stats-card">
+            <div class="card-title"><span class="emoji">🔗</span> 最近关系</div>
+            <div class="entity-list" id="relList">
+              <div style="color:var(--text3);font-size:11px;">暂无数据</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-// ===== API =====
-const API = '';
-const API_TIMEOUT = 90000; // 90s for slow LLM calls
-
-async function apiPost(path, body) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT);
-  try {
-    const res = await fetch(`${API}${path}`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});
-    clearTimeout(timer);
-    if (!res.ok) { const t = await res.text(); throw new Error(`${res.status}: ${t.slice(0,200)}`); }
-    return res.json();
-  } catch(e) {
-    clearTimeout(timer);
-    if(e.name==='AbortError') throw new Error('请求超时（LLM调用耗时较长，请稍候重试）');
-    throw e;
-  }
-}
-async function apiGet(path) {
-  const res = await fetch(`${API}${path}`);
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
-}
-
 // ===== State =====
-let isProcessing = false;
-let graphData = {nodes:[],edges:[]};
-let memories = [];
-let ebbinghausChart = null;
-let autoDemoRunning = false;
+let connected = false;
+let cyGraph = null;
+let demoRunning = false;
+let lastTrace = [];
+let allEntities = [];
+let allRelationships = [];
 
-// ===== Server Status =====
-async function checkServer() {
-  try {
-    await apiGet('/api/stats');
-    document.getElementById('statusDot').className='dot online';
-    document.getElementById('statusText').textContent='服务在线';
-  } catch {
-    document.getElementById('statusDot').className='dot offline';
-    document.getElementById('statusText').textContent='服务离线';
-  }
-}
-checkServer();
-setInterval(checkServer, 5000);
-
-// ===== Tab Switching =====
-function switchTab(el, tabId) {
-  document.querySelectorAll('.panel-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  ['memories','relations','profile','history','stats','ebbinghaus'].forEach(id=>{
-    const e=document.getElementById('tab-'+id);
-    if(e)e.style.display=id===tabId?'block':'none';
+// ===== Init Cytoscape =====
+function initCy() {
+  cyGraph = cytoscape({
+    container: document.getElementById('cy'),
+    style: [
+      {selector:'node',style:{'label':'data(label)','font-size':'11px','color':'#e2e4ea','text-valign':'center','text-halign':'center','background-color':'data(color)','width':'data(size)','height':'data(size)','border-width':2,'border-color':'data(border)','text-wrap':'wrap','text-max-width':'60px','font-weight':600}},
+      {selector:'node.highlight',style:{'border-color':'#3b82f6','border-width':4,'z-index':10}},
+      {selector:'edge',style:{'label':'data(label)','font-size':'9px','color':'#555a6a','width':2,'line-color':'#252838','target-arrow-color':'#252838','target-arrow-shape':'triangle','curve-style':'bezier','text-rotation':'autorotate','text-wrap':'wrap','text-max-width':'50px'}},
+      {selector:'edge.highlight',style:{'line-color':'#3b82f6','target-arrow-color':'#3b82f6','width':4,'z-index':10}},
+    ],
+    layout:{name:'concentric',concentric:function(n){return n.data('weight')||1;},levelWidth:function(){return 50;},animate:true,animationDuration:500},
+    minZoom:0.3,maxZoom:3,
   });
-  if(tabId==='profile')refreshProfile();
-  if(tabId==='history')refreshHistory();
-  if(tabId==='stats')refreshStats();
-  if(tabId==='ebbinghaus')refreshEbbinghaus();
 }
 
-// ===== Chat =====
-function useExample(el) {
-  document.getElementById('chatInput').value=el.textContent;
-  document.getElementById('chatInput').focus();
+// ===== Color map for entity types =====
+const TYPE_COLORS={person:'#3b82f6',location:'#10b981',organization:'#f59e0b',event:'#8b5cf6',concept:'#ec4899',skill:'#06b6d4',hobby:'#f97316',resource:'#ef4444',default:'#6366f1'};
+const TYPE_BORDER={person:'#60a5fa',location:'#34d399',organization:'#fbbf24',event:'#a78bfa',concept:'#f472b6',skill:'#22d3ee',hobby:'#fb923c',resource:'#f87171',default:'#818cf8'};
+const TYPE_SIZE={person:40,location:35,organization:38,event:32,concept:30,skill:28,hobby:26,resource:24,default:28};
+
+// ===== API Helpers =====
+async function apiPost(url, data) {
+  const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  return r.json();
+}
+async function apiGet(url) {
+  const r = await fetch(url);
+  return r.json();
 }
 
-function sendMessage() {
-  const input=document.getElementById('chatInput');
-  const text=input.value.trim();
-  if(!text||isProcessing)return;
-  input.value='';
-  document.getElementById('welcomeScreen')?.remove();
-  addChatMsg('user',text);
-  processMessage(text);
-}
-
-function addChatMsg(role, text, evidence, pipeline) {
-  const container=document.getElementById('chatMessages');
-  const div=document.createElement('div');
-  div.className=`chat-msg ${role}`;
-  const avatar=role==='user'?'U':'AI';
-  let html=`<div class="chat-avatar">${avatar}</div><div class="chat-bubble">`;
-  html+=escapeHtml(text);
-  if(pipeline)html+=`<div class="chat-pipeline">${pipeline}</div>`;
-  if(evidence)html+=`<div class="chat-evidence">${evidence}</div>`;
-  html+='</div>';
-  div.innerHTML=html;
-  container.appendChild(div);
-  container.scrollTop=container.scrollHeight;
-  return div;
-}
-
-function showTyping() {
-  const container=document.getElementById('chatMessages');
-  const div=document.createElement('div');
-  div.className='chat-msg assistant';
-  div.id='typingIndicator';
-  div.innerHTML=`<div class="chat-avatar">AI</div><div class="typing-indicator"><span></span><span></span><span></span></div>`;
-  container.appendChild(div);
-  container.scrollTop=container.scrollHeight;
-}
-function removeTyping(){document.getElementById('typingIndicator')?.remove();}
-
-function pipelineHtml(steps) {
-  return steps.map((s,i)=>`
-    <div class="pipeline-step ${s.status}">
-      <div class="step-num">${i+1}</div>
-      <div><div>${s.name}</div><div class="step-detail">${s.detail}</div></div>
-    </div>`).join('');
-}
-
-function escapeHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-// ===== Process Message — Full V3 Pipeline =====
-async function processMessage(text) {
-  if(isProcessing)return;
-  isProcessing=true;
-  document.getElementById('sendBtn').disabled=true;
+// ===== Check Connection =====
+async function checkConnection() {
   try {
-    let classifyResult;
-    try{classifyResult=await apiPost('/api/memory/classify',{text});}catch{classifyResult=regexClassify(text);}
-    if(classifyResult.action==='QUERY'){
-      await processQuery(text, classifyResult);
-    } else {
-      await processAdd(text, classifyResult);
-    }
-  } catch(e){
-    removeTyping();
-    addChatMsg('assistant','处理出错，请重试。');
-  } finally{isProcessing=false;document.getElementById('sendBtn').disabled=false;}
-}
-
-function regexClassify(text) {
-  const hasQmark=/[？?]/.test(text);
-  const startsQ=/^(谁|什么|哪里|哪个|哪些|有多少|有哪些|我喜欢|我有什么|帮我查)/.test(text);
-  const startsMy=/^(我|我的|咱)(的?|们?)(同事|朋友|有什么|谁|什么|了解|知道|记得)/.test(text);
-  const isQuery=hasQmark||startsQ||(startsMy&&!/也在|也喜欢/.test(text));
-  return{action:isQuery?'QUERY':'ADD',method:'regex',reason:'regex fallback'};
-}
-
-// ===== ADD: Enhanced with Dedup + Privacy =====
-async function processAdd(text, classifyInfo) {
-  showTyping();
-  try {
-    // Step 1: Call ADD API
-    const result = await apiPost('/api/memory/add', {content:text, user_id:'demo_user'});
-
-    const cMethod = (classifyInfo?.method||'regex').toUpperCase();
-    const cReason = classifyInfo?.reason||'regex fallback';
-
-    // Step 2: Try dedup check (new capability)
-    let dedupInfo = null;
-    try {
-      const facts = result.entities?.map(e=>e.name) || [];
-      if(facts.length>0) {
-        dedupInfo = await apiPost('/api/memory/dedup', {facts, stored_hashes:[]});
-      }
-    } catch {}
-
-    // Step 3: Try privacy filter (new capability)
-    let privacyInfo = null;
-    try {
-      privacyInfo = await apiPost('/api/privacy/filter', {content:text, privacy_level:'standard'});
-    } catch {}
-
-    const steps = [
-      {name:'意图分类',status:'done',detail:`ADD (${cMethod}: ${cReason})`},
-      {name:'自指消解',status:'done',detail:'"我/我的"→用户上下文'},
-      {name:'LLM 实体提取',status:'done',detail:`提取 ${result.entities?.length||0} 个实体`},
-      {name:'关系提取',status:'done',detail:`发现 ${result.relationships?.length||0} 条关系`},
-      {name:'ADD 去重检查',status:'done',detail:dedupInfo?`新=${dedupInfo.new_facts?.length||0} 重复=${dedupInfo.duplicate_facts?.length||0}`:'跳过',status:'done'},
-      {name:'隐私过滤',status:'done',detail:privacyInfo?(privacyInfo.filtered!==privacyInfo.original?'检测敏感信息，已过滤':'无敏感信息'):'跳过'},
-      {name:`决策: ${result.action}`,status:'done',detail:result.reason||'-'},
-      {name:'图存储写入',status:'done',detail:'HugeGraph 顶点+边写入'},
-    ];
-
-    const entityBadges = (result.entities||[]).map(e=>`<span class="entity-badge ${e.type}">${e.name} (${e.type})</span>`).join(' ');
-    const relTags = (result.relationships||[]).map(r=>`<span class="relation-tag">${r.source} --[${r.relationship}]--> ${r.target}</span>`).join(' ');
-
-    let evidence='';
-    if(result.entities?.length)evidence+=`<b>实体:</b> ${entityBadges}<br>`;
-    if(result.relationships?.length)evidence+=`<b>关系:</b> ${relTags}`;
-    if(privacyInfo&&privacyInfo.filtered!==privacyInfo.original)evidence+=`<br><b>隐私:</b> 原文含敏感信息→已过滤`;
-    if(dedupInfo&&dedupInfo.duplicate_facts?.length)evidence+=`<br><b>去重:</b> ${dedupInfo.duplicate_facts.length} 条重复已跳过`;
-
-    let responseText;
-    if(result.action==='ADD') {
-      const names=(result.entities||[]).map(e=>e.name).join('、');
-      responseText=`记忆已存储。我了解到：${names||'这些信息'}。建立了 ${(result.relationships||[]).length} 条图谱关系。`;
-    } else if(result.action==='UPDATE') {
-      responseText=`记忆已更新。${result.reason}`;
-    } else {
-      responseText=`这条信息已存在。${result.reason}`;
-    }
-
-    removeTyping();
-    addChatMsg('assistant',responseText,evidence,pipelineHtml(steps));
-    await refreshAll();
-  } catch(err) {
-    removeTyping();
-    addChatMsg('assistant',`处理出错: ${err.message}`);
+    const r = await apiGet('/api/stats');
+    connected = true;
+    document.getElementById('connDot').className = 'conn-dot';
+    document.getElementById('connText').textContent = '已连接';
+    updateStatsFromResult(r);
+  } catch(e) {
+    connected = false;
+    document.getElementById('connDot').className = 'conn-dot err';
+    document.getElementById('connText').textContent = '未连接';
   }
-  isProcessing=false;document.getElementById('sendBtn').disabled=false;
 }
 
-// ===== QUERY: Enhanced with Rewrite + Scoring + Profile =====
-async function processQuery(text, classifyInfo) {
-  showTyping();
-  try {
-    // Step 1: Query rewrite (new)
-    let rewriteInfo = null;
-    try {rewriteInfo = await apiPost('/api/query/rewrite',{query:text, user_id:'demo_user'});}catch{}
+// ===== Update Stats =====
+function updateStatsFromResult(r) {
+  if (!r) return;
+  const mems = r.memory_count || r.total_memories || 0;
+  const ents = r.entity_count || r.total_entities || 0;
+  const edges = r.edge_count || r.total_edges || 0;
+  document.getElementById('statMemories').textContent = mems;
+  document.getElementById('statEntities').textContent = ents;
+  document.getElementById('statEdges').textContent = edges;
+  document.getElementById('s-memories').textContent = mems;
+  document.getElementById('s-faiss').textContent = r.faiss_count || '-';
+  document.getElementById('s-bm25').textContent = r.bm25_count || '-';
+  document.getElementById('s-graph').textContent = ents + ' / ' + edges;
+}
 
-    const rewrittenQuery = rewriteInfo?.rewritten || text;
-    const rewriteEntities = rewriteInfo?.entities || [];
+// ===== Chat Messages =====
+function addUserMsg(text) {
+  const area = document.getElementById('chatArea');
+  const w = document.getElementById('welcomeMsg');
+  if (w) w.style.display = 'none';
+  const div = document.createElement('div');
+  div.className = 'chat-msg user';
+  div.innerHTML = `<div class="msg-avatar user">U</div><div class="msg-body"><div class="msg-bubble">${escHtml(text)}</div><div class="msg-time">${timeStr()}</div></div>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
 
-    // Step 2: Search with rewritten query
-    const result = await apiPost('/api/memory/search',{query:rewrittenQuery, user_id:'demo_user', limit:5});
+function addAiMsg(html) {
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ai';
+  div.innerHTML = `<div class="msg-avatar ai">AI</div><div class="msg-body">${html}<div class="msg-time">${timeStr()}</div></div>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
 
-    // Step 3: Scoring breakdown (new)
-    let scoringInfo = null;
-    try {
-      if(result.results?.length) {
-        const docs = result.results.map(r=>r.memory?.content||'');
-        scoringInfo = await apiPost('/api/scoring/explain',{query:rewrittenQuery, documents:docs.slice(0,3), entities:rewriteEntities});
-      }
-    } catch {}
+function addPipelineStep(step) {
+  const area = document.getElementById('chatArea');
+  const nameMap = {
+    'LLM实体抽取':'extract','V3 ADD-only去重':'dedup','V3 ADD-only提取':'dedup',
+    '混合检索':'search','加性混合检索':'search','FAISS+Ebbinghaus检索':'search',
+    '图谱上下文检索':'graph','评分排序':'score','加性评分':'score',
+    'LLM答案生成':'answer','Fast-eval':'answer','Fast-eval retrieval-only':'answer',
+    '存储':'store','写入HugeGraph':'store','写入FAISS':'store','写入BM25':'store',
+    'LLM重排':'rerank','权限与隐私过滤':'rerank',
+  };
+  const iconType = nameMap[step.name] || 'search';
+  const iconColors = {extract:'var(--accent)',dedup:'var(--yellow)',store:'var(--green)',search:'var(--accent3)',score:'var(--accent2)',rerank:'var(--pink)',answer:'var(--orange)',graph:'#6366f1'};
+  const bgColor = iconColors[iconType] || 'var(--accent)';
+  const div = document.createElement('div');
+  div.className = 'pipeline-step';
+  div.innerHTML = `<div class="step-icon ${iconType}" style="background:${bgColor}">${iconType==='extract'?'🔬':iconType==='dedup'?'🧹':iconType==='store'?'💾':iconType==='search'?'🔍':iconType==='score'?'📊':iconType==='rerank'?'🔄':iconType==='answer'?'💬':iconType==='graph'?'🕸️':'⚙️'}</div><div class="step-detail"><div class="step-name">${step.name}</div><div class="step-info">${step.detail||''}</div>${step.elapsed_ms?`<div class="step-data">${step.elapsed_ms}ms</div>`:''}</div>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  // Highlight corresponding flow node
+  const flowIdMap = {extract:'f-extract',dedup:'f-dedup',store:'f-store',search:'f-search',score:'f-score',rerank:'f-score',answer:'f-answer',graph:'f-search'};
+  const flowId = flowIdMap[iconType];
+  if (flowId) highlightFlow(flowId);
+}
 
-    // Step 4: Profile inject (new)
-    let profileInfo = null;
-    try {profileInfo = await apiPost('/api/profile/auto',{user_id:'demo_user'});}catch{}
+function addAiAnswer(answer, elapsedMs) {
+  addAiMsg(`<div class="msg-bubble">${escHtml(answer)}</div>`);
+  highlightFlow('f-answer', true);
+  if (elapsedMs) document.getElementById('statLatency').textContent = elapsedMs + 'ms';
+}
 
-    const cMethod=(classifyInfo?.method||'regex').toUpperCase();
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function timeStr() { const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')+':'+d.getSeconds().toString().padStart(2,'0'); }
 
-    // Smart answer: if LLM answer looks like prompt regurgitation, build from results
-    let answer = result.answer || '';
-    const isBadAnswer = /^\d+\.\s/.test(answer) || /不能跨记忆|不能编造|只根据记忆回答|不要输出推理/.test(answer);
-    if(isBadAnswer && result.results?.length) {
-      const bestMem = result.results[0]?.memory?.content || '';
-      if(text.includes('同事') && bestMem.includes('同事')) answer = `根据记忆：${bestMem}`;
-      else if((text.includes('偏好')||text.includes('喜欢')||text.includes('爱好')) && result.results.length) {
-        const relMem = result.results.find(r=>(/偏好|喜欢|爱好/).test(r.memory?.content||''));
-        answer = relMem ? `根据记忆：${relMem.memory.content}` : `最相关记忆：${bestMem}`;
-      }
-      else answer = `最相关记忆：${bestMem}`;
-    }
-    if(!answer && result.results?.length) answer = `找到 ${result.results.length} 条相关记忆`;
+// ===== Flow Highlight =====
+let flowTimers = {};
+function highlightFlow(id, done=false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('active');
+  if (done) { el.classList.remove('active'); el.classList.add('done'); setTimeout(()=>el.classList.remove('done'),2000); }
+  else { clearTimeout(flowTimers[id]); flowTimers[id]=setTimeout(()=>el.classList.remove('active'),1500); }
+}
+function resetFlow() { document.querySelectorAll('.flow-node').forEach(n=>{n.classList.remove('active','done');}); }
 
-    const steps = [
-      {name:'意图分类',status:'done',detail:`QUERY (${cMethod})`},
-      {name:'LLM 查询改写',status:'done',detail:rewriteInfo?`${text} → ${rewrittenQuery} | intent=${rewriteInfo.intent||'-'} | entities=${rewriteEntities.length}`:'跳过'},
-      {name:'混合多通道检索',status:'done',detail:`FAISS向量 + BM25全文 + HugeGraph图`},
-      {name:'评分分解',status:'done',detail:scoringInfo?`BM25 sigmoid + Entity boost + Decay`:'跳过'},
-      {name:'遗忘曲线强化',status:'done',detail:`${result.results?.length||0} 条记忆强化 (+0.3)`},
-      {name:'图谱多跳遍历',status:'done',detail:result.graph_context?'检索相关实体':'无图上下文'},
-      {name:'用户画像注入',status:'done',detail:profileInfo?`姓名=${profileInfo.name||'-'} 话题=${(profileInfo.topics||[]).join(',')}`:'跳过'},
-      {name:'回答生成',status:'done',detail:isBadAnswer?'规则兜底（LLM回答异常）':'LLM生成'},
-    ];
+// ===== Send Message =====
+async function sendMessage() {
+  const input = document.getElementById('inputField');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  document.getElementById('sendBtn').disabled = true;
+  resetFlow();
+  highlightFlow('f-input', true);
+  addUserMsg(text);
 
-    let evidence='';
-    if(rewriteInfo&&rewrittenQuery!==text) evidence+=`<b>改写:</b> "${text}" → "${rewrittenQuery}"<br>`;
-    if(rewriteEntities.length) evidence+=`<b>提取实体:</b> ${rewriteEntities.map(e=>`<span class="entity-badge concept">${e}</span>`).join(' ')}<br>`;
-    if(result.results?.length) {
-      evidence+=`<b>检索结果:</b><br>`;
-      result.results.forEach(r=>{
-        evidence+=`#${r.memory?.id||'?'} [score=${r.score?.toFixed(3)||'-'}] ${(r.memory?.content||'').substring(0,60)}...<br>`;
-      });
-    }
-    if(scoringInfo?.explanation) evidence+=`<br><b>评分:</b> ${scoringInfo.explanation}`;
-    if(profileInfo) evidence+=`<br><b>画像:</b> ${profileInfo.name||'-'} | ${(profileInfo.topics||[]).join(',')}`;
+  // Heuristic: if text contains question marks or is short → search; else → add
+  const isQuestion = text.includes('?') || text.includes('？') || (text.length < 40 && /^(what|who|where|when|how|为什么|谁|哪|怎么|什么)/i.test(text));
 
-    removeTyping();
-    addChatMsg('assistant', answer, evidence, pipelineHtml(steps));
-    await refreshAll();
-  } catch(err) {
-    removeTyping();
-    addChatMsg('assistant',`查询出错: ${err.message}`);
+  if (isQuestion) {
+    await doSearch(text);
+  } else {
+    await doAddMemory(text);
   }
-  isProcessing=false;document.getElementById('sendBtn').disabled=false;
+  document.getElementById('sendBtn').disabled = false;
+  refreshStats();
+  refreshGraph();
+}
+
+// ===== Add Memory =====
+async function doAddMemory(text) {
+  try {
+    highlightFlow('f-input');
+    const r = await apiPost('/api/memory/add', {content: text, user_id: 'demo_user'});
+    highlightFlow('f-input', true);
+    // Show pipeline trace
+    if (r.trace) {
+      for (const step of r.trace) addPipelineStep(step);
+    }
+    // Show result
+    if (r.action === 'SKIP') {
+      addAiMsg(`<div class="msg-bubble" style="color:var(--yellow)">⚠️ 记忆已存在（${r.reason||'dedup'}），跳过存储。</div>`);
+    } else if (r.memory_id) {
+      const ents = (r.entities||[]).map(e=>`${e.name}(${e.type})`).join(', ');
+      const rels = (r.relationships||[]).map(e=>`${e.source} → ${e.relationship} → ${e.target}`).join(', ');
+      let html = `<div class="msg-bubble" style="color:var(--green)">✅ 记忆已存储</div>`;
+      if (ents) html += `<div style="margin-top:6px;font-size:12px;color:var(--accent)">🧬 实体: ${escHtml(ents)}</div>`;
+      if (rels) html += `<div style="margin-top:4px;font-size:12px;color:var(--accent2)">🔗 关系: ${escHtml(rels)}</div>`;
+      addAiMsg(html);
+      // Add to graph
+      updateCyFromResult(r);
+    } else {
+      addAiMsg(`<div class="msg-bubble">${escHtml(JSON.stringify(r).slice(0,300))}</div>`);
+    }
+  } catch(e) {
+    addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ 存储失败: ${escHtml(e.message)}</div>`);
+  }
+}
+
+// ===== Search =====
+async function doSearch(query) {
+  try {
+    const r = await apiPost('/api/memory/search', {query: query, user_id: 'demo_user', top_k: 5, fast_eval: true});
+    // Show pipeline trace
+    if (r.trace) {
+      for (const step of r.trace) addPipelineStep(step);
+    }
+    // Show answer
+    const answer = r.answer || '无结果';
+    addAiAnswer(answer, r.total_elapsed_ms);
+    // Show top results
+    if (r.results && r.results.length > 0) {
+      const top = r.results.slice(0, 3);
+      let html = '<div style="margin-top:8px;font-size:11px;color:var(--text2)">检索结果:</div>';
+      for (const res of top) {
+        const mem = res.memory || {};
+        const score = res.score || 0;
+        const source = res.source || '';
+        html += `<div class="pipeline-step" style="margin:4px 0;"><div class="step-icon search" style="background:var(--accent3);font-size:10px">#${top.indexOf(res)+1}</div><div class="step-detail"><div class="step-info">${escHtml(mem.content||'').slice(0,80)}</div><div class="step-data">score=${round(score)}  source=${source}</div></div></div>`;
+      }
+      addAiMsg(html);
+    }
+    // Highlight graph entities from results
+    highlightGraphFromSearch(r);
+  } catch(e) {
+    addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ 检索失败: ${escHtml(e.message)}</div>`);
+  }
+}
+
+function round(n) { return Math.round(n * 1000) / 1000; }
+
+// ===== Update Cytoscape Graph =====
+function updateCyFromResult(r) {
+  if (!cyGraph) return;
+  const ents = r.entities || [];
+  const rels = r.relationships || [];
+  for (const e of ents) {
+    const type = (e.type || 'default').toLowerCase();
+    const color = TYPE_COLORS[type] || TYPE_COLORS.default;
+    const border = TYPE_BORDER[type] || TYPE_BORDER.default;
+    const size = TYPE_SIZE[type] || TYPE_SIZE.default;
+    try {
+      cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,color:border,size:type==='person'?48:36,border:border,weight:type==='person'?5:2,type:type}});
+    } catch(ex) {} // duplicate
+  }
+  for (const r2 of rels) {
+    const eid = r2.source + '_' + r2.relationship + '_' + r2.target;
+    try {
+      cyGraph.add({group:'edges',data:{id:eid,source:r2.source,target:r2.target,label:r2.relationship}});
+    } catch(ex) {} // duplicate
+  }
+  cyGraph.layout({name:'concentric',animate:true,animationDuration:400}).run();
+  // Update entity/rel lists
+  updateEntityRelLists(ents, rels);
+}
+
+function updateEntityRelLists(ents, rels) {
+  const eList = document.getElementById('entityList');
+  eList.innerHTML = ents.map(e=>`<div class="entity-item"><span>${escHtml(e.name)}</span><span class="entity-type">${e.type||'?'}</span></div>`).join('');
+  const rList = document.getElementById('relList');
+  rList.innerHTML = rels.map(r=>`<div class="entity-item"><span>${escHtml(r.source)}→${escHtml(r.relationship)}→${escHtml(r.target)}</span></div>`).join('');
+}
+
+function highlightGraphFromSearch(r) {
+  if (!cyGraph || !r.results) return;
+  cyGraph.elements().removeClass('highlight');
+  for (const res of r.results.slice(0,2)) {
+    const mem = res.memory || {};
+    const md = mem.metadata || {};
+    const ents = (md.entities || []);
+    for (const e of ents) {
+      const n = cyGraph.$(`node[id="${e.name}"]`);
+      if (n.length) n.addClass('highlight');
+    }
+    const rels = md.relationships || [];
+    for (const r2 of rels) {
+      const eid = r2.source + '_' + r2.relationship + '_' + r2.target;
+      const ed = cyGraph.$(`edge[id="${eid}"]`);
+      if (ed.length) ed.addClass('highlight');
+    }
+  }
 }
 
 // ===== Refresh =====
-async function refreshAll() {
-  await Promise.all([refreshMemories(),refreshGraph(),refreshStats()]);
-  // Don't auto-refresh tabs that are expensive
-}
-
-async function refreshMemories() {
+async function refreshStats() {
   try {
-    memories=await apiGet('/api/memory/list');
-    const container=document.getElementById('tab-memories');
-    if(!memories.length){container.innerHTML='<p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">暂无记忆</p>';return;}
-    container.innerHTML=memories.map(m=>{
-      const retColor=m.retention>0.7?'var(--green)':m.retention>0.3?'var(--orange)':'var(--red)';
-      const ts=new Date(m.created_at*1000).toLocaleTimeString();
-      return`<div class="memory-item" onclick="clickMemory('${m.id}')">
-        <div class="mem-content">${escapeHtml(m.content)}</div>
-        <div class="mem-meta"><span>#${m.id} | ${ts} | ${m.access_count}次访问</span><span class="retention" style="color:${retColor}">R=${m.retention?.toFixed(3)||'-'}</span></div>
-        <div class="retention-bar"><div class="retention-bar-fill" style="width:${(m.retention||0)*100}%;background:${retColor}"></div></div>
-        ${m.hash?`<div class="mem-hash">MD5: ${m.hash}</div>`:''}
-      </div>`;
-    }).join('');
-  } catch{}
+    const r = await apiGet('/api/stats');
+    updateStatsFromResult(r);
+  } catch(e) {}
 }
 
 async function refreshGraph() {
   try {
-    graphData=await apiGet('/api/graph');
-    document.getElementById('nodeCount').textContent=`${graphData.nodes.length} nodes / ${graphData.edges.length} edges`;
-    drawGraph();
-    const relsContainer=document.getElementById('tab-relations');
-    if(!graphData.edges.length){relsContainer.innerHTML='<p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">暂无关系</p>';return;}
-    const nodeMap={};
-    graphData.nodes.forEach(n=>nodeMap[n.id]=n);
-    relsContainer.innerHTML=graphData.edges.slice(0,50).map(e=>{
-      const src=nodeMap[e.source]||{name:e.source,type:'unknown'};
-      const tgt=nodeMap[e.target]||{name:e.target,type:'unknown'};
-      return`<div class="memory-item" style="padding:6px 10px;">
-        <span class="entity-badge ${src.type}">${src.name}</span>
-        <span style="color:var(--blue);font-size:11px;margin:0 4px;">—[${e.relationship}]→</span>
-        <span class="entity-badge ${tgt.type}">${tgt.name}</span>
-      </div>`;
-    }).join('');
-  } catch{}
-}
-
-async function refreshStats() {
-  try {
-    const stats=await apiGet('/api/stats');
-    const container=document.getElementById('tab-stats');
-    // Also get compression & history stats
-    let compStats=null, histStats=null, faissStats=null;
-    try{compStats=await apiGet('/api/memory/compress_stats');}catch{}
-    try{histStats=await apiGet('/api/history/stats');}catch{}
-    try{faissStats=await apiGet('/api/faiss/stats');}catch{}
-
-    container.innerHTML=`
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val">${stats.total_memories||stats.memories||0}</div><div class="stat-label">记忆数</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.total_nodes||stats.entities||0}</div><div class="stat-label">实体数</div></div>
-        <div class="stat-card"><div class="stat-val">${stats.total_edges||stats.edges||0}</div><div class="stat-label">关系数</div></div>
-        <div class="stat-card highlight"><div class="stat-val">${stats.vectors||faissStats?.total_vectors||0}</div><div class="stat-label">向量数</div></div>
-      </div>
-      <div style="padding:10px;">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">节点类型分布</div>
-        ${Object.entries(stats.node_type_distribution||{}).map(([k,v])=>`
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-            <span class="entity-badge ${k}" style="min-width:40px;text-align:center;">${k}</span>
-            <div style="flex:1;height:5px;background:var(--bg3);border-radius:3px;"><div style="height:100%;width:${stats.total_nodes?v/stats.total_nodes*100:0}%;background:var(--blue);border-radius:3px;"></div></div>
-            <span style="font-size:10px;color:var(--text2);min-width:20px;text-align:right;">${v}</span>
-          </div>`).join('')}
-      </div>
-      ${histStats?`<div style="padding:10px;border-top:1px solid var(--border);">
-        <div style="font-size:12px;color:var(--cyan);margin-bottom:4px;">⏱ 版本历史</div>
-        <div style="font-size:11px;color:var(--text2);">总事件: ${histStats.total_events||0}</div>
-      </div>`:''}
-      ${faissStats?`<div style="padding:10px;border-top:1px solid var(--border);">
-        <div style="font-size:12px;color:var(--cyan);margin-bottom:4px;">📊 FAISS 索引</div>
-        <div style="font-size:11px;color:var(--text2);">类型: ${faissStats.index_type||'-'} | 维度: ${faissStats.dimension||'-'} | 向量: ${faissStats.total_vectors||0}</div>
-      </div>`:''}`;
-  } catch{}
-}
-
-async function refreshEbbinghaus() {
-  try {
-    const stats=await apiGet('/api/stats');
-    const data=stats.ebbinghaus_scores||[];
-    const canvas=document.getElementById('ebbinghausChart');
-    if(ebbinghausChart)ebbinghausChart.destroy();
-    ebbinghausChart=new Chart(canvas.getContext('2d'),{
-      type:'bar',
-      data:{
-        labels:data.map(d=>`#${d.id}`),
-        datasets:[{
-          label:'Retention',
-          data:data.map(d=>d.retention),
-          backgroundColor:data.map(d=>d.retention>0.7?'rgba(63,185,80,0.6)':d.retention>0.3?'rgba(210,153,34,0.6)':'rgba(248,81,73,0.6)'),
-          borderWidth:1,
-        }]
-      },
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:1,ticks:{color:'#8b949e'},grid:{color:'#21262d'}},x:{ticks:{color:'#8b949e',font:{size:10}},grid:{display:false}}}}
-    });
-  } catch{}
-}
-
-async function refreshProfile() {
-  try {
-    const profile=await apiPost('/api/profile/auto',{user_id:'demo_user'});
-    const container=document.getElementById('tab-profile');
-    container.innerHTML=`
-      <div class="profile-item">
-        <div class="profile-field"><span class="pf-label">姓名</span><span class="pf-val">${profile.name||'-'}</span></div>
-        <div class="profile-field"><span class="pf-label">话题</span><span class="pf-val">${(profile.topics||[]).join('、')||'-'}</span></div>
-        <div class="profile-field"><span class="pf-label">偏好</span><span class="pf-val">${(profile.preferences||[]).join('、')||'-'}</span></div>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-top:8px;">画像由 LLM 从记忆中自动提取，注入到检索回答中提升个性化</div>`;
-  } catch(e) {
-    document.getElementById('tab-profile').innerHTML=`<p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">画像提取失败: ${e.message}</p>`;
-  }
-}
-
-async function refreshHistory() {
-  try {
-    const histStats=await apiGet('/api/history/stats');
-    const historyRaw=await apiGet('/api/memory/history');
-    // Handle both list and {events:[]} formats
-    const events = Array.isArray(historyRaw) ? historyRaw : (historyRaw.events || []);
-    const container=document.getElementById('tab-history');
-    container.innerHTML=`
-      <div style="font-size:12px;color:var(--cyan);margin-bottom:8px;">⏱ 版本历史追踪 (总事件: ${histStats.total_events||0})</div>
-      ${events.slice(0,20).map(h=>`
-        <div class="history-item">
-          <span class="history-op ${h.operation||'ADD'}">${h.operation||'ADD'}</span>
-          ${(h.content||h.memory_content||'').substring(0,40)}...
-          <span class="history-ts">${h.timestamp||h.created_at||'-'}</span>
-        </div>`).join('')}
-      <div style="font-size:11px;color:var(--text2);margin-top:8px;">每次记忆变更均记录版本，支持回溯和审计</div>`;
-  } catch(e) {
-    document.getElementById('tab-history').innerHTML=`<p style="color:var(--text2);font-size:12px;text-align:center;padding:20px;">暂无历史数据</p>`;
-  }
-}
-
-function clickMemory(id) {
-  const mem=memories.find(m=>m.id===id);
-  if(!mem)return;
-  document.getElementById('chatInput').value=mem.content;
-  sendMessage();
-}
-
-async function clearAll() {
-  if(!confirm('清空所有记忆和图谱数据？'))return;
-  try{await apiPost('/api/clear',{});await refreshAll();
-    document.getElementById('chatMessages').innerHTML=`<div class="welcome" id="welcomeScreen"><h2>HugeGraph Memory</h2><p>数据已清空，开始新对话！</p></div>`;
-  }catch(err){alert('清空失败: '+err.message);}
-}
-
-// ===== Graph Multi-Hop & Search =====
-async function graphMultiHop() {
-  const query=prompt('输入图谱多跳遍历关键词:','风控');
-  if(!query)return;
-  try {
-    const result=await apiPost('/api/graph/search',{query,max_hops:2,limit:10});
-    const nodes=result.results||[];
-    if(nodes.length) {
-      // Merge into graph data
-      nodes.forEach(n=>{
-        if(!graphData.nodes.find(x=>x.id===n.id))graphData.nodes.push(n);
-      });
-      (result.edges||[]).forEach(e=>{
-        if(!graphData.edges.find(x=>x.source===e.source&&x.target===e.target))graphData.edges.push(e);
-      });
-      drawGraph();
-      document.getElementById('nodeCount').textContent=`${graphData.nodes.length} nodes / ${graphData.edges.length} edges`;
-      addChatMsg('assistant',`图谱多跳遍历 "${query}"：发现 ${nodes.length} 个实体，${(result.edges||[]).length} 条边。`,`<b>遍历路径:</b> 从 "${query}" 出发，2 跳范围`);
-    } else {
-      addChatMsg('assistant',`图谱多跳遍历 "${query}"：未发现相关实体。`);
+    // Get all entities and relations from the graph
+    const ents = await apiGet('/api/graph/entities');
+    const rels = await apiGet('/api/graph/relations');
+    if (!cyGraph) return;
+    cyGraph.elements().remove();
+    // Re-add all
+    if (ents.entities) {
+      for (const e of ents.entities) {
+        const type = (e.type || 'default').toLowerCase();
+        const color = TYPE_COLORS[type] || TYPE_COLORS.default;
+        const border = TYPE_BORDER[type] || TYPE_BORDER.default;
+        try {
+          cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,color:border,size:type==='person'?48:36,border:border,weight:type==='person'?5:2,type:type}});
+        } catch(ex) {}
+      }
     }
-  } catch(e) {addChatMsg('assistant',`图谱遍历失败: ${e.message}`);}
+    if (rels.relations) {
+      for (const r2 of rels.relations) {
+        const eid = r2.source + '_' + r2.label + '_' + r2.target;
+        try {
+          cyGraph.add({group:'edges',data:{id:eid,source:r2.source,target:r2.target,label:r2.label}});
+        } catch(ex) {}
+      }
+    }
+    cyGraph.layout({name:'concentric',animate:true,animationDuration:500}).run();
+    // Update overlay
+    const nodeCount = cyGraph.nodes().length;
+    const edgeCount = cyGraph.edges().length;
+    document.getElementById('graphOverlay').textContent = `${nodeCount} 实体 · ${edgeCount} 关系`;
+    document.getElementById('statEntities').textContent = nodeCount;
+    document.getElementById('statEdges').textContent = edgeCount;
+  } catch(e) {}
 }
 
-async function graphSearch() {
-  const query=prompt('输入图谱检索关键词:','HugeGraph');
-  if(!query)return;
+// ===== Clear =====
+function clearChat() {
+  const area = document.getElementById('chatArea');
+  area.innerHTML = '';
+  const w = document.getElementById('welcomeMsg');
+  w.style.display = '';
+  area.appendChild(w);
+  resetFlow();
+}
+
+async function clearMemory() {
   try {
-    const result=await apiPost('/api/graph/search',{query,max_hops:1,limit:5});
-    const nodes=result.results||[];
-    addChatMsg('assistant',`图谱检索 "${query}"：${nodes.length} 个结果。`,nodes.map(n=>`<span class="entity-badge ${n.type}">${n.name}</span>`).join(' '));
-  } catch(e) {addChatMsg('assistant',`图谱检索失败: ${e.message}`);}
+    await apiPost('/api/clear', {});
+    if (cyGraph) cyGraph.elements().remove();
+    addAiMsg(`<div class="msg-bubble" style="color:var(--green)">✅ 所有记忆已清空</div>`);
+    refreshStats();
+    document.getElementById('entityList').innerHTML = '<div style="color:var(--text3);font-size:11px;">暂无数据</div>';
+    document.getElementById('relList').innerHTML = '<div style="color:var(--text3);font-size:11px;">暂无数据</div>';
+  } catch(e) {}
 }
 
 // ===== Auto Demo =====
+const DEMO_SCRIPT = [
+  {type:'add', text:'我叫张明，是货拉拉图谱团队的工程师。我擅长关系图谱和图数据库运维，平时喜欢打篮球和摄影。'},
+  {type:'add', text:'张明最近在做 AI Memory 项目，想把 60 亿点边的风控关系图谱升级为全公司 AI Agent 的图存储底座。'},
+  {type:'add', text:'张明的同事李华负责风控场景，她们经常讨论如何用图算法识别供应链风险。'},
+  {type:'add', text:'张明上周去了深圳参加了 GraphRAG 技术峰会，学习了多跳检索和混合评分的最新方案。'},
+  {type:'add', text:'货拉拉图谱团队有 4 个人，计划 6 个月内完成从风控专用到 AI 底座的转型。'},
+  {type:'search', text:'张明擅长什么？'},
+  {type:'search', text:'货拉拉图谱团队的目标是什么？'},
+  {type:'search', text:'张明和谁一起工作？'},
+  {type:'search', text:'张明最近学了什么新技术？'},
+];
+
 async function runAutoDemo() {
-  if(autoDemoRunning)return;
-  autoDemoRunning=true;
-  const btn=document.getElementById('demoBtn');
+  if (demoRunning) return;
+  demoRunning = true;
+  const btn = document.getElementById('demoBtn');
   btn.classList.add('running');
-  btn.textContent='演示中...';
-  document.getElementById('welcomeScreen')?.remove();
+  btn.innerHTML = '<span>⏳</span> 演示进行中...';
+  clearChat();
+  await clearMemory();
 
-  // Demo flow: start with queries (fast ~8s) to show capabilities,
-  // then ADD (slow ~30s) to show full pipeline
-  const demoMessages = [
-    // Queries first — fast, demonstrate new capabilities
-    '我同事有哪些？',
-    '我有什么偏好？',
-    // ADD last — slow, shows full extraction pipeline
-    '我团队下周要交付AI记忆系统的全量实测',
-  ];
-
-  for(const msg of demoMessages) {
-    addChatMsg('user',msg);
-    try {
-      await processMessage(msg);
-      // Wait for processing to complete (LLM calls can take up to 90s)
-      let waited=0;
-      while(isProcessing && waited<120000) {
-        await new Promise(r=>setTimeout(r,200));
-        waited+=200;
-      }
-      await new Promise(r=>setTimeout(r,800));
-    } catch(e) {
-      addChatMsg('assistant',`演示步骤出错: ${e.message}，继续下一步...`);
-      isProcessing=false;
-      document.getElementById('sendBtn').disabled=false;
-    }
+  for (const item of DEMO_SCRIPT) {
+    const input = document.getElementById('inputField');
+    input.value = item.text;
+    await sleep(800);
+    await sendMessage();
+    await sleep(1200);
   }
 
-  autoDemoRunning=false;
+  demoRunning = false;
   btn.classList.remove('running');
-  btn.textContent='🚀 自动演示';
+  btn.innerHTML = '<span>🎬</span> 一键演示';
+  showToast('✅ 演示完成！你可以继续交互探索', 'success');
 }
 
-// ===== Graph Canvas =====
-function drawGraph() {
-  const canvas=document.getElementById('graphCanvas');
-  const container=canvas.parentElement;
-  const dpr=window.devicePixelRatio||1;
-  canvas.width=container.clientWidth*dpr;
-  canvas.height=container.clientHeight*dpr;
-  canvas.style.width=container.clientWidth+'px';
-  canvas.style.height=container.clientHeight+'px';
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  const ctx=canvas.getContext('2d');
-  ctx.scale(dpr,dpr);
-  const W=container.clientWidth;
-  const H=container.clientHeight;
-  ctx.clearRect(0,0,W,H);
-
-  if(!graphData.nodes.length) {
-    ctx.fillStyle='#8b949e';ctx.font='14px sans-serif';ctx.textAlign='center';
-    ctx.fillText('暂无图谱数据',W/2,H/2);
-    return;
+// ===== Quick Demo Buttons =====
+async function demoAddMemory() {
+  const texts = [
+    '我是王芳，在货拉拉负责供应链风控分析。我喜欢用 Python 和 Spark 处理大规模数据。',
+    '王芳的团队开发了基于 HugeGraph 的实时风控图谱系统，可以秒级识别供应链风险传导。',
+    '王芳最近在学习 LLM 和 GraphRAG 技术，想把风控图谱升级为智能问答系统。',
+  ];
+  for (const t of texts) {
+    document.getElementById('inputField').value = t;
+    await sendMessage();
+    await sleep(600);
   }
-
-  const nodeMap={};
-  const nodes=graphData.nodes.slice(0,50);
-  nodes.forEach((n,i)=>{
-    const angle=(i/nodes.length)*Math.PI*2;
-    const r=Math.min(W,H)*0.3;
-    nodeMap[n.id]={...n,x:W/2+Math.cos(angle)*r+(Math.random()-.5)*30,y:H/2+Math.sin(angle)*r+(Math.random()-.5)*30};
-  });
-
-  const colorMap={person:'#58a6ff',org:'#f0883e',location:'#3fb950',skill:'#bc8cff',concept:'#39d2c0',event:'#f778ba',product:'#d29922',unknown:'#8b949e'};
-
-  graphData.edges.slice(0,80).forEach(e=>{
-    const src=nodeMap[e.source];const tgt=nodeMap[e.target];
-    if(!src||!tgt)return;
-    ctx.beginPath();ctx.moveTo(src.x,src.y);ctx.lineTo(tgt.x,tgt.y);
-    ctx.strokeStyle='rgba(88,166,255,0.25)';ctx.lineWidth=1;ctx.stroke();
-    const mx=(src.x+tgt.x)/2;const my=(src.y+tgt.y)/2;
-    ctx.fillStyle='#8b949e';ctx.font='8px sans-serif';ctx.textAlign='center';
-    ctx.fillText(`${e.relationship||'→'}`,mx,my-3);
-  });
-
-  nodes.forEach(n=>{
-    const nd=nodeMap[n.id];
-    const color=colorMap[n.type]||'#8b949e';
-    ctx.beginPath();ctx.arc(nd.x,nd.y,18,0,Math.PI*2);
-    const glow=ctx.createRadialGradient(nd.x,nd.y,6,nd.x,nd.y,18);
-    glow.addColorStop(0,color);glow.addColorStop(1,'transparent');
-    ctx.fillStyle=glow;ctx.fill();
-    ctx.beginPath();ctx.arc(nd.x,nd.y,12,0,Math.PI*2);
-    ctx.fillStyle=color;ctx.fill();
-    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
-    ctx.fillStyle='#e6edf3';ctx.font='10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(nd.name.substring(0,6),nd.x,nd.y+22);
-  });
 }
 
-window.addEventListener('resize',drawGraph);
-setInterval(()=>{if(document.getElementById('tab-ebbinghaus').style.display!=='none')refreshEbbinghaus();},10000);
+async function demoSearch() {
+  document.getElementById('inputField').value = '谁在学 GraphRAG 技术？';
+  await sendMessage();
+}
 
-// Initial load
-refreshAll();
+async function demoGraphExplore() {
+  await refreshGraph();
+  showToast('图谱已刷新，可点击实体查看详情', 'success');
+}
+
+// ===== Toast =====
+function showToast(msg, type='info') {
+  const div = document.createElement('div');
+  div.className = 'toast ' + type;
+  div.textContent = msg;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 3000);
+}
+
+// ===== Init =====
+window.addEventListener('load', () => {
+  initCy();
+  checkConnection();
+  setInterval(checkConnection, 15000);
+});
 </script>
 </body>
 </html>
