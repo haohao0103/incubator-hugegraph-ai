@@ -43,6 +43,9 @@ dependencies = [
     "tqdm",
     "scipy",
     "networkx",
+    "matplotlib",
+    "reportlab",
+    "Pillow",
 
     # LLM specific dependencies
     "openai",
