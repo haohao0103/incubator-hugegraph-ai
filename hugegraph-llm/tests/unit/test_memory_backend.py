@@ -351,6 +351,38 @@ def memory_backend(tmp_path):
             with mock.patch("hugegraph_llm.poc.memory_backend.FaissMemoryIndex") as MockFaiss:
                 with mock.patch("hugegraph_llm.poc.memory_backend.HugeGraphMemoryClient") as MockHG:
                     backend = MemoryPipelineBackend()
+                    # Mock P1/P2 components so unit tests stay offline / fast
+                    backend._query_rewrite = mock.MagicMock()
+                    backend._query_rewrite.rewrite.return_value = {
+                        "rewritten": "query",
+                        "entities": [],
+                        "intent": "general",
+                        "method": "rule",
+                        "boosts": {},
+                    }
+                    backend._route_store = mock.MagicMock()
+                    backend._route_store.add_memory.return_value = "user:demo_user"
+                    backend._user_profile = mock.MagicMock()
+                    backend._user_profile.update_from_memories.return_value = None
+                    backend._profile_injector = mock.MagicMock()
+                    backend._profile_injector.get_profile_for_rewrite.return_value = {
+                        "user_profile": "",
+                        "aliases": {},
+                        "topics": [],
+                    }
+                    backend._faiss_deletable = mock.MagicMock()
+                    backend._faiss_deletable.remove_by_id.return_value = True
+                    backend._compressor = mock.MagicMock()
+                    backend._compressor.compress.return_value = {
+                        "summaries": [],
+                        "kept": [],
+                        "pruned": [],
+                        "archived": [],
+                        "stats": {},
+                    }
+                    backend._agent_manager = mock.MagicMock()
+                    backend._agent_manager.check_access.return_value = True
+                    backend._agent_manager.get_accessible_memories.return_value = []
                     yield backend
         finally:
             mb_module.DB_PATH = old_module_db_path
@@ -503,3 +535,153 @@ def test_backend_update_and_delete_memory_triggers_history(memory_backend):
     delete_call = history_mock.add_history.call_args_list[-1]
     assert delete_call.kwargs["event"] == "DELETE"
     assert delete_call.kwargs["old_memory"] == "new content"
+
+
+def test_backend_query_rewrite_used_in_search(memory_backend):
+    """search_memory calls LLMQueryRewriteEngine and uses rewritten query."""
+    memory_backend._query_rewrite.rewrite.return_value = {
+        "rewritten": " rewritten query",
+        "entities": [{"name": "Alice", "type": "person"}],
+        "intent": "fact_lookup",
+        "method": "llm",
+        "boosts": {},
+    }
+    db = get_metadata_db()
+    now = time.time()
+    db.execute(
+        "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+        "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("m1", "Alice works at Tencent", "demo_user", now, now, 1, 0.8,
+         "private", "standard", 0.8, "{}"),
+    )
+    db.commit()
+    db.close()
+
+    memory_backend.faiss.search.return_value = [
+        {"memory_id": "m1", "raw_score": 0.9, "weighted_score": 0.9},
+    ]
+    memory_backend._bm25 = None
+    memory_backend._graph_store = mock.MagicMock()
+    memory_backend._graph_store.search.return_value = []
+
+    import hugegraph_llm.poc.memory_backend as mb
+    mb.HAS_GRAPHRAG_OPS = True
+    try:
+        result = memory_backend.search_memory("Alice", user_id="demo_user", fast_eval=True)
+        assert "results" in result
+        memory_backend._query_rewrite.rewrite.assert_called_once()
+        call_kwargs = memory_backend._query_rewrite.rewrite.call_args.kwargs
+        assert call_kwargs.get("user_profile") == ""
+    finally:
+        mb.HAS_GRAPHRAG_OPS = False
+
+
+def test_backend_user_profile_and_route_store_on_add(memory_backend):
+    """add_memory updates user profile and records routing key."""
+    additive_mock = mock.MagicMock()
+    additive_mock.run.return_value = {
+        "new_facts": ["Alice works at Tencent"],
+        "duplicate_facts": [],
+        "entities": [{"name": "Alice", "type": "person"}, {"name": "Tencent", "type": "organization"}],
+        "hashes": {content_hash_md5("Alice works at Tencent")},
+    }
+    memory_backend._additive_pipeline = additive_mock
+    memory_backend._llm_extract = mock.MagicMock(return_value={
+        "entities": [{"name": "Alice", "type": "person"}, {"name": "Tencent", "type": "organization"}],
+        "relationships": [{"source": "Alice", "relationship": "works_at", "target": "Tencent"}],
+    })
+    memory_backend.hg.add_vertex.return_value = "vid"
+    memory_backend.hg.add_edge.return_value = "eid"
+
+    result = memory_backend.add_memory(
+        "Alice works at Tencent", user_id="demo_user", skip_index_save=True
+    )
+    assert result["action"] == "ADD"
+    memory_backend._user_profile.update_from_memories.assert_called_once_with(
+        "demo_user", ["Alice works at Tencent"]
+    )
+    memory_backend._route_store.add_memory.assert_called_once()
+
+
+def test_backend_agent_privacy_filter_in_search(memory_backend):
+    """search_memory filters results via AgentMemoryManager when agent_id is given."""
+    db = get_metadata_db()
+    now = time.time()
+    for i, content in enumerate(["memory one", "memory two"], start=1):
+        db.execute(
+            "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+            "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (f"m{i}", content, "demo_user", now, now, 1, 0.8,
+             "private", "standard", 0.8, "{}"),
+        )
+    db.commit()
+    db.close()
+
+    memory_backend.faiss.search.return_value = [
+        {"memory_id": "m1", "raw_score": 0.9, "weighted_score": 0.9},
+        {"memory_id": "m2", "raw_score": 0.8, "weighted_score": 0.8},
+    ]
+    memory_backend._bm25 = None
+    memory_backend._graph_store = mock.MagicMock()
+    memory_backend._graph_store.search.return_value = []
+    memory_backend._agent_manager.get_accessible_memories.return_value = [
+        {"id": "m1", "content": "memory one"}
+    ]
+
+    import hugegraph_llm.poc.memory_backend as mb
+    mb.HAS_GRAPHRAG_OPS = True
+    try:
+        result = memory_backend.search_memory(
+            "query", user_id="demo_user", agent_id="agent-x", fast_eval=True
+        )
+        assert len(result["results"]) == 1
+        assert result["results"][0]["memory"]["id"] == "m1"
+        memory_backend._agent_manager.get_accessible_memories.assert_called_once()
+    finally:
+        mb.HAS_GRAPHRAG_OPS = False
+
+
+def test_backend_faiss_deletable_called_on_delete(memory_backend):
+    """delete_memory also removes the vector from FaissDeletableIndex."""
+    db = get_metadata_db()
+    now = time.time()
+    db.execute(
+        "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+        "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("m1", "content", "demo_user", now, now, 1, 0.8,
+         "private", "standard", 0.8, "{}"),
+    )
+    db.commit()
+    db.close()
+
+    memory_backend.delete_memory("m1", user_id="demo_user")
+    memory_backend._faiss_deletable.remove_by_id.assert_called_once_with("m1")
+
+
+def test_backend_compress_memories_calls_compressor(memory_backend):
+    """compress_memories invokes MemoryCompressor and deletes archived memories."""
+    db = get_metadata_db()
+    now = time.time()
+    for i, content in enumerate(["Alice likes tea", "Alice likes coffee"], start=1):
+        db.execute(
+            "INSERT INTO memories (id,content,user_id,created_at,last_accessed_at,access_count,"
+            "initial_score,scope,privacy,importance,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (f"m{i}", content, "demo_user", now, now, 1, 0.8,
+             "private", "standard", 0.8, "{}"),
+        )
+    db.commit()
+    db.close()
+
+    memory_backend._compressor.compress.return_value = {
+        "summaries": [{"cluster_id": 0, "summary": "Alice likes beverages", "source_ids": ["m1", "m2"], "source_count": 2}],
+        "kept": [],
+        "pruned": [],
+        "archived": [{"id": "m1"}, {"id": "m2"}],
+        "stats": {"input_count": 2, "output_count": 1},
+    }
+    memory_backend.add_memory_bypass_classify = mock.MagicMock(return_value={"memory_id": "msummary"})
+
+    result = memory_backend.compress_memories(user_id="demo_user")
+    memory_backend._compressor.compress.assert_called_once()
+    assert result["summaries"][0]["summary"] == "Alice likes beverages"
+    memory_backend.add_memory_bypass_classify.assert_called_once()

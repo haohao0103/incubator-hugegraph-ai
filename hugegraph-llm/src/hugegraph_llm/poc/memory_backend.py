@@ -4,7 +4,7 @@ HugeGraph Memory Backend — Engineering-grade AI Memory Server
 Architecture (GraphRAG-enhanced, aligned with PowerMem v1.1.2):
   Graph Storage:  HugeGraph 1.7.0 (via pyhugegraph-python-client)
   Vector Index:   FAISS (semantic search) + BM25 (fulltext search) + RRF fusion
-  LLM Engine:     MiMo v2.5 Pro API (entity extract / rank / generate)
+  LLM Engine:     DeepSeek Reasoner API (entity extract / rank / generate)
   Provenance:     Memory → Entity → Chunk source tracking
 
 Retrieval Pipeline (3-channel RRF fusion):
@@ -921,6 +921,43 @@ class MemoryPipelineBackend:
             llm_callback=self._additive_llm_callback
         )
 
+        # P1: LLM-enhanced query rewrite engine (PowerMem QueryRewriter aligned)
+        # 借鉴自: engines/memory/llm_query_rewrite.py LLMQueryRewriteEngine
+        self._query_rewrite = LLMQueryRewriteEngine()
+
+        # P1: Sub-store routing (PowerMem SubStore aligned)
+        # 借鉴自: engines/memory/sub_store_routing.py RouteStore
+        self._route_store = RouteStore(
+            base_dir=os.path.join(memory_settings.memory_data_dir, "route_shards")
+        )
+
+        # P1: User profile store (PowerMem UserMemory aligned)
+        # 借鉴自: engines/memory/user_profile.py UserProfileStore + TopicExtractor
+        self._user_profile = UserProfileStore(
+            db_path=os.path.join(memory_settings.memory_data_dir, "user_profile.db")
+        )
+        self._profile_injector = ProfileInjector(profile_store=self._user_profile)
+
+        # P2: Faiss deletable index (PowerMem efficient delete aligned)
+        # 借鉴自: engines/memory/faiss_deletable.py FaissDeletableIndex
+        # Auxiliary index for compression workflows; primary index remains self.faiss
+        self._faiss_deletable = FaissDeletableIndex(
+            dim=memory_settings.embedding_dim,
+            model_name=memory_settings.embedding_model or "all-MiniLM-L6-v2",
+        )
+
+        # P2: Memory compressor (PowerMem MemoryOptimizer aligned)
+        # 借鉴自: engines/memory/memory_compressor.py MemoryCompressor
+        self._compressor = MemoryCompressor(llm_callback=self._compressor_llm_callback)
+
+        # P2: Multi-agent collaboration / permissions (PowerMem AgentMemory aligned)
+        # 借鉴自: engines/memory/agent_collaboration.py AgentMemoryManager
+        self._agent_manager = AgentMemoryManager(
+            collaboration_broker=CollaborationBroker(
+                db_path=os.path.join(memory_settings.memory_data_dir, "agent_permissions.db")
+            )
+        )
+
     def _additive_llm_callback(self, prompt: str) -> str:
         """LLM callback wrapper for AdditiveExtractionPipeline."""
         client = OpenAI(base_url=self.llm_base_url, api_key=self.llm_api_key)
@@ -937,6 +974,21 @@ class MemoryPipelineBackend:
             return _get_llm_text(response)
         except Exception as e:
             print(f"[Additive LLM error] {e}", file=sys.stderr, flush=True)
+            return ""
+
+    def _compressor_llm_callback(self, prompt: str) -> str:
+        """LLM callback wrapper for MemoryCompressor summaries."""
+        client = OpenAI(base_url=self.llm_base_url, api_key=self.llm_api_key)
+        try:
+            response = client.chat.completions.create(
+                model=self.llm_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_completion_tokens=256,
+            )
+            return _get_llm_text(response)
+        except Exception as e:
+            print(f"[Compressor LLM error] {e}", file=sys.stderr, flush=True)
             return ""
     def _load_provenance(self):
         """Load provenance tracking data from disk."""
@@ -1422,6 +1474,23 @@ class MemoryPipelineBackend:
                 except Exception as e:
                     print(f"[BM25] Add error: {e}", file=sys.stderr, flush=True)
 
+            # P1: Sub-store routing (PowerMem SubStore aligned)
+            # 借鉴自: engines/memory/sub_store_routing.py RouteStore.add_memory
+            try:
+                self._route_store.add_memory(
+                    memory_id, content,
+                    {"user_id": user_id, "agent_id": agent_id, "scope": scope.value}
+                )
+            except Exception as e:
+                print(f"[RouteStore] Add error: {e}", file=sys.stderr, flush=True)
+
+            # P1: User profile update (PowerMem UserMemory aligned)
+            # 借鉴自: engines/memory/user_profile.py UserProfileStore.update_from_memories
+            try:
+                self._user_profile.update_from_memories(user_id, [content])
+            except Exception as e:
+                print(f"[UserProfile] Update error: {e}", file=sys.stderr, flush=True)
+
             # P1: Provenance tracking
             self._track_provenance(memory_id, entities, relationships)
 
@@ -1616,6 +1685,22 @@ class MemoryPipelineBackend:
                     self._bm25.save_index_by_name(bm25_dir, "memory_bm25")
                 except Exception as e:
                     print(f"[BM25] Add error: {e}", file=sys.stderr, flush=True)
+
+            # P1: Sub-store routing
+            try:
+                self._route_store.add_memory(
+                    memory_id, content,
+                    {"user_id": user_id, "agent_id": agent_id, "scope": scope.value}
+                )
+            except Exception as e:
+                print(f"[RouteStore] Add error: {e}", file=sys.stderr, flush=True)
+
+            # P1: User profile update
+            try:
+                self._user_profile.update_from_memories(user_id, [content])
+            except Exception as e:
+                print(f"[UserProfile] Update error: {e}", file=sys.stderr, flush=True)
+
             self._track_provenance(memory_id, entities, relationships)
 
             # P0: Memory history tracking (mem0-style ADD event)
@@ -1725,6 +1810,33 @@ class MemoryPipelineBackend:
                     "hint": "\u8bf7\u8f93\u5165\u7591\u95ee\u53e5\u6765\u67e5\u8be2\u8bb0\u5fc6",
                     "trace": trace}
 
+        # P1: LLM query rewrite + user profile injection (PowerMem QueryRewriter aligned)
+        # 借鉴自: engines/memory/llm_query_rewrite.py LLMQueryRewriteEngine.rewrite
+        step_start = time.time()
+        try:
+            profile_ctx = self._profile_injector.get_profile_for_rewrite(user_id)
+            rewrite_result = self._query_rewrite.rewrite(
+                query, context="", user_profile=profile_ctx.get("user_profile", "")
+            )
+            rewritten_query = rewrite_result.get("rewritten", query)
+            query_entities_extra = [
+                e.get("name", "") if isinstance(e, dict) else str(e)
+                for e in rewrite_result.get("entities", [])
+                if (e.get("name", "") if isinstance(e, dict) else e)
+            ]
+            query_intent = rewrite_result.get("intent", "general")
+            rewrite_method = rewrite_result.get("method", "rule")
+        except Exception as e:
+            print(f"[QueryRewrite] Error: {e}", file=sys.stderr, flush=True)
+            rewritten_query = query
+            query_entities_extra = []
+            query_intent = "general"
+            rewrite_method = "error_fallback"
+        trace.append({"step": 1.5, "name": "\u67e5\u8be2\u6539\u5199\u4e0e\u7528\u6237\u753b\u50cf\u6ce8\u5165",
+                      "detail": f"intent={query_intent}, method={rewrite_method}",
+                      "elapsed_ms": round((time.time() - step_start) * 1000),
+                      "data": {"rewritten": rewritten_query, "intent": query_intent}})
+
         # Step 2: 3-Channel Retrieval + RRF Fusion (FAISS + BM25 + Graph)
         step_start = time.time()
 
@@ -1766,7 +1878,7 @@ class MemoryPipelineBackend:
                                        "retention": ret, "access_count": row["access_count"]}
 
         # --- Channel 1: FAISS Vector Semantic Search (with Ebbinghaus) ---
-        faiss_results = self.faiss.search(query, top_k=top_k * 3, ebbinghaus_weights=eb_weights)
+        faiss_results = self.faiss.search(rewritten_query, top_k=top_k * 3, ebbinghaus_weights=eb_weights)
         # Build ranked list: memory_id ordered by FAISS relevance
         channel_faiss = [r["memory_id"] for r in faiss_results if r.get("memory_id")]
 
@@ -1780,7 +1892,7 @@ class MemoryPipelineBackend:
         bm25_scores = {}
         if self._bm25 is not None and self._bm25.doc_count > 0:
             try:
-                bm25_raw = self._bm25.search(query, top_k=top_k * 3, min_score=0.0)
+                bm25_raw = self._bm25.search(rewritten_query, top_k=top_k * 3, min_score=0.0)
                 for item in bm25_raw:
                     mid = item.get("id")
                     if mid:
@@ -1795,7 +1907,7 @@ class MemoryPipelineBackend:
         graph_entity_names: set = set()
         try:
             graph_results = self._graph_store.search(
-                query, limit=top_k * 3, max_hops=2
+                rewritten_query, limit=top_k * 3, max_hops=2
             )
             for gr in graph_results:
                 matched = gr.get("matched_entity", "")
@@ -1823,9 +1935,9 @@ class MemoryPipelineBackend:
                     entities_in_mem.add(ename)
             memory_entities[mid] = list(entities_in_mem)
 
-        # Query entities for boosting (search terms + graph-matched entities)
-        query_entities = extract_query_entities_simple(query)
-        query_entities = list(set(query_entities) | graph_entity_names)
+        # Query entities for boosting (search terms + graph-matched entities + rewrite entities)
+        query_entities = extract_query_entities_simple(rewritten_query)
+        query_entities = list(set(query_entities) | set(query_entities_extra) | graph_entity_names)
 
         # Compute entity boosts (mem0-style: +0.5 per matching entity)
         entity_boosts = compute_entity_boosts(
@@ -1922,6 +2034,26 @@ class MemoryPipelineBackend:
                           "detail": f"Top-{len(results)} (BM25/Graph\u4e0d\u53ef\u7528)",
                           "elapsed_ms": round((time.time()-step_start)*1000)})
 
+        # P2: Agent collaboration / privacy filtering (PowerMem AgentMemory aligned)
+        # 借鉴自: engines/memory/agent_collaboration.py AgentMemoryManager.get_accessible_memories
+        if results and agent_id:
+            try:
+                step_start_privacy = time.time()
+                accessible = self._agent_manager.get_accessible_memories(
+                    agent_id=agent_id,
+                    all_memories=[r["memory"] for r in results],
+                    operation="read",
+                )
+                accessible_ids = {m.get("id") for m in accessible if m.get("id")}
+                filtered_results = [r for r in results if r["memory"]["id"] in accessible_ids]
+                if len(filtered_results) < len(results):
+                    trace.append({"step": 2.1, "name": "\u6743\u9650\u4e0e\u9690\u79c1\u8fc7\u6ee4",
+                                  "detail": f"{len(filtered_results)}/{len(results)} accessible",
+                                  "elapsed_ms": round((time.time() - step_start_privacy) * 1000)})
+                results = filtered_results
+            except Exception as e:
+                print(f"[AgentCollaboration] Filter error: {e}", file=sys.stderr, flush=True)
+
         # Cross-encoder rerank (optional) before LLM rerank
         if self._reranker is not None and results and not fast_eval:
             try:
@@ -1935,7 +2067,7 @@ class MemoryPipelineBackend:
                     }
                     for r in results
                 ]
-                reranked = self._reranker.rerank(query, candidates, top_k=top_k * 2)
+                reranked = self._reranker.rerank(rewritten_query, candidates, top_k=top_k * 2)
                 results = [
                     {
                         "memory": r["memory"],
@@ -1957,7 +2089,7 @@ class MemoryPipelineBackend:
         top_candidates = results[:top_k]
         if not fast_eval and top_candidates and len(top_candidates) > 1:
             try:
-                llm_ranks = self._llm_rank_memories(query, top_candidates, graph_ctx)
+                llm_ranks = self._llm_rank_memories(rewritten_query, top_candidates, graph_ctx)
                 llm_score_map = {r.get("memory_id"): r.get("score", 0.5) for r in llm_ranks}
                 for r in top_candidates:
                     mid = r["memory"]["id"]
@@ -2108,10 +2240,15 @@ class MemoryPipelineBackend:
                 }
 
         # Fallback: LLM answer generation
+        # P1: Inject user profile context into answer query
+        profile_text = self._profile_injector.get_profile_for_rewrite(user_id).get("user_profile", "")
+        answer_query = rewritten_query
+        if profile_text:
+            answer_query = f"[用户背景: {profile_text}] {rewritten_query}"
         if relevant_memories:
-            answer = self._llm_generate_answer(query, relevant_memories, graph_ctx)
+            answer = self._llm_generate_answer(answer_query, relevant_memories, graph_ctx)
         elif graph_ctx:
-            answer = self._llm_generate_answer(query, [], graph_ctx)
+            answer = self._llm_generate_answer(answer_query, [], graph_ctx)
         else:
             answer = "记忆中没有相关信息。"
 
@@ -2796,15 +2933,32 @@ class MemoryPipelineBackend:
         content: str,
         user_id: str = "demo_user",
         metadata: Optional[Dict[str, Any]] = None,
+        agent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update a memory's content and metadata. Re-indexes FAISS/BM25."""
         db = get_metadata_db()
         existing = db.execute(
-            "SELECT id, content FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
+            "SELECT id, content, scope, privacy FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
         ).fetchone()
         if not existing:
             db.close()
             return {"error": "NOT_FOUND", "memory_id": memory_id}
+
+        # P2: Agent collaboration permission check (PowerMem AgentMemory aligned)
+        # 借鉴自: engines/memory/agent_collaboration.py PermissionChecker.check
+        if agent_id:
+            can_write = self._agent_manager.check_access(
+                agent_id=agent_id,
+                operation="write",
+                memory={
+                    "scope": existing["scope"] or MemoryScope.PRIVATE.value,
+                    "user_id": user_id,
+                    "privacy": existing["privacy"] or PrivacyLevel.STANDARD.value,
+                },
+            )
+            if not can_write:
+                db.close()
+                return {"error": "FORBIDDEN", "memory_id": memory_id}
 
         old_content = existing["content"]
         now = time.time()
@@ -2831,6 +2985,12 @@ class MemoryPipelineBackend:
         except Exception as e:
             print(f"[History] Update event error: {e}", file=sys.stderr, flush=True)
 
+        # P1: User profile update after memory change
+        try:
+            self._user_profile.update_from_memories(user_id, [content])
+        except Exception as e:
+            print(f"[UserProfile] Update error: {e}", file=sys.stderr, flush=True)
+
         # Re-index vector store (best-effort: remove + add)
         try:
             self.faiss.delete_memory(memory_id)
@@ -2856,15 +3016,36 @@ class MemoryPipelineBackend:
 
         return {"status": "ok", "memory_id": memory_id, "action": "updated"}
 
-    def delete_memory(self, memory_id: str, user_id: str = "demo_user") -> Dict[str, Any]:
+    def delete_memory(
+        self,
+        memory_id: str,
+        user_id: str = "demo_user",
+        agent_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Delete a memory from SQLite, FAISS and BM25. Graph provenance is kept."""
         db = get_metadata_db()
         row = db.execute(
-            "SELECT id, content FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
+            "SELECT id, content, scope, privacy FROM memories WHERE id=? AND user_id=?", (memory_id, user_id)
         ).fetchone()
         if not row:
             db.close()
             return {"error": "NOT_FOUND", "memory_id": memory_id}
+
+        # P2: Agent collaboration permission check
+        if agent_id:
+            can_delete = self._agent_manager.check_access(
+                agent_id=agent_id,
+                operation="delete",
+                memory={
+                    "scope": row["scope"] or MemoryScope.PRIVATE.value,
+                    "user_id": user_id,
+                    "privacy": row["privacy"] or PrivacyLevel.STANDARD.value,
+                },
+            )
+            if not can_delete:
+                db.close()
+                return {"error": "FORBIDDEN", "memory_id": memory_id}
+
         old_content = row["content"]
         db.execute("DELETE FROM memories WHERE id=?", (memory_id,))
         db.commit()
@@ -2889,6 +3070,14 @@ class MemoryPipelineBackend:
             self.faiss.save()
         except Exception:
             pass
+
+        # P2: Faiss deletable index auxiliary cleanup (PowerMem efficient delete aligned)
+        # 借鉴自: engines/memory/faiss_deletable.py FaissDeletableIndex.remove_by_id
+        try:
+            self._faiss_deletable.remove_by_id(memory_id)
+        except Exception:
+            pass
+
         if self._bm25 is not None:
             try:
                 self._bm25.delete_document(memory_id)
@@ -2909,6 +3098,79 @@ class MemoryPipelineBackend:
             pass
 
         return {"status": "ok", "memory_id": memory_id, "action": "deleted"}
+
+    def compress_memories(
+        self,
+        user_id: str = "demo_user",
+        max_age_hours: float = 0,
+    ) -> Dict[str, Any]:
+        """Compress memories for a user using MemoryCompressor.
+
+        Clusters similar memories, summarizes them, prunes low-value ones,
+        and archives originals. New summaries are added back as compressed
+        memories. Aligned with PowerMem MemoryOptimizer.compress().
+        """
+        db = get_metadata_db()
+        rows = db.execute(
+            "SELECT id, content, created_at, access_count, initial_score, importance "
+            "FROM memories WHERE user_id=?", (user_id,)
+        ).fetchall()
+        memories = [
+            {
+                "id": row["id"],
+                "content": row["content"],
+                "created_at": row["created_at"],
+                "access_count": row["access_count"],
+                "initial_importance": row["initial_score"],
+                "importance": row["importance"],
+            }
+            for row in rows
+        ]
+        db.close()
+
+        # P2: Memory compression (PowerMem MemoryOptimizer aligned)
+        # 借鉴自: engines/memory/memory_compressor.py MemoryCompressor.compress
+        result = self._compressor.compress(memories)
+
+        archived_ids = {
+            m.get("id", m.get("memory_id", ""))
+            for m in result.get("archived", [])
+        }
+        pruned_ids = {
+            m.get("id", m.get("memory_id", ""))
+            for m in result.get("pruned", [])
+        }
+        removed_ids = archived_ids | pruned_ids
+
+        for mid in removed_ids:
+            try:
+                self.delete_memory(mid, user_id=user_id)
+            except Exception as e:
+                print(f"[Compress] Delete {mid} error: {e}", file=sys.stderr, flush=True)
+
+        new_memory_ids = []
+        for summary_item in result.get("summaries", []):
+            summary_text = summary_item.get("summary", "")
+            if not summary_text:
+                continue
+            try:
+                add_res = self.add_memory_bypass_classify(
+                    content=summary_text,
+                    user_id=user_id,
+                    metadata={
+                        "memory_type": "compressed_summary",
+                        "source_ids": summary_item.get("source_ids", []),
+                    },
+                    skip_index_save=True,
+                )
+                new_memory_ids.append(add_res.get("memory_id"))
+            except Exception as e:
+                print(f"[Compress] Add summary error: {e}", file=sys.stderr, flush=True)
+
+        self.save_index()
+        result["removed_memory_ids"] = list(removed_ids)
+        result["new_memory_ids"] = new_memory_ids
+        return result
 
     def save_index(self) -> None:
         """Persist FAISS and BM25 indices to disk."""

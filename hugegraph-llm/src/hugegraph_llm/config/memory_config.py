@@ -19,7 +19,7 @@
 Unified configuration for HugeGraph-AI-Memory (PowerMem-style).
 
 All environment variables are optional and have safe defaults for local
-HugeGraph 1.7.0 + sentence-transformers + MiMo (OpenAI-compatible) PoC.
+HugeGraph 1.7.0 + sentence-transformers + DeepSeek (OpenAI-compatible) PoC.
 
 Usage:
     from hugegraph_llm.config.memory_config import memory_settings
