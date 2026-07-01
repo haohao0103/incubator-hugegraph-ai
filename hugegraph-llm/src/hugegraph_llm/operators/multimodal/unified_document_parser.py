@@ -501,6 +501,7 @@ _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 _V_NS = "urn:schemas-microsoft-com:vml"
+_O_NS = "urn:schemas-microsoft-com:office:office"
 _REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
 _IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
@@ -745,12 +746,13 @@ def _extract_para_id(para_element) -> Optional[str]:
     )
 
 
-def _extract_paragraph_content_omml(element, ns: Dict[str, str]) -> str:
-    """Extract text + OMML equations from a paragraph element.
+def _extract_paragraph_content_omml(element, ns: Dict[str, str], relationships: Optional[Dict[str, _DocxRelationship]] = None) -> str:
+    """Extract text + OMML equations + Drawing/VML images from a paragraph element.
 
     Handles w:r (text runs), m:oMath (inline equations), m:oMathPara
-    (block equations). Recurses into container elements.
-    OMML → LaTeX conversion is simplified (basic elements only).
+    (block equations), w:drawing (DrawingML Inline/Anchor images),
+    w:pict / w:object (VML legacy images).
+    OMML → LaTeX conversion uses the full omml_to_latex module.
     """
     parts: list[str] = []
 
@@ -762,9 +764,19 @@ def _extract_paragraph_content_omml(element, ns: Dict[str, str]) -> str:
             parts.append(_extract_run_text(node))
             return
         if tag == "oMath" or tag == "oMathPara":
-            latex = _convert_omml_to_latex_simplified(node)
+            latex = _convert_omml_to_latex(node)
             if latex:
                 parts.append(f"<equation>{latex}</equation>")
+            return
+        if tag == "drawing" and relationships is not None:
+            placeholder = _extract_docx_drawing_placeholder(node, relationships)
+            if placeholder:
+                parts.append(placeholder)
+            return
+        if tag in ("pict", "object") and relationships is not None:
+            placeholder = _extract_docx_vml_image_placeholder(node, relationships)
+            if placeholder:
+                parts.append(placeholder)
             return
         for child in node:
             _append_from(child)
@@ -802,25 +814,36 @@ def _extract_run_text(run_element) -> str:
     return text
 
 
-def _convert_omml_to_latex_simplified(element) -> str:
+def _convert_omml_to_latex(element) -> str:
+    """Full OMML → LaTeX conversion using the dedicated omml_to_latex module.
+
+    Supports ALL 21 OMML structure elements:
+    m:r, m:t, m:acc, m:bar, m:borderBox, m:box, m:groupChr, m:d,
+    m:eqArr, m:f, m:m, m:mr, m:func, m:sSup, m:sSub, m:sSubSup,
+    m:sPre, m:rad, m:nary, m:e (plus parse entry).
+
+    Falls back to simplified conversion only if omml_to_latex module is
+    not importable (e.g., missing defusedxml dependency).
+    """
+    try:
+        from .omml_to_latex import convert_omml_to_latex
+        return convert_omml_to_latex(element)
+    except ImportError:
+        log.warning("omml_to_latex module not available, using simplified fallback")
+        return _convert_omml_to_latex_fallback(element)
+
+
+def _convert_omml_to_latex_fallback(element) -> str:
     """Simplified OMML → LaTeX conversion for basic equation elements.
 
     Handles: m:r (text runs), m:f (fractions), m:sup (superscripts),
     m:sub (subscripts), m:nary (n-ary operators like integrals),
     m:d (delimiters/brackets).
 
-    This is intentionally simplified — full OMML conversion requires a
-    dedicated parser (see lightrag/parser/docx/omml/). For production
-    use, that module should be imported; this fallback handles common cases.
+    This is intentionally simplified — full OMML conversion is provided
+    by the omml_to_latex module. This fallback handles common cases when
+    the full module is not importable.
     """
-    try:
-        from lightrag.parser.docx.omml import convert_omml_to_latex
-
-        return convert_omml_to_latex(element)
-    except ImportError:
-        pass
-
-    # Simplified fallback
     tag = element.tag.split("}")[-1]
 
     if tag == "oMathPara":
@@ -828,7 +851,7 @@ def _convert_omml_to_latex_simplified(element) -> str:
         for child in element:
             child_tag = child.tag.split("}")[-1]
             if child_tag == "oMath":
-                parts.append(_convert_omml_to_latex_simplified(child))
+                parts.append(_convert_omml_to_latex_fallback(child))
         return " ".join(parts) if parts else ""
 
     if tag != "oMath":
@@ -848,8 +871,8 @@ def _convert_omml_to_latex_simplified(element) -> str:
             # m:f → fraction: numerator/denominator
             num_el = child.find(f"{{{_M_NS}}}num")
             den_el = child.find(f"{{{_M_NS}}}den")
-            num_latex = _convert_omml_to_latex_simplified(num_el) if num_el is not None else ""
-            den_latex = _convert_omml_to_latex_simplified(den_el) if den_el is not None else ""
+            num_latex = _convert_omml_to_latex_fallback(num_el) if num_el is not None else ""
+            den_latex = _convert_omml_to_latex_fallback(den_el) if den_el is not None else ""
             if num_latex or den_latex:
                 parts.append(f"\\frac{{{num_latex}}}{{{den_latex}}}")
 
@@ -857,16 +880,16 @@ def _convert_omml_to_latex_simplified(element) -> str:
             # m:sSup → superscript
             base_el = child.find(f"{{{_M_NS}}}e")
             sup_el = child.find(f"{{{_M_NS}}}sup")
-            base_latex = _convert_omml_to_latex_simplified(base_el) if base_el is not None else ""
-            sup_latex = _convert_omml_to_latex_simplified(sup_el) if sup_el is not None else ""
+            base_latex = _convert_omml_to_latex_fallback(base_el) if base_el is not None else ""
+            sup_latex = _convert_omml_to_latex_fallback(sup_el) if sup_el is not None else ""
             parts.append(f"{{{base_latex}}}^{{{sup_latex}}}")
 
         elif child_tag == "sSub":
             # m:sSub → subscript
             base_el = child.find(f"{{{_M_NS}}}e")
             sub_el = child.find(f"{{{_M_NS}}}sub")
-            base_latex = _convert_omml_to_latex_simplified(base_el) if base_el is not None else ""
-            sub_latex = _convert_omml_to_latex_simplified(sub_el) if sub_el is not None else ""
+            base_latex = _convert_omml_to_latex_fallback(base_el) if base_el is not None else ""
+            sub_latex = _convert_omml_to_latex_fallback(sub_el) if sub_el is not None else ""
             parts.append(f"{{{base_latex}}}_{{{sub_latex}}}")
 
         elif child_tag == "d":
@@ -891,7 +914,7 @@ def _convert_omml_to_latex_simplified(element) -> str:
 
             e_parts = []
             for e_child in child.findall(f"{{{_M_NS}}}e"):
-                e_latex = _convert_omml_to_latex_simplified(e_child)
+                e_latex = _convert_omml_to_latex_fallback(e_child)
                 if e_latex:
                     e_parts.append(e_latex)
             inner = " ".join(e_parts)
@@ -979,7 +1002,7 @@ def _extract_docx_table_rows(table_element) -> Dict[str, Any]:
                 # Extract cell text from paragraphs
                 para_texts: list[str] = []
                 for para_el in tc.findall(qn("w:p")):
-                    para_text = _extract_paragraph_content_omml(para_el, _DOCX_NS)
+                    para_text = _extract_paragraph_content_omml(para_el, _DOCX_NS, relationships)
                     para_text = para_text.strip().replace("\x07", "")
                     if para_text:
                         para_texts.append(para_text)
@@ -1007,10 +1030,25 @@ def _extract_docx_table_rows(table_element) -> Dict[str, Any]:
     }
 
 
+def _emu_to_pixels(emu: str) -> Optional[int]:
+    """Convert EMU (English Metric Units) to pixels at 96 DPI.
+
+    1 inch = 914400 EMU, 1 inch = 96 pixels.
+    Reference: LightRAG drawing_image_extractor.py (EMU dimension handling).
+    """
+    try:
+        emu_val = int(emu)
+        return round(emu_val / 914400 * 96)
+    except (ValueError, TypeError):
+        return None
+
+
 def _extract_docx_drawing_placeholder(drawing_elem, relationships: Dict[str, _DocxRelationship]) -> str:
     """Build a placeholder string from a w:drawing element.
 
     Resolves a:blip → r:embed / r:link relationships.
+    Priority: r:link > r:embed (LightRAG drawing_image_extractor.py style).
+    Extracts wp:extent cx/cy for image dimensions (EMU → px conversion).
     """
     doc_pr = drawing_elem.find(".//wp:docPr", _DOCX_NS)
     attrs = {
@@ -1018,20 +1056,82 @@ def _extract_docx_drawing_placeholder(drawing_elem, relationships: Dict[str, _Do
         "name": doc_pr.get("name", "") if doc_pr is not None else "",
     }
 
-    # Find blip
+    # Extract dimensions from wp:extent (Inline) or wp:extent inside wp:anchor
+    extent = drawing_elem.find(".//wp:extent", _DOCX_NS)
+    if extent is not None:
+        cx = extent.get("cx")
+        cy = extent.get("cy")
+        if cx:
+            attrs["width"] = str(_emu_to_pixels(cx) or "")
+        if cy:
+            attrs["height"] = str(_emu_to_pixels(cy) or "")
+    # Remove empty dimension attrs
+    attrs = {k: v for k, v in attrs.items() if v}
+
+    # Find blip — r:link takes priority over r:embed (LightRAG style)
     for blip in drawing_elem.findall(".//a:blip", _DOCX_NS):
         rel_link = blip.get(f"{{{_R_NS}}}link")
         rel_embed = blip.get(f"{{{_R_NS}}}embed")
 
+        # Priority: r:link > r:embed
         rel_id = rel_link or rel_embed
         if rel_id and rel_id in relationships:
             rel = relationships[rel_id]
             if rel.image_format:
                 attrs["format"] = rel.image_format
             if rel.target_mode.lower() == "external":
-                attrs["path"] = rel.target
+                attrs["path"] = rel.target  # External URL preserved, not downloaded
             elif rel.target:
                 attrs["path"] = rel.target
+
+    pieces = [f'{k}="{v}"' for k, v in attrs.items() if v]
+    return f"<drawing {' '.join(pieces)} />"
+
+
+def _extract_docx_vml_image_placeholder(container_elem, relationships: Dict[str, _DocxRelationship]) -> str:
+    """Build a placeholder string from a w:pict or w:object element containing VML image.
+
+    Resolves v:imagedata → r:id relationships (LightRAG drawing_image_extractor.py style).
+    VML uses r:id for both embedded and external images (distinguished by TargetMode).
+    """
+    from xml.etree import ElementTree as ET
+
+    # Find v:imagedata
+    imagedata = None
+    for child in container_elem.iter():
+        tag = child.tag.split("}")[-1]
+        if tag == "imagedata":
+            imagedata = child
+            break
+
+    if imagedata is None:
+        return ""
+
+    attrs: Dict[str, str] = {}
+    # Get docPr-like attributes from v:imagedata
+    # Note: ET uses Clark notation for namespace-prefixed attrs, so o:title
+    # becomes {urn:schemas-microsoft-com:office:office}title
+    img_id = imagedata.get("id", "")
+    img_name = (
+        imagedata.get(f"{{{_O_NS}}}title", "")
+        or imagedata.get("alt", "")
+        or imagedata.get("o:title", "")  # fallback if namespace not expanded
+    )
+    if img_id:
+        attrs["id"] = img_id
+    if img_name:
+        attrs["name"] = img_name
+
+    # r:id attribute on v:imagedata
+    rel_id = imagedata.get(f"{{{_R_NS}}}id", "")
+    if rel_id and rel_id in relationships:
+        rel = relationships[rel_id]
+        if rel.image_format:
+            attrs["format"] = rel.image_format
+        if rel.target_mode.lower() == "external":
+            attrs["path"] = rel.target  # External URL preserved (SSRF-safe)
+        elif rel.target:
+            attrs["path"] = rel.target
 
     pieces = [f'{k}="{v}"' for k, v in attrs.items() if v]
     return f"<drawing {' '.join(pieces)} />"
@@ -1359,18 +1459,150 @@ def _consume_pipe_table_md(lines: List[str], start: int) -> Tuple[int, List[List
     return (j - start), body_rows, [header] if header else None
 
 
-def _resolve_md_image(src: str, md_dir: Optional[Path] = None) -> Optional[ExtractedImage]:
-    """Resolve a markdown image reference to ExtractedImage.
+# ============================================================================
+# SSRF Protection for Markdown image URLs (LightRAG ir_builder.py style)
+# ============================================================================
+
+# Blocked URL schemes — never fetch these
+_BLOCKED_SCHEMES = frozenset({"file", "ftp", "ftps", "sftp", "data", "javascript", "vbscript"})
+
+# Internal/private IP patterns — block to prevent SSRF
+_PRIVATE_IP_RE = re.compile(
+    r"^(?:"
+    r"127\.\d+\.\d+\.\d+"           # 127.x.x.x (loopback)
+    r"|0\.\d+\.\d+\.\d+"            # 0.x.x.x
+    r"|10\.\d+\.\d+\.\d+"           # 10.x.x.x (Class A private)
+    r"|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+"  # 172.16-31.x.x (Class B private)
+    r"|192\.168\.\d+\.\d+"          # 192.168.x.x (Class C private)
+    r"|169\.254\.\d+\.\d+"          # 169.254.x.x (link-local)
+    r"|::1\b"                        # IPv6 loopback (urlparse strips brackets)
+    r"|\[::1\]"                     # IPv6 loopback (bracketed form)
+    r"|fe80:"                        # IPv6 link-local (urlparse strips brackets)
+    r"|\[fe80:"                      # IPv6 link-local (bracketed form)
+    r"|fc[0-9a-f]{2}:"               # IPv6 unique local fc00-fcff (urlparse strips brackets)
+    r"|\[fc[0-9a-f]{2}:"             # IPv6 unique local (bracketed form)
+    r"|fd[0-9a-f]{2}:"               # IPv6 unique local fd00-fdff (urlparse strips brackets)
+    r"|\[fd[0-9a-f]{2}:"             # IPv6 unique local (bracketed form)
+    r")",
+    re.IGNORECASE,
+)
+
+# Maximum URL length to prevent DoS
+_MAX_URL_LENGTH = 2048
+
+# Maximum image file size to download (bytes)
+_MAX_IMAGE_DOWNLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+# Allowed domains whitelist (empty = allow all non-private)
+_ALLOWED_DOMAINS: frozenset = frozenset()  # Configurable via context
+
+
+def _is_safe_url(url: str, allowed_domains: Optional[frozenset] = None) -> bool:
+    """Check if a URL is safe to fetch (SSRF protection).
+
+    Blocks:
+    - Non-HTTP/HTTPS schemes (file://, ftp://, etc.)
+    - Private/internal IP addresses (127.x, 10.x, 172.16-31.x, 192.168.x, etc.)
+    - IPv6 loopback and link-local addresses
+    - URLs exceeding MAX_URL_LENGTH
+    - localhost/hostname-only URLs
+    - URLs with @ (credential injection)
+
+    LightRAG strategy: External links are preserved as-is (not downloaded).
+    This function only gates the download step for HTTP/HTTPS URLs.
+
+    Args:
+        url: The URL to validate.
+        allowed_domains: Optional whitelist of allowed domain names.
+
+    Returns:
+        True if safe to fetch, False if blocked.
+    """
+    if len(url) > _MAX_URL_LENGTH:
+        log.warning(f"URL exceeds max length ({len(url)} > {_MAX_URL_LENGTH}): {url[:80]}")
+        return False
+
+    # Check scheme
+    lower_url = url.lower().strip()
+    # Must start with http:// or https://
+    if not lower_url.startswith(("http://", "https://")):
+        log.warning(f"Blocked scheme in URL: {url[:80]}")
+        return False
+
+    # Check for credential injection (@)
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.username or parsed.password:
+            log.warning(f"URL contains credentials (@): {url[:80]}")
+            return False
+    except Exception:
+        return False
+
+    # Extract hostname
+    hostname = parsed.hostname
+    if not hostname:
+        log.warning(f"URL has no hostname: {url[:80]}")
+        return False
+
+    # Block localhost and bare hostnames
+    hostname_lower = hostname.lower()
+    if hostname_lower in ("localhost", "localdomain") or hostname_lower.endswith(".local"):
+        log.warning(f"Blocked localhost/local hostname: {hostname}")
+        return False
+
+    # Block private IP ranges (SSRF protection)
+    if _PRIVATE_IP_RE.match(hostname):
+        log.warning(f"Blocked private/internal IP: {hostname}")
+        return False
+
+    # Check domain whitelist if configured
+    domain_whitelist = allowed_domains or _ALLOWED_DOMAINS
+    if domain_whitelist:
+        # Extract base domain
+        domain_parts = hostname_lower.split(".")
+        base_domain = ".".join(domain_parts[-2:]) if len(domain_parts) >= 2 else hostname_lower
+        if base_domain not in domain_whitelist and hostname_lower not in domain_whitelist:
+            log.warning(f"Domain not in whitelist: {hostname}")
+            return False
+
+    return True
+
+
+def _resolve_md_image(src: str, md_dir: Optional[Path] = None, allowed_domains: Optional[frozenset] = None) -> Optional[ExtractedImage]:
+    """Resolve a markdown image reference to ExtractedImage with SSRF protection.
 
     Handles:
     - Local file references (relative to markdown directory)
-    - Absolute file paths
-    - HTTP/HTTPS URLs (base64 fetch)
+    - Absolute file paths (blocked: file:// scheme)
+    - HTTP/HTTPS URLs (with SSRF checks: private IP, localhost, credential injection)
     - Data URIs (base64 embedded)
+
+    SSRF protection (LightRAG style):
+    - file:// scheme URLs are BLOCKED
+    - Private/internal IPs (127.x, 10.x, 172.16-31.x, 192.168.x) are BLOCKED
+    - localhost/localdomain hostnames are BLOCKED
+    - URLs with credentials (@) are BLOCKED
+    - URLs exceeding 2048 chars are BLOCKED
+    - Image download size is capped at 10 MB
     """
     src = src.strip()
     if src.startswith("<") and src.endswith(">"):
         src = src[1:-1].strip()
+
+    # Block file:// scheme (SSRF protection)
+    if src.lower().startswith("file:"):
+        log.warning(f"Blocked file:// scheme in markdown image: {src[:80]}")
+        return None
+
+    # Block other dangerous schemes
+    for scheme in _BLOCKED_SCHEMES:
+        if src.lower().startswith(f"{scheme}:"):
+            if scheme == "data":
+                # data URIs for images are allowed (handled below)
+                break
+            log.warning(f"Blocked {scheme}:// scheme in markdown image: {src[:80]}")
+            return None
 
     # Data URI: data:image/png;base64,...
     if src.lower().startswith("data:"):
@@ -1378,6 +1610,11 @@ def _resolve_md_image(src: str, md_dir: Optional[Path] = None) -> Optional[Extra
         if match:
             fmt = _normalize_image_format(match.group(1)) or "jpeg"
             b64_data = match.group(2)
+            # Validate base64 data size
+            estimated_bytes = len(b64_data) * 3 // 4
+            if estimated_bytes > _MAX_IMAGE_DOWNLOAD_SIZE:
+                log.warning(f"Data URI exceeds max size ({estimated_bytes} bytes)")
+                return None
             return ExtractedImage(
                 image_id=f"img_md_data",
                 base64_data=b64_data,
@@ -1386,13 +1623,25 @@ def _resolve_md_image(src: str, md_dir: Optional[Path] = None) -> Optional[Extra
             )
         return None
 
-    # HTTP/HTTPS URL — fetch and base64 encode
+    # HTTP/HTTPS URL — SSRF check before fetch
     if src.startswith(("http://", "https://")):
+        if not _is_safe_url(src, allowed_domains):
+            log.warning(f"Blocked unsafe URL in markdown image: {src[:80]}")
+            return None
         try:
             import urllib.request
 
             with urllib.request.urlopen(src, timeout=10) as resp:
-                img_bytes = resp.read()
+                # Check Content-Length before downloading
+                content_length = resp.headers.get("Content-Length")
+                if content_length and int(content_length) > _MAX_IMAGE_DOWNLOAD_SIZE:
+                    log.warning(f"Image URL exceeds max size ({content_length} bytes): {src[:80]}")
+                    return None
+                img_bytes = resp.read(_MAX_IMAGE_DOWNLOAD_SIZE + 1)
+                if len(img_bytes) > _MAX_IMAGE_DOWNLOAD_SIZE:
+                    log.warning(f"Image download exceeded max size: {src[:80]}")
+                    return None
+                # img_bytes already contains the full data
             compressed = _compress_image_bytes(img_bytes)
             b64 = base64.b64encode(compressed).decode("ascii")
             suffix = PurePosixPath(src).suffix.lstrip(".")
@@ -1407,24 +1656,37 @@ def _resolve_md_image(src: str, md_dir: Optional[Path] = None) -> Optional[Extra
             log.warning(f"Failed to fetch markdown image URL {src}: {e}")
             return None
 
-    # Local file reference
+    # Local file reference — path traversal protection (LightRAG _safe_asset_ref style)
     if md_dir is not None:
         local_path = md_dir / src
-        if local_path.exists():
+        # Security: resolve and check no path traversal
+        try:
+            resolved = local_path.resolve()
+            md_dir_resolved = md_dir.resolve()
+            if not str(resolved).startswith(str(md_dir_resolved)):
+                log.warning(f"Blocked path traversal in markdown image: {src}")
+                return None
+            if any(part == ".." for part in PurePosixPath(src).parts):
+                log.warning(f"Blocked '..' in markdown image path: {src}")
+                return None
+        except Exception:
+            return None
+
+        if resolved.exists():
             try:
-                img_bytes = local_path.read_bytes()
+                img_bytes = resolved.read_bytes()
                 compressed = _compress_image_bytes(img_bytes)
                 b64 = base64.b64encode(compressed).decode("ascii")
-                suffix = local_path.suffix.lstrip(".")
+                suffix = resolved.suffix.lstrip(".")
                 fmt = _normalize_image_format(suffix) or "jpeg"
                 return ExtractedImage(
                     image_id=f"img_md_local",
                     base64_data=b64,
                     format=fmt,
-                    source_id=str(local_path),
+                    source_id=str(resolved),
                 )
             except Exception as e:
-                log.warning(f"Failed to read local markdown image {local_path}: {e}")
+                log.warning(f"Failed to read local markdown image {resolved}: {e}")
 
     return None
 
