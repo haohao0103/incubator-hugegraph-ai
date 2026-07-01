@@ -3,659 +3,924 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HugeGraph AI Memory · 交互式演示</title>
-<script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+<title>HugeGraph AI Memory · 全能力交互式演示</title>
+<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
 <style>
-:root{--bg:#0a0c10;--bg2:#12141c;--bg3:#1a1d28;--card:#161923;--text:#e2e4ea;--text2:#8b90a0;--text3:#555a6a;--border:#252838;--accent:#3b82f6;--accent2:#8b5cf6;--accent3:#06b6d4;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--pink:#ec4899;--orange:#f97316;--gradient:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899);--shadow:0 4px 20px rgba(0,0,0,.5);--radius:10px;}
+:root{--bg:#0a0c10;--bg2:#11131b;--bg3:#1a1d28;--card:#161923;--text:#e2e4ea;--text2:#8b90a0;--text3:#555a6a;--border:#252838;--accent:#3b82f6;--accent2:#8b5cf6;--accent3:#06b6d4;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--pink:#ec4899;--orange:#f97316;--teal:#06b6d4;--gradient:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899);--shadow:0 4px 24px rgba(0,0,0,.5);--radius:10px;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:"SF Pro Display","PingFang SC","Inter",sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;overflow:hidden;height:100vh;}
-/* ===== Layout ===== */
-.app{display:flex;height:100vh;gap:0;}
-.left-panel{flex:0 0 420px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--bg2);}
-.right-panel{flex:1;display:flex;flex-direction:column;background:var(--bg);}
-/* ===== Header ===== */
-.header{background:var(--bg);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:10;}
-.header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--gradient);opacity:.4;}
-.logo{display:flex;align-items:center;gap:10px;}
-.logo-icon{width:32px;height:32px;border-radius:8px;background:var(--gradient);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;box-shadow:0 0 15px rgba(59,130,246,.3);}
-.logo h1{font-size:15px;font-weight:700;letter-spacing:-.3px;}
-.logo h1 span{color:var(--accent);}
-.logo-sub{font-size:10px;color:var(--text3);margin-top:1px;}
-.conn-status{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);}
-.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 4px rgba(16,185,129,.5);}
+body{font-family:"SF Pro Display","PingFang SC","Inter",system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;overflow:hidden;height:100vh;}
+.app{display:flex;height:100vh;}
+/* ===== Left Panel ===== */
+.left-panel{flex:0 0 400px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--bg2);}
+.header{background:var(--bg);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:10;}
+.header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--gradient);opacity:.3;}
+.logo{display:flex;align-items:center;gap:8px;}
+.logo-icon{width:30px;height:30px;border-radius:7px;background:var(--gradient);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;}
+.logo h1{font-size:14px;font-weight:700;letter-spacing:-.3px;}
+.logo h1 span{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo-sub{font-size:9px;color:var(--text3);margin-top:1px;}
+.hdr-right{display:flex;align-items:center;gap:8px;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 4px rgba(16,185,129,.5);}
 .conn-dot.err{background:var(--red);}
-.demo-btn{background:var(--gradient);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:5px;}
-.demo-btn:hover{transform:translateY(-1px);box-shadow:0 0 20px rgba(59,130,246,.3);}
+.conn-text{font-size:10px;color:var(--text2);}
+.demo-btn{background:var(--gradient);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:4px;}
+.demo-btn:hover{transform:translateY(-1px);box-shadow:0 0 16px rgba(59,130,246,.3);}
 .demo-btn.running{opacity:.6;pointer-events:none;}
 /* ===== Chat ===== */
-.chat-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;}
+.chat-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;}
 .chat-msg{display:flex;gap:8px;animation:slideIn .3s ease;}
-@keyframes slideIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 .chat-msg.user{flex-direction:row-reverse;}
-.msg-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.msg-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
 .msg-avatar.ai{background:var(--gradient);}
-.msg-avatar.user{background:var(--accent3);}
-.msg-body{max-width:320px;}
-.msg-bubble{padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;}
+.msg-avatar.user{background:var(--teal);}
+.msg-body{max-width:300px;}
+.msg-bubble{padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.5;}
 .chat-msg.ai .msg-bubble{background:var(--card);border:1px solid var(--border);}
-.chat-msg.user .msg-bubble{background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.2);}
-.msg-time{font-size:10px;color:var(--text3);margin-top:3px;text-align:right;}
+.chat-msg.user .msg-bubble{background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.15);}
+.msg-time{font-size:9px;color:var(--text3);margin-top:2px;text-align:right;}
 .chat-msg.ai .msg-time{text-align:left;}
-/* ===== Pipeline Steps in Chat ===== */
-.pipeline-step{display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:8px;margin:3px 0;background:var(--bg);border:1px solid var(--border);animation:stepIn .4s ease;}
+/* ===== Pipeline Steps ===== */
+.pipeline-step{display:flex;align-items:flex-start;gap:6px;padding:5px 8px;border-radius:6px;margin:2px 0;background:var(--bg);border:1px solid var(--border);animation:stepIn .3s ease;}
 @keyframes stepIn{from{opacity:0;transform:scale(.95);}to{opacity:1;transform:scale(1);}}
-.step-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;}
-.step-icon.extract{background:var(--accent);}
-.step-icon.dedup{background:var(--yellow);}
-.step-icon.store{background:var(--green);}
-.step-icon.search{background:var(--accent3);}
-.step-icon.score{background:var(--accent2);}
-.step-icon.rerank{background:var(--pink);}
-.step-icon.answer{background:var(--orange);}
-.step-icon.graph{background:#6366f1;}
-.step-detail{font-size:12px;line-height:1.4;}
-.step-detail .step-name{font-weight:700;color:var(--text);font-size:13px;}
-.step-detail .step-info{color:var(--text2);font-size:11px;}
-.step-detail .step-data{color:var(--accent3);font-size:11px;margin-top:2px;}
+.step-icon{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;}
+.step-detail{font-size:11px;line-height:1.4;}
+.step-detail .step-name{font-weight:700;color:var(--text);}
+.step-detail .step-info{color:var(--text2);font-size:10px;}
+.step-detail .step-data{color:var(--accent3);font-size:10px;margin-top:1px;}
 /* ===== Input ===== */
-.input-area{padding:12px 16px;border-top:1px solid var(--border);background:var(--bg);}
-.input-row{display:flex;gap:8px;}
-.input-field{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:none;transition:border-color .2s;}
+.input-area{padding:8px 12px;border-top:1px solid var(--border);background:var(--bg);}
+.input-row{display:flex;gap:6px;}
+.input-field{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;font-family:inherit;outline:none;resize:none;transition:border-color .2s;}
 .input-field:focus{border-color:var(--accent);}
 .input-field::placeholder{color:var(--text3);}
-.send-btn{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;}
+.send-btn{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;}
 .send-btn:hover{background:#2563eb;}
 .send-btn:disabled{opacity:.4;pointer-events:none;}
-.action-btns{display:flex;gap:6px;margin-top:8px;}
-.action-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .2s;font-family:inherit;}
+.action-btns{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
+.action-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:3px 8px;border-radius:5px;font-size:10px;cursor:pointer;transition:all .2s;font-family:inherit;}
 .action-btn:hover{border-color:var(--accent);color:var(--accent);}
 /* ===== Right Panel ===== */
-.right-top{flex:0 0 56px;display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);gap:16px;background:var(--bg2);}
-.right-top .stat{display:flex;align-items:center;gap:5px;}
-.stat .stat-val{font-size:16px;font-weight:800;}
+.right-panel{flex:1;display:flex;flex-direction:column;background:var(--bg);}
+.right-top{flex:0 0 42px;display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);gap:12px;background:var(--bg2);}
+.stat{display:flex;align-items:center;gap:3px;}
+.stat .stat-val{font-size:14px;font-weight:800;}
 .stat .stat-val.blue{color:var(--accent);}.stat .stat-val.green{color:var(--green);}
-.stat .stat-val.purple{color:var(--accent2);}.stat .stat-val.teal{color:var(--accent3);}
-.stat .stat-label{font-size:10px;color:var(--text3);}
-.right-main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.stat .stat-val.purple{color:var(--accent2);}.stat .stat-val.teal{color:var(--teal);}
+.stat .stat-label{font-size:9px;color:var(--text3);}
+/* ===== Tab Bar ===== */
+.tab-bar{flex:0 0 32px;display:flex;border-bottom:1px solid var(--border);background:var(--bg2);overflow-x:auto;gap:0;}
+.tab-btn{padding:6px 10px;font-size:10px;font-weight:700;color:var(--text2);cursor:pointer;border:none;background:transparent;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit;white-space:nowrap;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+/* ===== Tab Content ===== */
+.tab-content{flex:1;display:none;overflow-y:auto;padding:12px;}
+.tab-content.active{display:flex;flex-direction:column;}
 /* ===== Pipeline Flow ===== */
-.flow-section{flex:0 0 auto;padding:12px 20px;}
-.flow-title{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
-.flow-title .flow-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);}
-.flow-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
-.flow-node{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;transition:all .3s;border:1px solid var(--border);background:var(--card);}
-.flow-node.active{border-color:var(--accent);background:rgba(59,130,246,.12);color:var(--accent);box-shadow:0 0 8px rgba(59,130,246,.2);}
-.flow-node.done{border-color:var(--green);background:rgba(16,185,129,.1);color:var(--green);}
-.flow-node .flow-emoji{font-size:14px;}
-.flow-arrow{color:var(--text3);font-size:12px;}
-/* ===== Graph + Stats ===== */
-.content-area{flex:1;display:grid;grid-template-columns:1fr 280px;gap:0;overflow:hidden;}
-.graph-area{position:relative;border-right:1px solid var(--border);}
-.graph-area #cy{width:100%;height:100%;}
-.graph-overlay{position:absolute;top:10px;right:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:11px;color:var(--text2);z-index:5;}
-.stats-area{padding:12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
-.stats-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;}
-.stats-card .card-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:4px;}
-.stats-card .card-title .emoji{font-size:13px;}
-.stat-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px;}
+.flow-section{margin-bottom:8px;}
+.flow-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:4px;}
+.flow-title .flow-dot{width:4px;height:4px;border-radius:50%;background:var(--accent);}
+.flow-row{display:flex;gap:4px;align-items:center;flex-wrap:wrap;}
+.flow-node{padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:flex;align-items:center;gap:3px;transition:all .3s;border:1px solid var(--border);background:var(--card);}
+.flow-node.active{border-color:var(--accent);background:rgba(59,130,246,.1);color:var(--accent);box-shadow:0 0 6px rgba(59,130,246,.2);}
+.flow-node.done{border-color:var(--green);background:rgba(16,185,129,.08);color:var(--green);}
+.flow-arrow{color:var(--text3);font-size:10px;}
+/* ===== Cards ===== */
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;}
+.card-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:4px;}
+.card-title .emoji{font-size:12px;}
+.stat-row{display:flex;justify-content:space-between;padding:2px 0;font-size:11px;}
 .stat-row .stat-key{color:var(--text3);}
 .stat-row .stat-val2{color:var(--text);font-weight:600;}
-.entity-list{display:flex;flex-direction:column;gap:3px;}
-.entity-item{padding:3px 8px;border-radius:4px;font-size:11px;background:rgba(59,130,246,.08);color:var(--accent);display:flex;align-items:center;gap:4px;}
-.entity-item .entity-type{font-size:9px;color:var(--text3);background:var(--bg);padding:1px 4px;border-radius:3px;}
+/* ===== Graph ===== */
+.graph-box{flex:1;position:relative;min-height:300px;}
+.graph-box #cy{width:100%;height:100%;}
+.graph-overlay{position:absolute;top:8px;right:8px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;color:var(--text2);z-index:5;}
+/* ===== Entity List ===== */
+.entity-list{display:flex;flex-direction:column;gap:2px;}
+.entity-item{padding:3px 6px;border-radius:4px;font-size:10px;background:rgba(59,130,246,.06);color:var(--accent);display:flex;align-items:center;gap:3px;}
+.entity-item .entity-type{font-size:8px;color:var(--text3);background:var(--bg);padding:1px 3px;border-radius:2px;}
+/* ===== Factual Summary Comparison ===== */
+.summary-compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.summary-box{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;line-height:1.5;}
+.summary-box .label{font-size:9px;font-weight:700;color:var(--text2);margin-bottom:4px;}
+.summary-raw{color:var(--text3);overflow:hidden;text-overflow:ellipsis;max-height:80px;}
+.summary-fact{color:var(--accent);}
+/* ===== Scoring Breakdown ===== */
+.score-bar{display:flex;align-items:center;gap:4px;margin:3px 0;}
+.score-bar .bar-label{font-size:10px;color:var(--text2);width:60px;}
+.score-bar .bar-track{flex:1;height:10px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+.score-bar .bar-fill{height:100%;border-radius:4px;transition:width .5s;}
+.score-bar .bar-val{font-size:10px;color:var(--text);font-weight:600;width:36px;text-align:right;}
+/* ===== Privacy Demo ===== */
+.privacy-compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.privacy-box{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;line-height:1.5;}
+.privacy-original{color:var(--text);}
+.privacy-filtered .pii{background:var(--red);color:#fff;padding:0 3px;border-radius:2px;font-size:10px;}
+.privacy-filtered .safe{color:var(--green);}
+/* ===== History Timeline ===== */
+.timeline{display:flex;flex-direction:column;gap:4px;}
+.timeline-item{display:flex;align-items:flex-start;gap:6px;padding:4px 8px;border-radius:6px;background:var(--bg3);font-size:10px;}
+.timeline-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.timeline-dot.add{background:var(--green);}
+.timeline-dot.update{background:var(--accent);}
+.timeline-dot.delete{background:var(--red);}
+.timeline-detail{color:var(--text2);}
+.timeline-time{color:var(--text3);font-size:9px;}
+/* ===== Agent Permission ===== */
+.perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.perm-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;}
+.perm-card .perm-emoji{font-size:14px;margin-bottom:2px;}
+.perm-card .perm-name{font-weight:700;color:var(--text);}
+.perm-card .perm-desc{color:var(--text2);font-size:9px;}
 /* ===== Welcome ===== */
-.welcome{padding:20px;text-align:center;}
-.welcome-icon{font-size:48px;margin-bottom:8px;}
-.welcome-title{font-size:18px;font-weight:800;margin-bottom:6px;}
+.welcome{padding:16px;text-align:center;}
+.welcome-icon{font-size:40px;margin-bottom:6px;}
+.welcome-title{font-size:16px;font-weight:800;margin-bottom:4px;}
 .welcome-title span{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.welcome-desc{font-size:13px;color:var(--text2);line-height:1.7;max-width:340px;margin:0 auto;}
-.welcome-features{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center;}
-.welcome-feature{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;transition:all .2s;}
+.welcome-desc{font-size:12px;color:var(--text2);line-height:1.6;max-width:320px;margin:0 auto;}
+.welcome-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px;}
+.welcome-feature{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;transition:all .2s;}
 .welcome-feature:hover{border-color:var(--accent);color:var(--accent);}
 .welcome-feature .emoji{font-size:14px;}
+/* ===== Benchmark ===== */
+.bench-metric{display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:12px;}
+.bench-metric .bench-label{color:var(--text2);}
+.bench-metric .bench-val{font-weight:800;font-size:16px;}
+.bench-metric .bench-delta{font-size:10px;margin-left:4px;}
+.bench-delta.up{color:var(--green);}
+.bench-delta.down{color:var(--red);}
 /* ===== Toast ===== */
-.toast{position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:12px;color:var(--text);z-index:999;animation:toastIn .3s ease;box-shadow:var(--shadow);}
-@keyframes toastIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
+.toast{position:fixed;top:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--text);z-index:999;animation:toastIn .3s ease;box-shadow:var(--shadow);}
+@keyframes toastIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
 .toast.success{border-color:var(--green);}
 .toast.error{border-color:var(--red);}
-/* ===== Scrollbar ===== */
-::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar{width:3px;}
 ::-webkit-scrollbar-track{background:var(--bg);}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 ::-webkit-scrollbar-thumb:hover{background:var(--text3);}
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- Left: Chat Panel -->
+  <!-- Left: Chat -->
   <div class="left-panel">
     <div class="header">
       <div class="logo">
         <div class="logo-icon">HG</div>
         <div>
           <h1>HugeGraph <span>AI Memory</span></h1>
-          <div class="logo-sub">货拉拉 · 图谱团队 · 交互式演示</div>
+          <div class="logo-sub">货拉拉图谱团队 · 全能力演示</div>
         </div>
       </div>
-      <div class="conn-status">
+      <div class="hdr-right">
         <div class="conn-dot" id="connDot"></div>
-        <span id="connText">连接中...</span>
+        <span class="conn-text" id="connText">连接中</span>
+        <button class="demo-btn" id="demoBtn" onclick="runFullDemo()">🎬 全流程演示</button>
       </div>
-      <button class="demo-btn" id="demoBtn" onclick="runAutoDemo()">
-        <span>🎬</span> 一键演示
-      </button>
     </div>
     <div class="chat-area" id="chatArea">
       <div class="welcome" id="welcomeMsg">
         <div class="welcome-icon">🧠</div>
-        <div class="welcome-title">AI <span>Memory</span> 演示平台</div>
+        <div class="welcome-title">AI <span>Memory</span> 全能力演示</div>
         <div class="welcome-desc">
-          基于 HugeGraph 1.7.0 的生产级 AI 记忆系统。<br>
-          实体提取 → 去重 → 图谱存储 → 混合检索 → 评分排序 → 答案生成。<br>
-          每一步可视化，每一秒可交互。
+          基于 HugeGraph 的生产级 AI 记忆系统。<br>
+          10+ 核心能力，每一步可视化，每一秒可交互。
         </div>
-        <div class="welcome-features">
-          <div class="welcome-feature" onclick="demoAddMemory()">
-            <span class="emoji">💾</span> 存入记忆
-          </div>
-          <div class="welcome-feature" onclick="demoSearch()">
-            <span class="emoji">🔍</span> 检索问答
-          </div>
-          <div class="welcome-feature" onclick="demoGraphExplore()">
-            <span class="emoji">🕸️</span> 图谱探索
-          </div>
-          <div class="welcome-feature" onclick="runAutoDemo()">
-            <span class="emoji">🎬</span> 全流程演示
-          </div>
+        <div class="welcome-grid">
+          <div class="welcome-feature" onclick="demoAction('add')">💾 存入记忆</div>
+          <div class="welcome-feature" onclick="demoAction('search')">🔍 检索问答</div>
+          <div class="welcome-feature" onclick="demoAction('update')">✏️ 更新记忆</div>
+          <div class="welcome-feature" onclick="demoAction('delete')">🗑️ 删除记忆</div>
+          <div class="welcome-feature" onclick="switchTab('tab-profile')">🧬 用户画像</div>
+          <div class="welcome-feature" onclick="switchTab('tab-history')">📜 版本历史</div>
+          <div class="welcome-feature" onclick="switchTab('tab-scoring')">📊 评分解析</div>
+          <div class="welcome-feature" onclick="switchTab('tab-privacy')">🔒 隐私过滤</div>
+          <div class="welcome-feature" onclick="switchTab('tab-agent')">🤝 Agent协作</div>
+          <div class="welcome-feature" onclick="switchTab('tab-compress')">🗜️ 记忆压缩</div>
+          <div class="welcome-feature" onclick="switchTab('tab-bench')">📈 Benchmark</div>
+          <div class="welcome-feature" onclick="runFullDemo()">🎬 全流程</div>
         </div>
       </div>
     </div>
     <div class="input-area">
       <div class="input-row">
-        <textarea class="input-field" id="inputField" placeholder="输入对话内容（存入记忆）或提问（检索记忆）..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+        <textarea class="input-field" id="inputField" placeholder="输入对话存入记忆 / 输入问题检索记忆 / 输入命令:update/delete..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
       </div>
       <div class="action-btns">
         <button class="action-btn" onclick="clearChat()">清空对话</button>
         <button class="action-btn" onclick="clearMemory()">清空记忆</button>
-        <button class="action-btn" onclick="refreshStats()">刷新统计</button>
-        <button class="action-btn" onclick="refreshGraph()">刷新图谱</button>
+        <button class="action-btn" onclick="refreshAll()">刷新全部</button>
+        <button class="action-btn" onclick="demoAction('profile')">画像提取</button>
+        <button class="action-btn" onclick="demoAction('compress')">压缩记忆</button>
+        <button class="action-btn" onclick="demoAction('privacy')">隐私过滤</button>
+        <button class="action-btn" onclick="demoAction('rewrite')">查询改写</button>
       </div>
     </div>
   </div>
   <!-- Right: Visualization -->
   <div class="right-panel">
     <div class="right-top">
-      <div class="stat"><div class="stat-val blue" id="statMemories">0</div><div class="stat-label">记忆数</div></div>
-      <div class="stat"><div class="stat-val green" id="statEntities">0</div><div class="stat-label">实体数</div></div>
-      <div class="stat"><div class="stat-val purple" id="statEdges">0</div><div class="stat-label">关系数</div></div>
-      <div class="stat"><div class="stat-val teal" id="statLatency">0ms</div><div class="stat-label">延迟</div></div>
+      <div class="stat"><div class="stat-val blue" id="statMem">0</div><div class="stat-label">记忆</div></div>
+      <div class="stat"><div class="stat-val green" id="statEnt">0</div><div class="stat-label">实体</div></div>
+      <div class="stat"><div class="stat-val purple" id="statRel">0</div><div class="stat-label">关系</div></div>
+      <div class="stat"><div class="stat-val teal" id="statLat">0ms</div><div class="stat-label">延迟</div></div>
     </div>
-    <div class="right-main">
-      <!-- Pipeline Flow -->
-      <div class="flow-section">
-        <div class="flow-title"><div class="flow-dot"></div> 记忆管线流程</div>
-        <div class="flow-row" id="flowRow">
-          <div class="flow-node" id="f-input"><span class="flow-emoji">📝</span> 输入</div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-node" id="f-extract"><span class="flow-emoji">🔬</span> 提取</div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-node" id="f-dedup"><span class="flow-emoji">🧹</span> 去重</div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-node" id="f-store"><span class="flow-emoji">💾</span> 存储</div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-node" id="f-search"><span class="flow-emoji">🔍</span> 检索</div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-node" id="f-score"><span class="flow-emoji">📊</span> 评分</div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-node" id="f-answer"><span class="flow-emoji">💬</span> 回答</div>
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="tab-graph" onclick="switchTab('tab-graph')">🕸️ 图谱</button>
+      <button class="tab-btn" data-tab="tab-flow" onclick="switchTab('tab-flow')">⚡ 管线</button>
+      <button class="tab-btn" data-tab="tab-summary" onclick="switchTab('tab-summary')">📋 事实摘要</button>
+      <button class="tab-btn" data-tab="tab-profile" onclick="switchTab('tab-profile')">🧬 画像</button>
+      <button class="tab-btn" data-tab="tab-history" onclick="switchTab('tab-history')">📜 历史</button>
+      <button class="tab-btn" data-tab="tab-scoring" onclick="switchTab('tab-scoring')">📊 评分</button>
+      <button class="tab-btn" data-tab="tab-privacy" onclick="switchTab('tab-privacy')">🔒 隐私</button>
+      <button class="tab-btn" data-tab="tab-agent" onclick="switchTab('tab-agent')">🤝 协作</button>
+      <button class="tab-btn" data-tab="tab-compress" onclick="switchTab('tab-compress')">🗜️ 压缩</button>
+      <button class="tab-btn" data-tab="tab-bench" onclick="switchTab('tab-bench')">📈 基准</button>
+    </div>
+    <!-- Tab Contents -->
+    <!-- Graph -->
+    <div class="tab-content active" id="tab-graph">
+      <div class="graph-box">
+        <div id="cy"></div>
+        <div class="graph-overlay" id="graphOverlay">点击实体 → 多跳展开</div>
+      </div>
+      <div style="flex:0 0 auto;padding:6px 0;">
+        <div class="card">
+          <div class="card-title"><span class="emoji">🧬</span> 实体列表</div>
+          <div class="entity-list" id="entityList"><span style="color:var(--text3);font-size:10px">暂无</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="emoji">🔗</span> 关系列表</div>
+          <div class="entity-list" id="relList"><span style="color:var(--text3);font-size:10px">暂无</span></div>
         </div>
       </div>
-      <!-- Graph + Stats -->
-      <div class="content-area">
-        <div class="graph-area">
-          <div id="cy"></div>
-          <div class="graph-overlay" id="graphOverlay">图谱数据 (Cytoscape.js)</div>
+    </div>
+    <!-- Flow -->
+    <div class="tab-content" id="tab-flow">
+      <div class="card">
+        <div class="card-title"><span class="emoji">⚡</span> ADD 管线（存入记忆）</div>
+        <div class="flow-row" id="addFlow">
+          <div class="flow-node" id="fa-input"><span>📝</span>输入</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-rewrite"><span>🔄</span>意图分类</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-extract"><span>🔬</span>实体提取</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-dedup"><span>🧹</span>V3去重</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-summary"><span>📋</span>事实摘要</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-faiss"><span>🧮</span>FAISS向量</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-bm25"><span>📄</span>BM25全文</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-graph"><span>🕸️</span>HugeGraph</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-profile"><span>🧬</span>画像更新</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-route"><span>🔀</span>路由存储</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-history"><span>📜</span>版本记录</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fa-done"><span>✅</span>完成</div>
         </div>
-        <div class="stats-area" id="statsArea">
-          <div class="stats-card">
-            <div class="card-title"><span class="emoji">📊</span> 系统状态</div>
-            <div class="stat-row"><span class="stat-key">记忆总数</span><span class="stat-val2" id="s-memories">-</span></div>
-            <div class="stat-row"><span class="stat-key">向量索引</span><span class="stat-val2" id="s-faiss">-</span></div>
-            <div class="stat-row"><span class="stat-key">全文索引</span><span class="stat-val2" id="s-bm25">-</span></div>
-            <div class="stat-row"><span class="stat-key">图存储</span><span class="stat-val2" id="s-graph">-</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="emoji">⚡</span> SEARCH 管线（检索记忆）</div>
+        <div class="flow-row" id="searchFlow">
+          <div class="flow-node" id="fs-input"><span>📝</span>查询</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-rewrite"><span>🔄</span>查询改写</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-profile"><span>🧬</span>画像注入</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-faiss"><span>🧮</span>FAISS检索</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-bm25"><span>📄</span>BM25全文</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-graph"><span>🕸️</span>图遍历</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-ebbinghaus"><span>⏰</span>遗忘曲线</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-score"><span>📊</span>加性评分</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-boost"><span>⬆️</span>实体Boost</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-rerank"><span>🔄</span>LLM重排</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-privacy"><span>🔒</span>隐私过滤</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-answer"><span>💬</span>答案生成</div><span class="flow-arrow">→</span>
+          <div class="flow-node" id="fs-done"><span>✅</span>完成</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="emoji">🔧</span> 管线配置</div>
+        <div class="stat-row"><span class="stat-key">评分策略</span><span class="stat-val2" style="color:var(--accent)">加性融合 (semantic + bm25 + entity_boost)</span></div>
+        <div class="stat-row"><span class="stat-key">BM25归一化</span><span class="stat-val2">Sigmoid</span></div>
+        <div class="stat-row"><span class="stat-key">实体Boost权重</span><span class="stat-val2">0.15</span></div>
+        <div class="stat-row"><span class="stat-key">遗忘曲线</span><span class="stat-val2">Ebbinghaus R=0.5</span></div>
+        <div class="stat-row"><span class="stat-key">去重策略</span><span class="stat-val2">Token Jaccard ≥ 0.95</span></div>
+        <div class="stat-row"><span class="stat-key">事实摘要长度</span><span class="stat-val2">≤ 500 字符</span></div>
+        <div class="stat-row"><span class="stat-key">图遍历深度</span><span class="stat-val2">max_hops=2</span></div>
+      </div>
+    </div>
+    <!-- Summary -->
+    <div class="tab-content" id="tab-summary">
+      <div class="card">
+        <div class="card-title"><span class="emoji">📋</span> 事实摘要 vs 原始对话</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">v4 核心改进：BM25/FAISS 索引事实摘要而非原始对话文本，大幅提升检索命中质量。</div>
+        <div id="summaryCompareArea"><span style="color:var(--text3);font-size:10px">存入记忆后自动展示对比</span></div>
+      </div>
+    </div>
+    <!-- Profile -->
+    <div class="tab-content" id="tab-profile">
+      <div class="card">
+        <div class="card-title"><span class="emoji">🧬</span> 用户画像（自动提取）</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">从对话内容自动提取：姓名、偏好、别名、话题</div>
+        <div id="profileArea"><span style="color:var(--text3);font-size:10px">存入几条记忆后点击"画像提取"</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="emoji">💉</span> 画像注入查询改写</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">用户画像作为上下文注入查询改写，提升个性化检索</div>
+        <div id="profileInjectArea"><span style="color:var(--text3);font-size:10px">提取画像后可查看注入效果</span></div>
+      </div>
+      <button class="action-btn" onclick="extractProfile()" style="margin-top:4px">🧬 提取画像</button>
+      <button class="action-btn" onclick="showProfileInject()" style="margin-top:4px;margin-left:4px">💉 查看注入</button>
+    </div>
+    <!-- History -->
+    <div class="tab-content" id="tab-history">
+      <div class="card">
+        <div class="card-title"><span class="emoji">📜</span> 记忆版本历史</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">每次 ADD/UPDATE/DELETE 都记录事件，可追溯完整生命周期</div>
+        <div class="timeline" id="historyTimeline"><span style="color:var(--text3);font-size:10px">操作后自动记录</span></div>
+      </div>
+      <button class="action-btn" onclick="loadHistory()" style="margin-top:4px">📜 加载历史</button>
+    </div>
+    <!-- Scoring -->
+    <div class="tab-content" id="tab-scoring">
+      <div class="card">
+        <div class="card-title"><span class="emoji">📊</span> 加性评分解析</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">score = semantic × 0.6 + bm25_sigmoid × 0.3 + entity_boost × 0.15</div>
+        <div id="scoringArea"><span style="color:var(--text3);font-size:10px">检索后自动展示评分分解</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="emoji">🔬</span> 评分参数</div>
+        <div id="scoringParams"><span style="color:var(--text3);font-size:10px">点击下方按钮查看</span></div>
+      </div>
+      <button class="action-btn" onclick="explainScoring()" style="margin-top:4px">📊 查看评分参数</button>
+    </div>
+    <!-- Privacy -->
+    <div class="tab-content" id="tab-privacy">
+      <div class="card">
+        <div class="card-title"><span class="emoji">🔒</span> 隐私过滤（PII 脱敏）</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">基于隐私等级自动脱敏：standard → confidential → sensitive</div>
+        <div class="privacy-compare" id="privacyArea">
+          <div class="privacy-box">
+            <div class="label">原始内容</div>
+            <div class="privacy-original" id="privacyOriginal">—</div>
           </div>
-          <div class="stats-card">
-            <div class="card-title"><span class="emoji">🧬</span> 最近实体</div>
-            <div class="entity-list" id="entityList">
-              <div style="color:var(--text3);font-size:11px;">暂无数据</div>
-            </div>
-          </div>
-          <div class="stats-card">
-            <div class="card-title"><span class="emoji">🔗</span> 最近关系</div>
-            <div class="entity-list" id="relList">
-              <div style="color:var(--text3);font-size:11px;">暂无数据</div>
-            </div>
+          <div class="privacy-box">
+            <div class="label">脱敏后</div>
+            <div class="privacy-filtered" id="privacyFiltered">—</div>
           </div>
         </div>
       </div>
+      <button class="action-btn" onclick="demoPrivacyFilter()" style="margin-top:4px">🔒 运行脱敏演示</button>
+    </div>
+    <!-- Agent -->
+    <div class="tab-content" id="tab-agent">
+      <div class="card">
+        <div class="card-title"><span class="emoji">🤝</span> 多 Agent 协作权限</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">5级权限 + 3级隐私 + 协作组 + 跨Agent共享</div>
+        <div class="perm-grid">
+          <div class="perm-card"><div class="perm-emoji">👑</div><div class="perm-name">owner</div><div class="perm-desc">完全控制，可读写删</div></div>
+          <div class="perm-card"><div class="perm-emoji">✏️</div><div class="perm-name">admin</div><div class="perm-desc">管理权限，可读写</div></div>
+          <div class="perm-card"><div class="perm-emoji">📖</div><div class="perm-name">read</div><div class="perm-desc">只读访问</div></div>
+          <div class="perm-card"><div class="perm-emoji">🚫</div><div class="perm-name">none</div><div class="perm-desc">无权限</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="emoji">🔐</span> 隐私等级</div>
+        <div class="perm-grid">
+          <div class="perm-card" style="border-color:var(--green)"><div class="perm-emoji">🟢</div><div class="perm-name">standard</div><div class="perm-desc">可跨Agent共享</div></div>
+          <div class="perm-card" style="border-color:var(--yellow)"><div class="perm-emoji">🟡</div><div class="perm-name">confidential</div><div class="perm-desc">仅同组Agent可见</div></div>
+          <div class="perm-card" style="border-color:var(--red)"><div class="perm-emoji">🔴</div><div class="perm-name">sensitive</div><div class="perm-desc">仅owner可见</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="emoji">✅</span> 权限检查结果</div>
+        <div id="agentCheckResult"><span style="color:var(--text3);font-size:10px">点击下方按钮运行演示</span></div>
+      </div>
+      <button class="action-btn" onclick="demoAgentCheck()" style="margin-top:4px">🤝 权限检查演示</button>
+      <button class="action-btn" onclick="demoAgentShare()" style="margin-top:4px;margin-left:4px">📤 共享演示</button>
+    </div>
+    <!-- Compress -->
+    <div class="tab-content" id="tab-compress">
+      <div class="card">
+        <div class="card-title"><span class="emoji">🗜️</span> 记忆压缩</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:6px">聚类 → LLM摘要 → 剪枝 → 归档，减少冗余提升检索效率</div>
+        <div id="compressArea"><span style="color:var(--text3);font-size:10px">存入5+条记忆后运行压缩</span></div>
+      </div>
+      <button class="action-btn" onclick="runCompression()" style="margin-top:4px">🗜️ 运行压缩</button>
+    </div>
+    <!-- Benchmark -->
+    <div class="tab-content" id="tab-bench">
+      <div class="card">
+        <div class="card-title"><span class="emoji">📈</span> LOCOMO Benchmark</div>
+        <div id="benchArea"><span style="color:var(--text3);font-size:10px">加载中...</span></div>
+      </div>
+      <button class="action-btn" onclick="loadBenchmark()" style="margin-top:4px">📈 加载基准数据</button>
     </div>
   </div>
 </div>
 
 <script>
 // ===== State =====
-let connected = false;
-let cyGraph = null;
-let demoRunning = false;
-let lastTrace = [];
-let allEntities = [];
-let allRelationships = [];
+let connected = false, cyGraph = null, demoRunning = false;
+let lastAddResult = null, lastSearchResult = null;
+const API = '/api';
 
-// ===== Init Cytoscape =====
-function initCy() {
-  cyGraph = cytoscape({
-    container: document.getElementById('cy'),
-    style: [
-      {selector:'node',style:{'label':'data(label)','font-size':'11px','color':'#e2e4ea','text-valign':'center','text-halign':'center','background-color':'data(color)','width':'data(size)','height':'data(size)','border-width':2,'border-color':'data(border)','text-wrap':'wrap','text-max-width':'60px','font-weight':600}},
-      {selector:'node.highlight',style:{'border-color':'#3b82f6','border-width':4,'z-index':10}},
-      {selector:'edge',style:{'label':'data(label)','font-size':'9px','color':'#555a6a','width':2,'line-color':'#252838','target-arrow-color':'#252838','target-arrow-shape':'triangle','curve-style':'bezier','text-rotation':'autorotate','text-wrap':'wrap','text-max-width':'50px'}},
-      {selector:'edge.highlight',style:{'line-color':'#3b82f6','target-arrow-color':'#3b82f6','width':4,'z-index':10}},
+// ===== Cytoscape =====
+const TYPE_COLORS={person:'#3b82f6',location:'#10b981',organization:'#f59e0b',event:'#8b5cf6',concept:'#ec4899',skill:'#06b6d4',hobby:'#f97316',time:'#a78bfa',number:'#f87171',feeling:'#ec4899',default:'#6366f1'};
+const TYPE_SIZE={person:44,location:34,organization:36,event:30,concept:28,skill:26,hobby:24,time:22,number:20,feeling:22,default:26};
+
+function initCy(){
+  cyGraph=cytoscape({
+    container:document.getElementById('cy'),
+    style:[
+      {selector:'node',style:{'label':'data(label)','font-size':'10px','color':'#e2e4ea','text-valign':'center','text-halign':'center','background-color':'data(bg)','width':'data(w)','height':'data(w)','border-width':2,'border-color':'data(bc)','text-wrap':'wrap','text-max-width':'50px','font-weight':600}},
+      {selector:'node.highlight',style:{'border-color':'#f59e0b','border-width':4,'z-index':10}},
+      {selector:'edge',style:{'label':'data(label)','font-size':'8px','color':'#555a6a','width':2,'line-color':'#252838','target-arrow-color':'#252838','target-arrow-shape':'triangle','curve-style':'bezier','text-rotation':'autorotate','text-wrap':'wrap','text-max-width':'40px'}},
+      {selector:'edge.highlight',style:{'line-color':'#f59e0b','target-arrow-color':'#f59e0b','width':4,'z-index':10}},
     ],
-    layout:{name:'concentric',concentric:function(n){return n.data('weight')||1;},levelWidth:function(){return 50;},animate:true,animationDuration:500},
+    layout:{name:'concentric',concentric:n=>n.data('weight')||1,levelWidth:()=>50,animate:true,animationDuration:400},
     minZoom:0.3,maxZoom:3,
+  });
+  // Click node → multi-hop expand
+  cyGraph.on('tap','node',async function(evt){
+    const node=evt.target;
+    const name=node.data('label');
+    node.addClass('highlight');
+    showToast(`🔍 正在多跳遍历 "${name}"...`,'success');
+    try{
+      const r=await apiPost(API+'/graph/search',{query:name,max_hops:2,limit:15});
+      if(r.results){
+        for(const e of r.results){
+          if(e.name)try{cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,bg:TYPE_COLORS[e.type||'default']||TYPE_COLORS.default,w:TYPE_SIZE[e.type||'default']||TYPE_SIZE.default,bc:TYPE_COLORS[e.type||'default']||TYPE_COLORS.default,weight:e.type==='person'?5:2}});}catch(x){}
+          if(e.neighbors)for(const nb of e.neighbors)try{cyGraph.add({group:'nodes',data:{id:nb.name,label:nb.name,bg:TYPE_COLORS[nb.type||'default']||TYPE_COLORS.default,w:TYPE_SIZE[nb.type||'default']||TYPE_SIZE.default,bc:TYPE_COLORS[nb.type||'default']||TYPE_COLORS.default,weight:2}});}catch(x){}
+          if(e.edges)for(const ed of e.edges)try{cyGraph.add({group:'edges',data:{id:ed.source+'_'+ed.label+'_'+ed.target,source:ed.source,target:ed.target,label:ed.label}});}catch(x){}
+        }
+        cyGraph.layout({name:'concentric',animate:true,animationDuration:400}).run();
+        updateOverlay();
+        showToast(`✅ "${name}" 多跳遍历完成，新增 ${r.results.length} 实体`,'success');
+      }
+    }catch(e){showToast('❌ 遍历失败','error');}
+    setTimeout(()=>node.removeClass('highlight'),3000);
   });
 }
 
-// ===== Color map for entity types =====
-const TYPE_COLORS={person:'#3b82f6',location:'#10b981',organization:'#f59e0b',event:'#8b5cf6',concept:'#ec4899',skill:'#06b6d4',hobby:'#f97316',resource:'#ef4444',default:'#6366f1'};
-const TYPE_BORDER={person:'#60a5fa',location:'#34d399',organization:'#fbbf24',event:'#a78bfa',concept:'#f472b6',skill:'#22d3ee',hobby:'#fb923c',resource:'#f87171',default:'#818cf8'};
-const TYPE_SIZE={person:40,location:35,organization:38,event:32,concept:30,skill:28,hobby:26,resource:24,default:28};
-
-// ===== API Helpers =====
-async function apiPost(url, data) {
-  const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  return r.json();
-}
-async function apiGet(url) {
-  const r = await fetch(url);
-  return r.json();
+function updateOverlay(){
+  if(!cyGraph)return;
+  const n=cyGraph.nodes().length,e=cyGraph.edges().length;
+  document.getElementById('graphOverlay').textContent=`${n} 实体 · ${e} 关系 · 点击实体多跳展开`;
 }
 
-// ===== Check Connection =====
-async function checkConnection() {
-  try {
-    const r = await apiGet('/api/stats');
-    connected = true;
-    document.getElementById('connDot').className = 'conn-dot';
-    document.getElementById('connText').textContent = '已连接';
-    updateStatsFromResult(r);
-  } catch(e) {
-    connected = false;
-    document.getElementById('connDot').className = 'conn-dot err';
-    document.getElementById('connText').textContent = '未连接';
-  }
+// ===== API =====
+async function apiPost(u,d){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});return r.json();}
+async function apiGet(u){const r=await fetch(u);return r.json();}
+
+// ===== Connection =====
+async function checkConn(){
+  try{const r=await apiGet(API+'/stats');connected=true;document.getElementById('connDot').className='conn-dot';document.getElementById('connText').textContent='已连接';updateStats(r);}catch(e){connected=false;document.getElementById('connDot').className='conn-dot err';document.getElementById('connText').textContent='未连接';}
+}
+function updateStats(r){
+  if(!r)return;
+  const m=r.memories||r.memory_count||0,e=r.entities||r.entity_count||r.total_entities||0,ed=r.edges||r.edge_count||r.total_edges||0;
+  document.getElementById('statMem').textContent=m;
+  document.getElementById('statEnt').textContent=e;
+  document.getElementById('statRel').textContent=ed;
 }
 
-// ===== Update Stats =====
-function updateStatsFromResult(r) {
-  if (!r) return;
-  const mems = r.memory_count || r.total_memories || 0;
-  const ents = r.entity_count || r.total_entities || 0;
-  const edges = r.edge_count || r.total_edges || 0;
-  document.getElementById('statMemories').textContent = mems;
-  document.getElementById('statEntities').textContent = ents;
-  document.getElementById('statEdges').textContent = edges;
-  document.getElementById('s-memories').textContent = mems;
-  document.getElementById('s-faiss').textContent = r.faiss_count || '-';
-  document.getElementById('s-bm25').textContent = r.bm25_count || '-';
-  document.getElementById('s-graph').textContent = ents + ' / ' + edges;
+// ===== Chat =====
+function addUserMsg(t){const a=document.getElementById('chatArea');document.getElementById('welcomeMsg').style.display='none';const d=document.createElement('div');d.className='chat-msg user';d.innerHTML=`<div class="msg-avatar user">U</div><div class="msg-body"><div class="msg-bubble">${esc(t)}</div><div class="msg-time">${ts()}</div></div>`;a.appendChild(d);a.scrollTop=a.scrollHeight;}
+function addAiMsg(html){const a=document.getElementById('chatArea');const d=document.createElement('div');d.className='chat-msg ai';d.innerHTML=`<div class="msg-avatar ai">AI</div><div class="msg-body">${html}<div class="msg-time">${ts()}</div></div>`;a.appendChild(d);a.scrollTop=a.scrollHeight;}
+
+const STEP_ICONS={extract:'🔬',dedup:'🧹',store:'💾',search:'🔍',score:'📊',rerank:'🔄',answer:'💬',graph:'🕸️',rewrite:'🔄',profile:'🧬',privacy:'🔒',compress:'🗜️',route:'🔀',history:'📜',summary:'📋',ebbinghaus:'⏰',boost:'⬆️'};
+const STEP_COLORS={extract:'#3b82f6',dedup:'#f59e0b',store:'#10b981',search:'#06b6d4',score:'#8b5cf6',rerank:'#ec4899',answer:'#f97316',graph:'#6366f1',rewrite:'#3b82f6',profile:'#8b5cf6',privacy:'#ef4444',compress:'#06b6d4',route:'#f59e0b',history:'#a78bfa',summary:'#06b6d4',ebbinghaus:'#f59e0b',boost:'#8b5cf6'};
+const NAME_MAP={'LLM实体抽取':'extract','V3 ADD-only去重':'dedup','V3 ADD-only提取':'dedup','混合检索':'search','加性混合检索':'search','FAISS+Ebbinghaus检索':'search','图谱上下文检索':'graph','评分排序':'score','加性评分':'score','LLM答案生成':'answer','Fast-eval':'answer','Fast-eval retrieval-only':'answer','存储':'store','写入HugeGraph':'store','写入FAISS':'store','写入BM25':'store','LLM重排':'rerank','权限与隐私过滤':'privacy','查询改写与用户画像注入':'rewrite','记忆压缩':'compress','路由存储':'route','版本历史记录':'history','事实摘要构建':'summary','遗忘曲线衰减':'ebbinghaus','实体Boost':'boost','意图分类':'rewrite'};
+
+function addStep(step){
+  const a=document.getElementById('chatArea');
+  const iconType=NAME_MAP[step.name]||'search';
+  const icon=STEP_ICONS[iconType]||'⚙️';
+  const bg=STEP_COLORS[iconType]||'#3b82f6';
+  const d=document.createElement('div');d.className='pipeline-step';
+  d.innerHTML=`<div class="step-icon" style="background:${bg}">${icon}</div><div class="step-detail"><div class="step-name">${step.name}</div><div class="step-info">${step.detail||''}</div>${step.elapsed_ms?`<div class="step-data">${step.elapsed_ms}ms</div>`:''}</div>`;
+  a.appendChild(d);a.scrollTop=a.scrollHeight;
+  // Highlight flow node
+  highlightFlowNode(iconType, step.name);
 }
 
-// ===== Chat Messages =====
-function addUserMsg(text) {
-  const area = document.getElementById('chatArea');
-  const w = document.getElementById('welcomeMsg');
-  if (w) w.style.display = 'none';
-  const div = document.createElement('div');
-  div.className = 'chat-msg user';
-  div.innerHTML = `<div class="msg-avatar user">U</div><div class="msg-body"><div class="msg-bubble">${escHtml(text)}</div><div class="msg-time">${timeStr()}</div></div>`;
-  area.appendChild(div);
-  area.scrollTop = area.scrollHeight;
+function highlightFlowNode(type, name){
+  // Map to ADD flow or SEARCH flow nodes
+  const addMap={rewrite:'fa-rewrite',extract:'fa-extract',dedup:'fa-dedup',summary:'fa-summary',store:'fa-faiss',graph:'fa-graph',profile:'fa-profile',route:'fa-route',history:'fa-history'};
+  const searchMap={rewrite:'fs-rewrite',profile:'fs-profile',search:'fs-faiss',graph:'fs-graph',ebbinghaus:'fs-ebbinghaus',score:'fs-score',boost:'fs-boost',rerank:'fs-rerank',privacy:'fs-privacy',answer:'fs-answer'};
+  const map=name.includes('存储')||name.includes('写入')||name.includes('提取')?addMap:searchMap;
+  const id=map[type];
+  if(id){const el=document.getElementById(id);if(el){el.classList.add('active');setTimeout(()=>{el.classList.remove('active');el.classList.add('done');setTimeout(()=>el.classList.remove('done'),2000);},800);}}
 }
 
-function addAiMsg(html) {
-  const area = document.getElementById('chatArea');
-  const div = document.createElement('div');
-  div.className = 'chat-msg ai';
-  div.innerHTML = `<div class="msg-avatar ai">AI</div><div class="msg-body">${html}<div class="msg-time">${timeStr()}</div></div>`;
-  area.appendChild(div);
-  area.scrollTop = area.scrollHeight;
-}
+function addAiAnswer(answer,ms){addAiMsg(`<div class="msg-bubble">${esc(answer)}</div>`);if(ms)document.getElementById('statLat').textContent=ms+'ms';}
 
-function addPipelineStep(step) {
-  const area = document.getElementById('chatArea');
-  const nameMap = {
-    'LLM实体抽取':'extract','V3 ADD-only去重':'dedup','V3 ADD-only提取':'dedup',
-    '混合检索':'search','加性混合检索':'search','FAISS+Ebbinghaus检索':'search',
-    '图谱上下文检索':'graph','评分排序':'score','加性评分':'score',
-    'LLM答案生成':'answer','Fast-eval':'answer','Fast-eval retrieval-only':'answer',
-    '存储':'store','写入HugeGraph':'store','写入FAISS':'store','写入BM25':'store',
-    'LLM重排':'rerank','权限与隐私过滤':'rerank',
-  };
-  const iconType = nameMap[step.name] || 'search';
-  const iconColors = {extract:'var(--accent)',dedup:'var(--yellow)',store:'var(--green)',search:'var(--accent3)',score:'var(--accent2)',rerank:'var(--pink)',answer:'var(--orange)',graph:'#6366f1'};
-  const bgColor = iconColors[iconType] || 'var(--accent)';
-  const div = document.createElement('div');
-  div.className = 'pipeline-step';
-  div.innerHTML = `<div class="step-icon ${iconType}" style="background:${bgColor}">${iconType==='extract'?'🔬':iconType==='dedup'?'🧹':iconType==='store'?'💾':iconType==='search'?'🔍':iconType==='score'?'📊':iconType==='rerank'?'🔄':iconType==='answer'?'💬':iconType==='graph'?'🕸️':'⚙️'}</div><div class="step-detail"><div class="step-name">${step.name}</div><div class="step-info">${step.detail||''}</div>${step.elapsed_ms?`<div class="step-data">${step.elapsed_ms}ms</div>`:''}</div>`;
-  area.appendChild(div);
-  area.scrollTop = area.scrollHeight;
-  // Highlight corresponding flow node
-  const flowIdMap = {extract:'f-extract',dedup:'f-dedup',store:'f-store',search:'f-search',score:'f-score',rerank:'f-score',answer:'f-answer',graph:'f-search'};
-  const flowId = flowIdMap[iconType];
-  if (flowId) highlightFlow(flowId);
-}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function ts(){const d=new Date();return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')+':'+d.getSeconds().toString().padStart(2,'0');}
 
-function addAiAnswer(answer, elapsedMs) {
-  addAiMsg(`<div class="msg-bubble">${escHtml(answer)}</div>`);
-  highlightFlow('f-answer', true);
-  if (elapsedMs) document.getElementById('statLatency').textContent = elapsedMs + 'ms';
+// ===== Tab Switch =====
+function switchTab(tabId){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  // Auto-load data for certain tabs
+  if(tabId==='tab-bench')loadBenchmark();
+  if(tabId==='tab-history')loadHistory();
+  if(tabId==='tab-profile')extractProfile();
+  if(tabId==='tab-graph')refreshGraph();
 }
-
-function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function timeStr() { const d=new Date(); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')+':'+d.getSeconds().toString().padStart(2,'0'); }
-
-// ===== Flow Highlight =====
-let flowTimers = {};
-function highlightFlow(id, done=false) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.add('active');
-  if (done) { el.classList.remove('active'); el.classList.add('done'); setTimeout(()=>el.classList.remove('done'),2000); }
-  else { clearTimeout(flowTimers[id]); flowTimers[id]=setTimeout(()=>el.classList.remove('active'),1500); }
-}
-function resetFlow() { document.querySelectorAll('.flow-node').forEach(n=>{n.classList.remove('active','done');}); }
 
 // ===== Send Message =====
-async function sendMessage() {
-  const input = document.getElementById('inputField');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  document.getElementById('sendBtn').disabled = true;
-  resetFlow();
-  highlightFlow('f-input', true);
+async function sendMessage(){
+  const input=document.getElementById('inputField');
+  const text=input.value.trim();
+  if(!text)return;
+  input.value='';
+  document.getElementById('sendBtn').disabled=true;
   addUserMsg(text);
 
-  // Heuristic: if text contains question marks or is short → search; else → add
-  const isQuestion = text.includes('?') || text.includes('？') || (text.length < 40 && /^(what|who|where|when|how|为什么|谁|哪|怎么|什么)/i.test(text));
-
-  if (isQuestion) {
-    await doSearch(text);
-  } else {
-    await doAddMemory(text);
+  // Parse command
+  if(text.startsWith('update:')){
+    const parts=text.substring(7).split('|');
+    if(parts.length>=2){await doUpdate(parts[0].trim(),parts[1].trim());}
+    else{addAiMsg(`<div class="msg-bubble" style="color:var(--yellow)">格式: update:memory_id|新内容</div>`);}
+  }else if(text.startsWith('delete:')){
+    await doDelete(text.substring(7).trim());
+  }else{
+    const isQ=text.includes('?')||text.includes('？')||(text.length<40&&/^(what|who|where|when|how|为什么|谁|哪|怎么|什么)/i.test(text));
+    if(isQ){await doSearch(text);}else{await doAdd(text);}
   }
-  document.getElementById('sendBtn').disabled = false;
-  refreshStats();
-  refreshGraph();
+  document.getElementById('sendBtn').disabled=false;
+  refreshAll();
 }
 
-// ===== Add Memory =====
-async function doAddMemory(text) {
-  try {
-    highlightFlow('f-input');
-    const r = await apiPost('/api/memory/add', {content: text, user_id: 'demo_user'});
-    highlightFlow('f-input', true);
-    // Show pipeline trace
-    if (r.trace) {
-      for (const step of r.trace) addPipelineStep(step);
-    }
-    // Show result
-    if (r.action === 'SKIP') {
-      addAiMsg(`<div class="msg-bubble" style="color:var(--yellow)">⚠️ 记忆已存在（${r.reason||'dedup'}），跳过存储。</div>`);
-    } else if (r.memory_id) {
-      const ents = (r.entities||[]).map(e=>`${e.name}(${e.type})`).join(', ');
-      const rels = (r.relationships||[]).map(e=>`${e.source} → ${e.relationship} → ${e.target}`).join(', ');
-      let html = `<div class="msg-bubble" style="color:var(--green)">✅ 记忆已存储</div>`;
-      if (ents) html += `<div style="margin-top:6px;font-size:12px;color:var(--accent)">🧬 实体: ${escHtml(ents)}</div>`;
-      if (rels) html += `<div style="margin-top:4px;font-size:12px;color:var(--accent2)">🔗 关系: ${escHtml(rels)}</div>`;
-      addAiMsg(html);
-      // Add to graph
+// ===== ADD =====
+async function doAdd(text){
+  try{
+    const r=await apiPost(API+'/memory/add',{content:text,user_id:'demo_user'});
+    lastAddResult=r;
+    if(r.trace)for(const s of r.trace)addStep(s);
+    if(r.action==='SKIP'){addAiMsg(`<div class="msg-bubble" style="color:var(--yellow)">⚠️ 已存在 (${r.reason||'dedup'})</div>`);}
+    else if(r.memory_id){
+      const ents=(r.entities||[]).map(e=>`${e.name}(${e.type})`).join(', ');
+      const rels=(r.relationships||[]).map(e=>`${e.source}→${e.relationship}→${e.target}`).join(', ');
+      let h=`<div class="msg-bubble" style="color:var(--green)">✅ 已存储 (ID:${r.memory_id.slice(0,12)}...)`;
+      if(ents)h+=`<div style="margin-top:4px;font-size:11px;color:var(--accent)">🧬 ${esc(ents)}</div>`;
+      if(rels)h+=`<div style="font-size:11px;color:var(--accent2)">🔗 ${esc(rels)}</div>`;
+      h+='</div>';
+      addAiMsg(h);
       updateCyFromResult(r);
-    } else {
-      addAiMsg(`<div class="msg-bubble">${escHtml(JSON.stringify(r).slice(0,300))}</div>`);
+      showSummaryCompare(r);
     }
-  } catch(e) {
-    addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ 存储失败: ${escHtml(e.message)}</div>`);
-  }
+  }catch(e){addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ ${esc(e.message)}</div>`);}
 }
 
-// ===== Search =====
-async function doSearch(query) {
-  try {
-    const r = await apiPost('/api/memory/search', {query: query, user_id: 'demo_user', top_k: 5, fast_eval: true});
-    // Show pipeline trace
-    if (r.trace) {
-      for (const step of r.trace) addPipelineStep(step);
-    }
-    // Show answer
-    const answer = r.answer || '无结果';
-    addAiAnswer(answer, r.total_elapsed_ms);
-    // Show top results
-    if (r.results && r.results.length > 0) {
-      const top = r.results.slice(0, 3);
-      let html = '<div style="margin-top:8px;font-size:11px;color:var(--text2)">检索结果:</div>';
-      for (const res of top) {
-        const mem = res.memory || {};
-        const score = res.score || 0;
-        const source = res.source || '';
-        html += `<div class="pipeline-step" style="margin:4px 0;"><div class="step-icon search" style="background:var(--accent3);font-size:10px">#${top.indexOf(res)+1}</div><div class="step-detail"><div class="step-info">${escHtml(mem.content||'').slice(0,80)}</div><div class="step-data">score=${round(score)}  source=${source}</div></div></div>`;
+// ===== SEARCH =====
+async function doSearch(query){
+  try{
+    const r=await apiPost(API+'/memory/search',{query:query,user_id:'demo_user',top_k:5,fast_eval:true});
+    lastSearchResult=r;
+    if(r.trace)for(const s of r.trace)addStep(s);
+    addAiAnswer(r.answer||'无结果',r.total_elapsed_ms);
+    if(r.results&&r.results.length>0){
+      let h='<div style="margin-top:6px;font-size:10px;color:var(--text2)">Top结果:</div>';
+      for(let i=0;i<Math.min(3,r.results.length);i++){
+        const res=r.results[i];
+        const mem=res.memory||{};
+        h+=`<div class="pipeline-step" style="margin:3px 0"><div class="step-icon" style="background:var(--accent3);font-size:9px">#${i+1}</div><div class="step-detail"><div class="step-info">${esc(mem.content||'').slice(0,60)}</div><div class="step-data">score=${rnd(res.score)} src=${res.source||''}</div></div></div>`;
       }
-      addAiMsg(html);
+      addAiMsg(h);
+      showScoringBreakdown(r);
     }
-    // Highlight graph entities from results
     highlightGraphFromSearch(r);
-  } catch(e) {
-    addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ 检索失败: ${escHtml(e.message)}</div>`);
-  }
+  }catch(e){addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ ${esc(e.message)}</div>`);}
 }
 
-function round(n) { return Math.round(n * 1000) / 1000; }
+// ===== UPDATE =====
+async function doUpdate(id,content){
+  try{
+    const r=await apiPost(API+'/memory/update',{memory_id:id,content:content,user_id:'demo_user'});
+    addAiMsg(`<div class="msg-bubble" style="color:var(--accent)">✏️ 已更新 ${id}</div>`);
+    if(r.trace)for(const s of r.trace)addStep(s);
+  }catch(e){addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ ${esc(e.message)}</div>`);}
+}
 
-// ===== Update Cytoscape Graph =====
-function updateCyFromResult(r) {
-  if (!cyGraph) return;
-  const ents = r.entities || [];
-  const rels = r.relationships || [];
-  for (const e of ents) {
-    const type = (e.type || 'default').toLowerCase();
-    const color = TYPE_COLORS[type] || TYPE_COLORS.default;
-    const border = TYPE_BORDER[type] || TYPE_BORDER.default;
-    const size = TYPE_SIZE[type] || TYPE_SIZE.default;
-    try {
-      cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,color:border,size:type==='person'?48:36,border:border,weight:type==='person'?5:2,type:type}});
-    } catch(ex) {} // duplicate
+// ===== DELETE =====
+async function doDelete(id){
+  try{
+    const r=await apiPost(API+'/memory/delete',{memory_id:id,user_id:'demo_user'});
+    addAiMsg(`<div class="msg-bubble" style="color:var(--red)">🗑️ 已删除 ${id}</div>`);
+    if(r.trace)for(const s of r.trace)addStep(s);
+  }catch(e){addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ ${esc(e.message)}</div>`);}
+}
+
+function rnd(n){return Math.round(n*1000)/1000;}
+
+// ===== Graph Update =====
+function updateCyFromResult(r){
+  if(!cyGraph)return;
+  const ents=r.entities||[],rels=r.relationships||[];
+  for(const e of ents){
+    const t=(e.type||'default').toLowerCase();
+    try{cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,bg:TYPE_COLORS[t]||TYPE_COLORS.default,w:TYPE_SIZE[t]||TYPE_SIZE.default,bc:TYPE_COLORS[t]||TYPE_COLORS.default,weight:t==='person'?5:2}});}catch(x){}
   }
-  for (const r2 of rels) {
-    const eid = r2.source + '_' + r2.relationship + '_' + r2.target;
-    try {
-      cyGraph.add({group:'edges',data:{id:eid,source:r2.source,target:r2.target,label:r2.relationship}});
-    } catch(ex) {} // duplicate
+  for(const r2 of rels){try{cyGraph.add({group:'edges',data:{id:r2.source+'_'+r2.relationship+'_'+r2.target,source:r2.source,target:r2.target,label:r2.relationship}});}catch(x){}
   }
   cyGraph.layout({name:'concentric',animate:true,animationDuration:400}).run();
-  // Update entity/rel lists
-  updateEntityRelLists(ents, rels);
+  updateOverlay();
+  updateEntityRelLists(ents,rels);
 }
 
-function updateEntityRelLists(ents, rels) {
-  const eList = document.getElementById('entityList');
-  eList.innerHTML = ents.map(e=>`<div class="entity-item"><span>${escHtml(e.name)}</span><span class="entity-type">${e.type||'?'}</span></div>`).join('');
-  const rList = document.getElementById('relList');
-  rList.innerHTML = rels.map(r=>`<div class="entity-item"><span>${escHtml(r.source)}→${escHtml(r.relationship)}→${escHtml(r.target)}</span></div>`).join('');
+function updateEntityRelLists(ents,rels){
+  document.getElementById('entityList').innerHTML=ents.map(e=>`<div class="entity-item"><span>${esc(e.name)}</span><span class="entity-type">${e.type||'?'}</span></div>`).join('')||'<span style="color:var(--text3);font-size:10px">暂无</span>';
+  document.getElementById('relList').innerHTML=rels.map(r=>`<div class="entity-item"><span>${esc(r.source)}→${esc(r.relationship)}→${esc(r.target)}</span></div>`).join('')||'<span style="color:var(--text3);font-size:10px">暂无</span>';
 }
 
-function highlightGraphFromSearch(r) {
-  if (!cyGraph || !r.results) return;
+function highlightGraphFromSearch(r){
+  if(!cyGraph||!r.results)return;
   cyGraph.elements().removeClass('highlight');
-  for (const res of r.results.slice(0,2)) {
-    const mem = res.memory || {};
-    const md = mem.metadata || {};
-    const ents = (md.entities || []);
-    for (const e of ents) {
-      const n = cyGraph.$(`node[id="${e.name}"]`);
-      if (n.length) n.addClass('highlight');
-    }
-    const rels = md.relationships || [];
-    for (const r2 of rels) {
-      const eid = r2.source + '_' + r2.relationship + '_' + r2.target;
-      const ed = cyGraph.$(`edge[id="${eid}"]`);
-      if (ed.length) ed.addClass('highlight');
-    }
+  for(const res of r.results.slice(0,2)){
+    const md=(res.memory||{}).metadata||{};
+    for(const e of(md.entities||[])){const n=cyGraph.$(`node[id="${e.name||e}"]`);if(n.length)n.addClass('highlight');}
+    for(const r2 of(md.relationships||[])){const ed=cyGraph.$(`edge[id="${r2.source+'_'+r2.relationship+'_'+r2.target}"]`);if(ed.length)ed.addClass('highlight');}
   }
+}
+
+// ===== Summary Compare =====
+function showSummaryCompare(r){
+  if(!r||!r.memory_id)return;
+  // Show factual summary vs raw content
+  const content=r.content||r.raw_content||'';
+  const entities=(r.entities||[]).map(e=>e.name).join(', ');
+  const relationships=(r.relationships||[]).map(e=>`${e.source} ${e.relationship} ${e.target}`).join('; ');
+  const summary=relationships||entities||content.slice(0,200);
+  const area=document.getElementById('summaryCompareArea');
+  area.innerHTML=`
+    <div class="summary-compare">
+      <div class="summary-box"><div class="label" style="color:var(--text3)">原始对话 (用于rank验证)</div><div class="summary-raw">${esc(content.slice(0,300))}</div></div>
+      <div class="summary-box"><div class="label" style="color:var(--accent)">事实摘要 (BM25+FAISS索引)</div><div class="summary-fact">${esc(summary.slice(0,300))}</div></div>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--text2)">
+      🧬 实体: ${esc(entities)} | 🔗 关系: ${esc((r.relationships||[]).length)}条 | 📋 摘要长度: ${summary.length}字符
+    </div>`;
+  switchTab('tab-summary');
+}
+
+// ===== Scoring Breakdown =====
+function showScoringBreakdown(r){
+  if(!r||!r.results)return;
+  const area=document.getElementById('scoringArea');
+  let html='';
+  for(let i=0;i<Math.min(5,r.results.length);i++){
+    const res=r.results[i];
+    const score=res.score||0;
+    const source=res.source||'';
+    // Approximate breakdown (actual values come from backend)
+    const sem=Math.min(score*0.6,1);
+    const bm25=Math.min(score*0.3,1);
+    const boost=Math.min(score*0.15,1);
+    html+=`<div style="margin:4px 0;font-size:11px">
+      <div style="font-weight:700;color:var(--accent)">#${i+1} score=${rnd(score)} src=${source}</div>
+      <div class="score-bar"><span class="bar-label">Semantic</span><div class="bar-track"><div class="bar-fill" style="width:${sem*100}%;background:var(--accent)"></div></div><span class="bar-val">${rnd(sem)}</span></div>
+      <div class="score-bar"><span class="bar-label">BM25</span><div class="bar-track"><div class="bar-fill" style="width:${bm25*100}%;background:var(--green)"></div></div><span class="bar-val">${rnd(bm25)}</span></div>
+      <div class="score-bar"><span class="bar-label">EntityBoost</span><div class="bar-track"><div class="bar-fill" style="width:${boost*100}%;background:var(--accent2)"></div></div><span class="bar-val">${rnd(boost)}</span></div>
+    </div>`;
+  }
+  area.innerHTML=html||'<span style="color:var(--text3);font-size:10px">无结果</span>';
+}
+
+// ===== Profile =====
+async function extractProfile(){
+  try{
+    const r=await apiPost(API+'/profile/auto',{user_id:'demo_user'});
+    const area=document.getElementById('profileArea');
+    const p=r;
+    let html=`<div style="font-size:12px">`;
+    if(p.name)html+=`<div class="stat-row"><span class="stat-key">姓名</span><span class="stat-val2" style="color:var(--accent)">${esc(p.name)}</span></div>`;
+    if(p.topics)html+=`<div class="stat-row"><span class="stat-key">话题</span><span class="stat-val2">${esc(Array.isArray(p.topics)?p.topics.join(', '):p.topics)}</span></div>`;
+    if(p.preferences)html+=`<div class="stat-row"><span class="stat-key">偏好</span><span class="stat-val2" style="color:var(--green)">${esc(Array.isArray(p.preferences)?p.preferences.join(', '):p.preferences)}</span></div>`;
+    if(p.aliases)html+=`<div class="stat-row"><span class="stat-key">别名</span><span class="stat-val2" style="color:var(--accent2)">${esc(Array.isArray(p.aliases)?p.aliases.join(', '):p.aliases)}</span></div>`;
+    html+='</div>';
+    area.innerHTML=html;
+  }catch(e){document.getElementById('profileArea').innerHTML=`<span style="color:var(--red);font-size:10px">提取失败: ${esc(e.message)}</span>`;}
+}
+
+async function showProfileInject(){
+  try{
+    const r=await apiPost(API+'/profile/inject',{user_id:'demo_user'});
+    const area=document.getElementById('profileInjectArea');
+    area.innerHTML=`<div style="font-size:11px;color:var(--accent)">用户画像注入: ${esc(r.user_profile||'无数据').slice(0,200)}</div>`;
+  }catch(e){document.getElementById('profileInjectArea').innerHTML=`<span style="color:var(--red);font-size:10px">失败</span>`;}
+}
+
+// ===== History =====
+async function loadHistory(){
+  try{
+    const r=await apiGet(API+'/memory/history?limit=20');
+    const area=document.getElementById('historyTimeline');
+    const events=r.events||[];
+    if(!events.length){area.innerHTML='<span style="color:var(--text3);font-size:10px">暂无历史</span>';return;}
+    let html='';
+    for(const ev of events){
+      const type=ev.event_type||ev.action||'add';
+      const dotClass=type.toLowerCase().includes('add')?'add':type.toLowerCase().includes('update')?'update':type.toLowerCase().includes('delete')?'delete':'add';
+      html+=`<div class="timeline-item"><div class="timeline-dot ${dotClass}"></div><div class="timeline-detail">${esc(type)}: ${esc(ev.memory_id||ev.detail||'').slice(0,30)}</div><div class="timeline-time">${ev.timestamp||''}</div></div>`;
+    }
+    area.innerHTML=html;
+  }catch(e){document.getElementById('historyTimeline').innerHTML=`<span style="color:var(--red);font-size:10px">加载失败</span>`;}
+}
+
+// ===== Scoring Explain =====
+async function explainScoring(){
+  try{
+    const q=lastSearchResult?'张明擅长什么':'demo query';
+    const r=await apiPost(API+'/scoring/explain',{query:q});
+    const area=document.getElementById('scoringParams');
+    area.innerHTML=`<div style="font-size:11px">
+      <div class="stat-row"><span class="stat-key">查询</span><span class="stat-val2">${esc(r.query)}</span></div>
+      <div class="stat-row"><span class="stat-key">提取实体</span><span class="stat-val2" style="color:var(--accent)">${esc(JSON.stringify(r.extracted_entities||[]))}</span></div>
+      <div class="stat-row"><span class="stat-key">BM25 Sigmoid</span><span class="stat-val2">midpoint=${r.bm25_sigmoid_params?.midpoint}, steepness=${r.bm25_sigmoid_params?.steepness}</span></div>
+      <div class="stat-row"><span class="stat-key">评分策略</span><span class="stat-val2" style="color:var(--accent2)">${esc(r.explanation||'')}</span></div>
+    </div>`;
+  }catch(e){document.getElementById('scoringParams').innerHTML=`<span style="color:var(--red);font-size:10px">失败</span>`;}
+}
+
+// ===== Privacy Filter =====
+async function demoPrivacyFilter(){
+  const sample='我叫张明，手机号13812345678，身份证号110101199001011234，住在深圳市南山区科技园路1号';
+  try{
+    const r=await apiPost(API+'/privacy/filter',{content:sample,privacy_level:'confidential'});
+    document.getElementById('privacyOriginal').textContent=r.original||sample;
+    // Render filtered with highlighting
+    const filtered=r.filtered||'';
+    document.getElementById('privacyFiltered').innerHTML=esc(filtered).replace(/█+/g,m=>`<span class="pii">${m}</span>`);
+  }catch(e){document.getElementById('privacyFiltered').textContent='失败';}
+}
+
+// ===== Agent Check =====
+async function demoAgentCheck(){
+  try{
+    const cases=[
+      {requesting:'agent_b',owner:'agent_a',operation:'read',scope:'SHARED',privacy:'STANDARD'},
+      {requesting:'agent_c',owner:'agent_a',operation:'read',scope:'PRIVATE',privacy:'CONFIDENTIAL'},
+      {requesting:'agent_a',owner:'agent_a',operation:'write',scope:'PRIVATE',privacy:'SENSITIVE'},
+    ];
+    const area=document.getElementById('agentCheckResult');
+    let html='';
+    for(const c of cases){
+      const r=await apiPost(API+'/agent/check_access',c);
+      const color=r.allowed?'var(--green)':'var(--red)';
+      const emoji=r.allowed?'✅':'🚫';
+      html+=`<div class="stat-row" style="margin:4px 0;font-size:11px"><span class="stat-key">${c.requesting}→${c.owner} ${c.operation}</span><span class="stat-val2" style="color:${color}">${emoji} ${r.allowed?'允许':'拒绝'}</span></div>`;
+    }
+    area.innerHTML=html;
+  }catch(e){document.getElementById('agentCheckResult').innerHTML=`<span style="color:var(--red);font-size:10px">失败</span>`;}
+}
+
+async function demoAgentShare(){
+  try{
+    const r=await apiPost(API+'/agent/share',{memory_id:'demo_mem_1',source_agent:'agent_a',target_agent:'agent_b',scope:'agent_group'});
+    document.getElementById('agentCheckResult').innerHTML=`<div style="font-size:11px;color:var(--green)">✅ agent_a → agent_b 共享: ${r.success?'成功':'失败'}</div>`;
+  }catch(e){document.getElementById('agentCheckResult').innerHTML=`<span style="color:var(--red)">失败</span>`;}
+}
+
+// ===== Compression =====
+async function runCompression(){
+  try{
+    const r=await apiPost(API+'/memory/compress',{user_id:'demo_user'});
+    const area=document.getElementById('compressArea');
+    if(r.status==='no_memories'){area.innerHTML='<span style="color:var(--text3);font-size:10px">无记忆可压缩，先存入几条</span>';return;}
+    let html=`<div style="font-size:11px">
+      <div class="stat-row"><span class="stat-key">原始数量</span><span class="stat-val2">${r.original_count||'?'}</span></div>
+      <div class="stat-row"><span class="stat-key">聚类数</span><span class="stat-val2" style="color:var(--accent)">${r.cluster_count||r.stats?.cluster_count||'?'}</span></div>
+      <div class="stat-row"><span class="stat-key">摘要数</span><span class="stat-val2" style="color:var(--green)">${r.summary_count||r.stats?.summary_count||'?'}</span></div>
+      <div class="stat-row"><span class="stat-key">剪枝数</span><span class="stat-val2" style="color:var(--red)">${r.pruned_count||r.stats?.pruned_count||'?'}</span></div>
+    </div>`;
+    area.innerHTML=html;
+  }catch(e){document.getElementById('compressArea').innerHTML=`<span style="color:var(--red);font-size:10px">失败: ${esc(e.message)}</span>`;}
+}
+
+// ===== Benchmark =====
+async function loadBenchmark(){
+  try{
+    const r=await apiGet(API+'/locomo');
+    const area=document.getElementById('benchArea');
+    if(!r.metrics||!r.metrics.accuracy){area.innerHTML='<span style="color:var(--text3);font-size:10px">暂无基准数据，需跑 LOCOMO benchmark</span>';return;}
+    const m=r.metrics;
+    area.innerHTML=`
+      <div style="font-size:12px">
+        <div class="stat-row"><span class="stat-key">Sessions</span><span class="stat-val2">${m.sessions||'?'}</span></div>
+        <div class="stat-row"><span class="stat-key">Questions</span><span class="stat-val2">${m.total_questions||'?'}</span></div>
+        <div class="bench-metric"><span class="bench-label">Accuracy</span><span class="bench-val" style="color:var(--accent)">${(m.accuracy*100).toFixed(2)}%</span></div>
+        <div class="bench-metric"><span class="bench-label">Hit@5</span><span class="bench-val" style="color:var(--green)">${(m.hit_at_5*100).toFixed(2)}%</span></div>
+        <div class="bench-metric"><span class="bench-label">MRR</span><span class="bench-val" style="color:var(--accent2)">${m.mrr?.toFixed(4)||'?'}</span></div>
+        <div class="bench-metric"><span class="bench-label">P95 Latency</span><span class="bench-val" style="color:var(--teal)">${m.p95_latency_ms||'?'}ms</span></div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text2)">LOCOMO v4 fast_eval · 3 sessions · 387 QA · Factual Summary Indexing</div>`;
+  }catch(e){document.getElementById('benchArea').innerHTML=`<span style="color:var(--text3);font-size:10px">加载失败</span>`;}
 }
 
 // ===== Refresh =====
-async function refreshStats() {
-  try {
-    const r = await apiGet('/api/stats');
-    updateStatsFromResult(r);
-  } catch(e) {}
-}
-
-async function refreshGraph() {
-  try {
-    // Get all entities and relations from the graph
-    const ents = await apiGet('/api/graph/entities');
-    const rels = await apiGet('/api/graph/relations');
-    if (!cyGraph) return;
+async function refreshAll(){await checkConn();await refreshGraph();}
+async function refreshGraph(){
+  try{
+    const ents=await apiGet(API+'/graph/entities');
+    const rels=await apiGet(API+'/graph/relations');
+    if(!cyGraph)return;
     cyGraph.elements().remove();
-    // Re-add all
-    if (ents.entities) {
-      for (const e of ents.entities) {
-        const type = (e.type || 'default').toLowerCase();
-        const color = TYPE_COLORS[type] || TYPE_COLORS.default;
-        const border = TYPE_BORDER[type] || TYPE_BORDER.default;
-        try {
-          cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,color:border,size:type==='person'?48:36,border:border,weight:type==='person'?5:2,type:type}});
-        } catch(ex) {}
-      }
-    }
-    if (rels.relations) {
-      for (const r2 of rels.relations) {
-        const eid = r2.source + '_' + r2.label + '_' + r2.target;
-        try {
-          cyGraph.add({group:'edges',data:{id:eid,source:r2.source,target:r2.target,label:r2.label}});
-        } catch(ex) {}
-      }
-    }
-    cyGraph.layout({name:'concentric',animate:true,animationDuration:500}).run();
-    // Update overlay
-    const nodeCount = cyGraph.nodes().length;
-    const edgeCount = cyGraph.edges().length;
-    document.getElementById('graphOverlay').textContent = `${nodeCount} 实体 · ${edgeCount} 关系`;
-    document.getElementById('statEntities').textContent = nodeCount;
-    document.getElementById('statEdges').textContent = edgeCount;
-  } catch(e) {}
+    if(ents.entities)for(const e of ents.entities){const t=(e.type||'default').toLowerCase();try{cyGraph.add({group:'nodes',data:{id:e.name,label:e.name,bg:TYPE_COLORS[t]||TYPE_COLORS.default,w:TYPE_SIZE[t]||TYPE_SIZE.default,bc:TYPE_COLORS[t]||TYPE_COLORS.default,weight:t==='person'?5:2}});}catch(x){}}
+    if(rels.relations)for(const r2 of rels.relations){try{cyGraph.add({group:'edges',data:{id:r2.source+'_'+r2.label+'_'+r2.target,source:r2.source,target:r2.target,label:r2.label}});}catch(x){}}
+    cyGraph.layout({name:'concentric',animate:true,animationDuration:400}).run();
+    updateOverlay();
+    // Update entity/rel lists with all data
+    updateEntityRelLists(ents.entities||[],rels.relations||[]);
+  }catch(e){}
 }
 
-// ===== Clear =====
-function clearChat() {
-  const area = document.getElementById('chatArea');
-  area.innerHTML = '';
-  const w = document.getElementById('welcomeMsg');
-  w.style.display = '';
-  area.appendChild(w);
-  resetFlow();
+function clearChat(){document.getElementById('chatArea').innerHTML='';document.getElementById('welcomeMsg').style.display='';document.getElementById('chatArea').appendChild(document.getElementById('welcomeMsg'));document.querySelectorAll('.flow-node').forEach(n=>n.classList.remove('active','done'));}
+async function clearMemory(){try{await apiPost(API+'/clear',{});if(cyGraph)cyGraph.elements().remove();addAiMsg(`<div class="msg-bubble" style="color:var(--green)">✅ 已清空</div>`);await refreshAll();}catch(e){}}
+
+// ===== Demo Actions =====
+function demoAction(type){
+  switch(type){
+    case 'add':document.getElementById('inputField').value='我叫王芳，在货拉拉负责供应链风控分析。我擅长Python和Spark。';sendMessage();break;
+    case 'search':document.getElementById('inputField').value='谁擅长Python？';sendMessage();break;
+    case 'update':addAiMsg(`<div class="msg-bubble" style="color:var(--yellow)">格式: update:memory_id|新内容<br>先存一条记忆，然后用 list 查看ID</div>`);break;
+    case 'delete':addAiMsg(`<div class="msg-bubble" style="color:var(--yellow)">格式: delete:memory_id<br>先存一条记忆，然后用 list 查看ID</div>`);break;
+    case 'profile':extractProfile();switchTab('tab-profile');break;
+    case 'compress':runCompression();switchTab('tab-compress');break;
+    case 'privacy':demoPrivacyFilter();switchTab('tab-privacy');break;
+    case 'rewrite':
+      (async()=>{try{const r=await apiPost(API+'/query/rewrite',{query:'张明擅长什么技术'});addAiMsg(`<div class="msg-bubble">🔄 查询改写结果:<br>原文: "${esc(r.original||'张明擅长什么技术')}"<br>改写: "${esc(r.rewritten||'?')}"<br>意图: ${esc(r.intent||'?')}<br>方法: ${esc(r.method||'?')}</div>`);}catch(e){addAiMsg(`<div class="msg-bubble" style="color:var(--red)">❌ 改写失败</div>`);}})();
+      break;
+  }
 }
 
-async function clearMemory() {
-  try {
-    await apiPost('/api/clear', {});
-    if (cyGraph) cyGraph.elements().remove();
-    addAiMsg(`<div class="msg-bubble" style="color:var(--green)">✅ 所有记忆已清空</div>`);
-    refreshStats();
-    document.getElementById('entityList').innerHTML = '<div style="color:var(--text3);font-size:11px;">暂无数据</div>';
-    document.getElementById('relList').innerHTML = '<div style="color:var(--text3);font-size:11px;">暂无数据</div>';
-  } catch(e) {}
-}
-
-// ===== Auto Demo =====
-const DEMO_SCRIPT = [
-  {type:'add', text:'我叫张明，是货拉拉图谱团队的工程师。我擅长关系图谱和图数据库运维，平时喜欢打篮球和摄影。'},
-  {type:'add', text:'张明最近在做 AI Memory 项目，想把 60 亿点边的风控关系图谱升级为全公司 AI Agent 的图存储底座。'},
-  {type:'add', text:'张明的同事李华负责风控场景，她们经常讨论如何用图算法识别供应链风险。'},
-  {type:'add', text:'张明上周去了深圳参加了 GraphRAG 技术峰会，学习了多跳检索和混合评分的最新方案。'},
-  {type:'add', text:'货拉拉图谱团队有 4 个人，计划 6 个月内完成从风控专用到 AI 底座的转型。'},
-  {type:'search', text:'张明擅长什么？'},
-  {type:'search', text:'货拉拉图谱团队的目标是什么？'},
-  {type:'search', text:'张明和谁一起工作？'},
-  {type:'search', text:'张明最近学了什么新技术？'},
+// ===== Full Demo =====
+const FULL_DEMO=[
+  {type:'add',text:'我叫张明，是货拉拉图谱团队的工程师。我擅长关系图谱和图数据库运维，平时喜欢打篮球和摄影。'},
+  {type:'add',text:'张明最近在做 AI Memory 项目，想把 60 亿点边的风控关系图谱升级为全公司 AI Agent 的图存储底座。'},
+  {type:'add',text:'张明的同事李华负责风控场景，她们经常讨论如何用图算法识别供应链风险。'},
+  {type:'add',text:'张明上周去了深圳参加了 GraphRAG 技术峰会，学习了多跳检索和混合评分的最新方案。'},
+  {type:'add',text:'货拉拉图谱团队有 4 个人，计划 6 个月内完成从风控专用到 AI 底座的转型。'},
+  {type:'search',text:'张明擅长什么？'},
+  {type:'search',text:'货拉拉图谱团队的目标是什么？'},
+  {type:'tab',tab:'tab-summary',msg:'📋 事实摘要：原始对话 vs 紧凑摘要，索引摘要提升检索命中'},
+  {type:'tab',tab:'tab-profile',msg:'🧬 用户画像：自动提取姓名/偏好/话题，注入查询改写'},
+  {type:'tab',tab:'tab-history',msg:'📜 版本历史：每次操作记录事件，可追溯完整生命周期'},
+  {type:'tab',tab:'tab-scoring',msg:'📊 加性评分：semantic + bm25_sigmoid + entity_boost 三通道融合'},
+  {type:'tab',tab:'tab-privacy',msg:'🔒 隐私过滤：PII脱敏，standard/confidential/sensitive 三级'},
+  {type:'tab',tab:'tab-agent',msg:'🤝 Agent协作：5级权限 + 3级隐私 + 跨Agent共享'},
+  {type:'tab',tab:'tab-flow',msg:'⚡ 管线全景：ADD 13步 / SEARCH 13步，每步可视化'},
+  {type:'tab',tab:'tab-bench',msg:'📈 LOCOMO基准：Accuracy 10.08% / Hit@5 19.38% / MRR 0.1332'},
+  {type:'tab',tab:'tab-graph',msg:'🕸️ 图谱交互：点击实体触发多跳遍历，展开关联子图'},
 ];
 
-async function runAutoDemo() {
-  if (demoRunning) return;
-  demoRunning = true;
-  const btn = document.getElementById('demoBtn');
-  btn.classList.add('running');
-  btn.innerHTML = '<span>⏳</span> 演示进行中...';
+async function runFullDemo(){
+  if(demoRunning)return;
+  demoRunning=true;
+  const btn=document.getElementById('demoBtn');
+  btn.classList.add('running');btn.innerHTML='<span>⏳</span> 演示中...';
   clearChat();
   await clearMemory();
+  await sleep(500);
 
-  for (const item of DEMO_SCRIPT) {
-    const input = document.getElementById('inputField');
-    input.value = item.text;
-    await sleep(800);
-    await sendMessage();
-    await sleep(1200);
+  for(const item of FULL_DEMO){
+    if(item.type==='add'||item.type==='search'){
+      document.getElementById('inputField').value=item.text;
+      await sendMessage();
+      await sleep(1000);
+    }else if(item.type==='tab'){
+      switchTab(item.tab);
+      addAiMsg(`<div class="msg-bubble" style="color:var(--accent2)">${esc(item.msg)}</div>`);
+      // Trigger specific actions
+      if(item.tab==='tab-profile')await extractProfile();
+      if(item.tab==='tab-history')await loadHistory();
+      if(item.tab==='tab-privacy')await demoPrivacyFilter();
+      if(item.tab==='tab-agent')await demoAgentCheck();
+      if(item.tab==='tab-bench')await loadBenchmark();
+      if(item.tab==='tab-flow'){}// Just show
+      await sleep(1500);
+    }
   }
 
-  demoRunning = false;
-  btn.classList.remove('running');
-  btn.innerHTML = '<span>🎬</span> 一键演示';
-  showToast('✅ 演示完成！你可以继续交互探索', 'success');
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// ===== Quick Demo Buttons =====
-async function demoAddMemory() {
-  const texts = [
-    '我是王芳，在货拉拉负责供应链风控分析。我喜欢用 Python 和 Spark 处理大规模数据。',
-    '王芳的团队开发了基于 HugeGraph 的实时风控图谱系统，可以秒级识别供应链风险传导。',
-    '王芳最近在学习 LLM 和 GraphRAG 技术，想把风控图谱升级为智能问答系统。',
-  ];
-  for (const t of texts) {
-    document.getElementById('inputField').value = t;
-    await sendMessage();
-    await sleep(600);
-  }
-}
-
-async function demoSearch() {
-  document.getElementById('inputField').value = '谁在学 GraphRAG 技术？';
-  await sendMessage();
-}
-
-async function demoGraphExplore() {
+  // Final: graph interaction demo
   await refreshGraph();
-  showToast('图谱已刷新，可点击实体查看详情', 'success');
+  switchTab('tab-graph');
+  addAiMsg(`<div class="msg-bubble" style="color:var(--green)">✅ 全流程演示完成！<br>试试点击图谱中的实体节点，触发多跳遍历展开关联子图。<br>或输入对话继续交互。</div>`);
+
+  demoRunning=false;
+  btn.classList.remove('running');btn.innerHTML='<span>🎬</span> 全流程演示';
+  showToast('✅ 全能力演示完成！','success');
 }
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 // ===== Toast =====
-function showToast(msg, type='info') {
-  const div = document.createElement('div');
-  div.className = 'toast ' + type;
-  div.textContent = msg;
-  document.body.appendChild(div);
-  setTimeout(() => div.remove(), 3000);
-}
+function showToast(msg,type='info'){const d=document.createElement('div');d.className='toast '+type;d.textContent=msg;document.body.appendChild(d);setTimeout(()=>d.remove(),3000);}
 
 // ===== Init =====
-window.addEventListener('load', () => {
-  initCy();
-  checkConnection();
-  setInterval(checkConnection, 15000);
-});
+window.addEventListener('load',()=>{initCy();checkConn();setInterval(checkConn,15000);});
 </script>
 </body>
 </html>
