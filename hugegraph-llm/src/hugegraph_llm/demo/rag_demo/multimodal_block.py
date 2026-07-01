@@ -765,7 +765,7 @@ def create_multimodal_block():
                         label="All 18 Multimodal Operators",
                         datatype=["str", "str", "str"],
                         row_count=18,
-                        column_count=3,
+                        col_count=3,
                         interactive=False,
                     )
 
@@ -782,7 +782,7 @@ def create_multimodal_block():
                         label="Image Description Gallery",
                         datatype=["str", "str", "str", "number", "str"],
                         row_count=5,
-                        column_count=5,
+                        col_count=5,
                     )
                     mm_registry_out = gr.Code(label="VLM Provider Registry", language="json")
                     mm_async_out = gr.Code(label="Async VLM Pipeline Stats", language="json")
@@ -807,7 +807,7 @@ def create_multimodal_block():
                         label="Search Result Channel Scores",
                         datatype=["str", "str", "number", "number", "number", "number", "number"],
                         row_count=5,
-                        column_count=7,
+                        col_count=7,
                     )
                     mm_channel_out = gr.Code(label="Retrieval Channel (Pipeline)", language="json")
                     mm_cmp_out = gr.Code(label="text_only vs multimodal", language="json")

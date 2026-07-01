@@ -348,21 +348,21 @@ DEMO_GUIDED_FRAUD = {
 
 DEMO_REGISTRY_ACCUMULATION = {
     "run_1": {
-        "known_types": {},
+        "known_types": [],
         "new_types_discovered": 8,
         "define_calls": 8,
         "registry_after": 8,
         "note": "首次运行：全部新类型，Define开销大",
     },
     "run_2": {
-        "known_types": {"person", "organization", "ip", "account", "amount"},
+        "known_types": ["person", "organization", "ip", "account", "amount"],
         "new_types_discovered": 2,
         "define_calls": 2,
         "registry_after": 10,
         "note": "第二次运行：只有2个新类型（vehicle_model, location），Define≈0开销",
     },
     "run_3": {
-        "known_types": {"person", "organization", "ip", "account", "amount", "vehicle_model", "location"},
+        "known_types": ["person", "organization", "ip", "account", "amount", "vehicle_model", "location"],
         "new_types_discovered": 0,
         "define_calls": 0,
         "registry_after": 10,
@@ -567,7 +567,7 @@ def create_edc_schema_block():
                         label="类型对照表",
                         datatype=["str", "str", "str"],
                         row_count=10,
-                        column_count=3,
+                        col_count=3,
                         interactive=False,
                     )
 
