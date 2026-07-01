@@ -17,15 +17,17 @@
 
 """Gradio UI block for Capability Closure.
 
-Adds interactive demos for all capabilities that were missing from the
+Adds interactive demos for capabilities that were missing from the
 existing Gradio tabs:
-- Multimodal RAG
 - Property Graph Extraction
 - Incremental Index Flow
 - Gremlin Self-Correction
 - Query Classifier
 - Synonym Manager
 - Chunk Similarity Edges
+
+Note: Multimodal RAG (Section 1) has been removed because it is now
+fully covered by Tab 11 (Multimodal GraphRAG) with all 18 operators.
 """
 
 import gradio as gr
@@ -34,10 +36,6 @@ from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
     chunk_sim_edges_build,
     gremlin_self_correct,
     incremental_index_flow,
-    multimodal_build_kg,
-    multimodal_describe_images,
-    multimodal_extract_pdf,
-    multimodal_search,
     property_graph_extract,
     query_classifier_demo,
     synonym_add,
@@ -52,59 +50,12 @@ def create_capability_closure_block():
     gr.Markdown("# Capability Closure / 能力补齐")
     gr.Markdown(
         "This tab exposes capabilities that exist in the codebase but were not "
-        "available in the previous Gradio tabs. Each section provides a standalone "
-        "interactive demo."
+        "available in the previous Gradio tabs. (Multimodal RAG is now in Tab 11.)"
     )
 
-    # ── Section 1: Multimodal RAG ─────────────────────────────
+    # ── Section 1: Property Graph Extraction ──────────────────
     gr.Markdown("---")
-    gr.Markdown("## 1. Multimodal RAG (PDF → Image + Text → VLM → KG → Search)")
-
-    with gr.Row():
-        with gr.Column(scale=1):
-            mm_pdf = gr.File(label="Upload PDF", file_types=[".pdf"])
-            mm_max_pages = gr.Number(value=5, label="Max Pages to Analyze", minimum=1, maximum=50)
-            mm_extract_btn = gr.Button("1. Extract PDF", variant="secondary")
-            mm_describe_btn = gr.Button("2. Describe Images (VLM)", variant="secondary")
-            mm_graph_name = gr.Textbox(value="multimodal_poc", label="Target Graph Name")
-            mm_build_btn = gr.Button("3. Build Multimodal KG", variant="secondary")
-        with gr.Column(scale=2):
-            mm_extract_out = gr.Code(label="Extraction Summary", language="json")
-
-    with gr.Row():
-        with gr.Column(scale=1):
-            mm_query = gr.Textbox(label="Search Query", placeholder="Ask about charts, figures, or text...")
-            mm_mode = gr.Dropdown(choices=["auto", "text_only", "image_aware"], value="auto", label="Search Mode")
-            mm_top_k = gr.Slider(value=5, minimum=1, maximum=20, step=1, label="Top-K")
-            mm_search_btn = gr.Button("4. Multimodal Search", variant="primary")
-        with gr.Column(scale=2):
-            mm_describe_out = gr.Code(label="VLM Descriptions", language="json")
-            mm_search_out = gr.Code(label="Search Results", language="json")
-
-    mm_extract_btn.click(
-        fn=multimodal_extract_pdf,
-        inputs=[mm_pdf, mm_max_pages],
-        outputs=[mm_extract_out],
-    )
-    mm_describe_btn.click(
-        fn=multimodal_describe_images,
-        inputs=[gr.Number(value=3, visible=False), gr.Text(value="xiaomimo", visible=False)],
-        outputs=[mm_describe_out],
-    )
-    mm_build_btn.click(
-        fn=multimodal_build_kg,
-        inputs=[mm_graph_name],
-        outputs=[mm_describe_out],
-    )
-    mm_search_btn.click(
-        fn=multimodal_search,
-        inputs=[mm_query, mm_graph_name, mm_top_k, mm_mode],
-        outputs=[mm_search_out],
-    )
-
-    # ── Section 2: Property Graph Extraction ──────────────────
-    gr.Markdown("---")
-    gr.Markdown("## 2. Property Graph Extraction")
+    gr.Markdown("## 1. Property Graph Extraction")
 
     with gr.Row():
         with gr.Column(scale=2):
@@ -130,7 +81,7 @@ def create_capability_closure_block():
 
     # ── Section 3: Incremental Index Flow ─────────────────────
     gr.Markdown("---")
-    gr.Markdown("## 3. Incremental Index Flow")
+    gr.Markdown("## 2. Incremental Index Flow")
 
     with gr.Row():
         with gr.Column(scale=2):
@@ -152,7 +103,7 @@ def create_capability_closure_block():
 
     # ── Section 4: Gremlin Self-Correction ────────────────────
     gr.Markdown("---")
-    gr.Markdown("## 4. Gremlin Self-Correction (Text2Gremlin + Validator + Retry)")
+    gr.Markdown("## 3. Gremlin Self-Correction (Text2Gremlin + Validator + Retry)")
 
     with gr.Row():
         with gr.Column(scale=2):
@@ -175,7 +126,7 @@ def create_capability_closure_block():
 
     # ── Section 5: Query Classifier ───────────────────────────
     gr.Markdown("---")
-    gr.Markdown("## 5. Query Classifier (Agent Routing)")
+    gr.Markdown("## 4. Query Classifier (Agent Routing)")
 
     with gr.Row():
         with gr.Column(scale=2):
@@ -197,7 +148,7 @@ def create_capability_closure_block():
 
     # ── Section 6: Synonym Manager ────────────────────────────
     gr.Markdown("---")
-    gr.Markdown("## 6. Synonym Manager")
+    gr.Markdown("## 5. Synonym Manager")
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -234,7 +185,7 @@ def create_capability_closure_block():
 
     # ── Section 7: Chunk Similarity Edges ─────────────────────
     gr.Markdown("---")
-    gr.Markdown("## 7. Chunk Similarity Edges")
+    gr.Markdown("## 6. Chunk Similarity Edges")
 
     with gr.Row():
         with gr.Column(scale=1):
