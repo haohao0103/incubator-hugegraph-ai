@@ -114,10 +114,13 @@ def step1_parse(pdf_path: str, max_pages: int = 10) -> str:
         from hugegraph_llm.operators.multimodal.unified_document_parser import UnifiedDocumentParser
 
         parser = UnifiedDocumentParser()
-        parsed = parser.parse(pdf_path)
+        ctx = parser.run({"document_path": pdf_path})
+        parsed = ctx.get("document_extraction")
         result_data["unified_document_parser"] = {
             "format": getattr(parsed, "format", "unknown"),
             "block_count": len(parsed.blocks) if hasattr(parsed, "blocks") else 0,
+            "total_images": parsed.total_images if parsed else 0,
+            "total_text_length": parsed.total_text_length if parsed else 0,
         }
         result_data["operators_activated"].append("unified_document_parser")
     except Exception as e:
@@ -147,23 +150,36 @@ def step2_vlm() -> str:
 
     # ── image_dimension_validator ──
     try:
-        from hugegraph_llm.operators.multimodal.image_dimension_validator import ImageDimensionValidator
+        from hugegraph_llm.operators.multimodal.image_dimension_validator import ImageDimensionValidator, ImageDimensionValidatorConfig
 
-        validator = ImageDimensionValidator(max_size_kb=512, min_width=50, min_height=50)
+        config = ImageDimensionValidatorConfig(
+            min_width=50,
+            min_height=50,
+            max_file_bytes=512 * 1024,  # 512 KB
+        )
+        validator = ImageDimensionValidator(config=config)
         with open(cache, "r", encoding="utf-8") as f:
             cached = json.load(f)
 
-        img_sizes = []
+        img_paths = []
         for p in cached["pages"]:
             for img in p["images"]:
-                img_sizes.append({"image_id": img["image_id"], "size": img["size"]})
+                # Use image_id as path_or_id for validation
+                img_paths.append(img.get("image_id", "unknown"))
 
-        validated = validator.validate_batch(img_sizes)
+        # Use run() method which validates a list of images
+        ctx = validator.run({"images": img_paths, "image_mode": "auto"})
+        results = ctx.get("validation_results", [])
+        total = len(results)
+        valid = sum(1 for r in results if getattr(r, "accepted", False))
+        rejected = total - valid
+        reasons = [getattr(r, "reason", "") for r in results if not getattr(r, "accepted", True)][:5]
+
         result_data["image_dimension_validator"] = {
-            "total_images": validated.total,
-            "valid": validated.valid,
-            "rejected": validated.rejected,
-            "rejection_reasons": validated.reasons[:5] if hasattr(validated, "reasons") else [],
+            "total_images": total,
+            "valid": valid,
+            "rejected": rejected,
+            "rejection_reasons": reasons,
         }
         result_data["operators_activated"].append("image_dimension_validator")
     except Exception as e:
