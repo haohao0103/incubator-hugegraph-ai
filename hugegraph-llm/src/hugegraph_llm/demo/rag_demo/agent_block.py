@@ -27,6 +27,7 @@ from hugegraph_llm.demo.rag_demo.agent_handlers import (
     global_search,
     graph_rag_search,
 )
+from hugegraph_llm.demo.rag_demo.capability_closure_handlers import query_classifier_demo
 from hugegraph_llm.utils.log import log
 
 
@@ -186,6 +187,29 @@ def create_agent_block():
             graph_search_keywords,
         ],
         outputs=[graph_search_result],
+    )
+
+    # ── Query Classifier (from Capability Closure) ────────────────
+    gr.Markdown("---")
+    gr.Markdown("## 🎯 查询分类 / Query Classifier")
+    gr.Markdown("将查询分类为简单或复杂，决定路由到快速图搜索还是 Agent 多步推理。")
+
+    with gr.Row():
+        with gr.Column(scale=2):
+            qc_query = gr.Textbox(
+                label="查询 / Query",
+                placeholder="输入查询以分类为简单或复杂...",
+                lines=2,
+            )
+            qc_use_llm = gr.Checkbox(value=False, label="使用 LLM 进行精细分类")
+            qc_btn = gr.Button("分类查询 / Classify", variant="secondary")
+        with gr.Column(scale=2):
+            qc_out = gr.Code(label="分类结果 / Classification Result", language="json")
+
+    qc_btn.click(
+        fn=query_classifier_demo,
+        inputs=[qc_query, qc_use_llm],
+        outputs=[qc_out],
     )
 
 

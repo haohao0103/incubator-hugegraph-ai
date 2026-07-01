@@ -30,6 +30,7 @@ from hugegraph_llm.flows.scheduler import SchedulerSingleton
 from hugegraph_llm.utils.embedding_utils import get_index_folder_name
 from hugegraph_llm.utils.hugegraph_utils import run_gremlin_query
 from hugegraph_llm.utils.log import log
+from hugegraph_llm.demo.rag_demo.capability_closure_handlers import gremlin_self_correct
 
 
 @dataclass
@@ -298,6 +299,30 @@ def create_text2gremlin_block() -> Tuple:
         fn=gremlin_generate_for_ui,
         inputs=[input_box, example_num_slider, schema_box, prompt_box],
         outputs=[match, initialized_out, raw_out, tmpl_exec_out, raw_exec_out],
+    )
+
+    # ── Gremlin Self-Correction (from Capability Closure) ────────────
+    gr.Markdown("---")
+    gr.Markdown("## Gremlin Self-Correction (Validator + Retry)")
+    gr.Markdown("Generate a Gremlin query, validate it, and auto-retry on errors.")
+
+    with gr.Row():
+        with gr.Column(scale=2):
+            gc_query = gr.Textbox(
+                label="Natural Language Query",
+                placeholder="e.g., Find all suppliers of part A",
+                lines=2,
+            )
+            gc_retries = gr.Slider(value=3, minimum=1, maximum=5, step=1, label="Max Retries")
+            gc_lang = gr.Dropdown(choices=["cn", "en"], value="cn", label="Language")
+            gc_btn = gr.Button("Generate & Validate Gremlin", variant="secondary")
+        with gr.Column(scale=2):
+            gc_out = gr.Code(label="Gremlin Retry Result", language="json")
+
+    gc_btn.click(
+        fn=gremlin_self_correct,
+        inputs=[gc_query, gc_retries, gc_lang],
+        outputs=[gc_out],
     )
 
     return input_box, schema_box, prompt_box

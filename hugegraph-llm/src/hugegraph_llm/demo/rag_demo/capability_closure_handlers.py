@@ -17,19 +17,20 @@
 
 """Handlers for the Capability Closure Gradio tab.
 
-Exposes the following previously-missing capabilities in the UI:
-- Multimodal RAG (PDF extract / VLM describe / build KG / search)
+Exposes the following capabilities in the UI:
 - Property Graph Extraction
 - Incremental Index Flow
 - Gremlin Validator + Self-Correction Loop
 - Query Classifier
 - Synonym Manager
 - Chunk Similarity Edges
+
+Note: Multimodal RAG handlers have been removed; they are now
+exclusively served by Tab 11 (Multimodal GraphRAG).
 """
 
 import json
 import os
-import tempfile
 from typing import Any, Dict, List, Optional
 
 from pyhugegraph.client import PyHugeClient
@@ -47,35 +48,7 @@ from hugegraph_llm.operators.hugegraph_op.schema_manager import SchemaManager
 from hugegraph_llm.operators.llm_op.gremlin_validator import GremlinRetryLoop
 from hugegraph_llm.operators.llm_op.info_extract import InfoExtract
 from hugegraph_llm.operators.llm_op.property_graph_extract import PropertyGraphExtract
-from hugegraph_llm.models.embeddings.init_embedding import Embeddings
-from hugegraph_llm.models.llms.init_llm import LLMs
-from hugegraph_llm.operators.graph_op.chunk_sim_edges import ChunkSimEdgeBuilder
-from hugegraph_llm.operators.graph_op.incremental_utils import find_affected_communities
-from hugegraph_llm.operators.graph_op.synonym_manager import SynonymManager
-from hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph import Commit2Graph
-from hugegraph_llm.operators.hugegraph_op.schema_manager import SchemaManager
-from hugegraph_llm.operators.llm_op.gremlin_validator import GremlinRetryLoop
-from hugegraph_llm.operators.llm_op.info_extract import InfoExtract
-from hugegraph_llm.operators.llm_op.property_graph_extract import PropertyGraphExtract
-from hugegraph_llm.operators.multimodal.multimodal_kg_builder import MultimodalKGBuilder
-from hugegraph_llm.operators.multimodal.multimodal_retriever import MultiModalRetriever
-from hugegraph_llm.operators.multimodal.vlm_descriptor import VLMDescriptor, BatchDescribeResult, ImageDescription
 from hugegraph_llm.utils.log import log
-
-# Optional multimodal PDF extraction (requires fitz/PyMuPDF)
-try:
-    from hugegraph_llm.operators.multimodal.pdf_image_extractor import (
-        PDFImageExtractor,
-        PDFExtractionResult,
-        ImageExtract,
-        PageResult,
-        TextBlockExtract,
-    )
-    _FITZ_AVAILABLE = True
-except Exception as _fitz_err:
-    _FITZ_AVAILABLE = False
-    PDFImageExtractor = None  # type: ignore
-    log.warning("PDFImageExtractor not available: %s", _fitz_err)
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -119,173 +92,7 @@ def _get_embedding():
         return None
 
 
-# ── 1. Multimodal RAG ─────────────────────────────────────────
-
-
-def multimodal_extract_pdf(pdf_file: Optional[str], max_pages: int = 5) -> str:
-    """Extract images and text blocks from an uploaded PDF."""
-    if not _FITZ_AVAILABLE:
-        return _serialize({"error": "PyMuPDF (fitz) is not installed. Run: pip install pymupdf pillow"})
-    if not pdf_file:
-        return _serialize({"error": "No PDF file uploaded"})
-    try:
-        extractor = PDFImageExtractor(max_image_size_kb=512)
-        result = extractor.extract(pdf_file)
-        pages = result.pages[:max_pages]
-        summary = {
-            "source": result.source_path,
-            "total_pages": result.total_pages,
-            "analyzed_pages": len(pages),
-            "total_images": result.total_images,
-            "total_text_blocks": result.total_text_blocks,
-            "total_chars": result.total_text_length,
-            "page_summaries": [
-                {
-                    "page_num": p.page_num,
-                    "image_count": p.image_count,
-                    "text_block_count": p.text_block_count,
-                    "text_preview": " ".join(b.text[:80] for b in p.text_blocks)[:200],
-                }
-                for p in pages
-            ],
-        }
-        # Persist extraction result to a temp file for downstream steps
-        cache_path = os.path.join(tempfile.gettempdir(), "multimodal_extract_cache.json")
-        with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "pdf_path": pdf_file,
-                "total_pages": result.total_pages,
-                "pages": [
-                    {
-                        "page_num": p.page_num,
-                        "page_size": p.page_size,
-                        "images": [{"image_id": img.image_id, "base64_data": img.base64_data, "bbox": img.bbox, "size": img.size} for img in p.images],
-                        "text_blocks": [{"block_id": b.block_id, "text": b.text, "bbox": b.bbox, "is_heading": b.is_heading} for b in p.text_blocks],
-                    }
-                    for p in result.pages
-                ],
-            }, f, ensure_ascii=False)
-        summary["cache_path"] = cache_path
-        return _serialize(summary)
-    except Exception as e:
-        log.error("PDF extraction failed: %s", e)
-        return _serialize({"error": str(e)})
-
-
-def multimodal_describe_images(max_images: int = 3, provider: str = "xiaomimo") -> str:
-    """Run VLM description on extracted images."""
-    if not _FITZ_AVAILABLE:
-        return _serialize({"error": "PyMuPDF (fitz) is not installed. Run: pip install pymupdf pillow"})
-    cache_path = os.path.join(tempfile.gettempdir(), "multimodal_extract_cache.json")
-    if not os.path.exists(cache_path):
-        return _serialize({"error": "Please extract a PDF first"})
-    try:
-        with open(cache_path, "r", encoding="utf-8") as f:
-            cached = json.load(f)
-
-        # Reconstruct ImageExtract objects
-        pages = []
-        for p in cached["pages"]:
-            page = PageResult(page_num=p["page_num"], page_size=tuple(p["page_size"]))
-            page.images = [ImageExtract(**img) for img in p["images"]]
-            page.text_blocks = p["text_blocks"]
-            pages.append(page)
-
-        all_images = []
-        for p in pages:
-            all_images.extend(p.images)
-
-        if not all_images:
-            return _serialize({"error": "No images found in PDF"})
-
-        descriptor = VLMDescriptor(provider=provider, batch_size=1, max_retries=1)
-        result = descriptor.describe_extracted_images(all_images[:max_images], text_blocks=[])
-
-        descriptions = [d.to_dict() for d in result.descriptions]
-        summary = {
-            "total_images": result.total_images,
-            "success_count": result.success_count,
-            "fail_count": result.fail_count,
-            "total_time_ms": result.total_time_ms,
-            "descriptions": descriptions,
-        }
-
-        # Cache describe result
-        desc_cache = os.path.join(tempfile.gettempdir(), "multimodal_describe_cache.json")
-        with open(desc_cache, "w", encoding="utf-8") as f:
-            json.dump(summary, f, ensure_ascii=False)
-
-        return _serialize(summary)
-    except Exception as e:
-        log.error("VLM description failed: %s", e)
-        return _serialize({"error": str(e)})
-
-
-def multimodal_build_kg(graph_name: str = "multimodal_poc") -> str:
-    """Build multimodal KG from cached extraction + description results."""
-    if not _FITZ_AVAILABLE:
-        return _serialize({"error": "PyMuPDF (fitz) is not installed. Run: pip install pymupdf pillow"})
-    extract_cache = os.path.join(tempfile.gettempdir(), "multimodal_extract_cache.json")
-    describe_cache = os.path.join(tempfile.gettempdir(), "multimodal_describe_cache.json")
-    if not os.path.exists(extract_cache):
-        return _serialize({"error": "Please extract a PDF first"})
-    try:
-        with open(extract_cache, "r", encoding="utf-8") as f:
-            cached = json.load(f)
-
-        pages = []
-        for p in cached["pages"]:
-            page = PageResult(page_num=p["page_num"], page_size=tuple(p["page_size"]))
-            page.images = [ImageExtract(**img) for img in p["images"]]
-            page.text_blocks = [TextBlockExtract(**b) for b in p["text_blocks"]]
-            pages.append(page)
-
-        # Reconstruct describe result if available
-        describe_result = None
-        if os.path.exists(describe_cache):
-            with open(describe_cache, "r", encoding="utf-8") as f:
-                desc_data = json.load(f)
-            descriptions = [ImageDescription(**d) for d in desc_data.get("descriptions", [])]
-            describe_result = BatchDescribeResult(
-                total_images=desc_data.get("total_images", 0),
-                success_count=desc_data.get("success_count", 0),
-                fail_count=desc_data.get("fail_count", 0),
-                descriptions=descriptions,
-                total_time_ms=desc_data.get("total_time_ms", 0),
-            )
-
-        class _ExtractionResult:
-            def __init__(self, pages):
-                self.pages = pages
-
-        extraction_result = _ExtractionResult(pages)
-        builder = MultimodalKGBuilder(host=huge_settings.graph_url, graph=graph_name)
-        builder.init_schema()
-        stats = builder.build(extraction_result, describe_result, document_name=os.path.basename(cached.get("pdf_path", "document.pdf")))
-        return _serialize(stats.summary())
-    except Exception as e:
-        log.error("Multimodal KG build failed: %s", e)
-        return _serialize({"error": str(e)})
-
-
-def multimodal_search(query: str, graph_name: str = "multimodal_poc", top_k: int = 5, mode: str = "auto") -> str:
-    """Run multimodal retrieval against a built multimodal KG."""
-    if not query:
-        return _serialize({"error": "Empty query"})
-    try:
-        retriever = MultiModalRetriever(
-            host=huge_settings.graph_url,
-            graph=graph_name,
-            final_top_k=top_k,
-        )
-        result = retriever.search(query, mode=mode)
-        return _serialize(result.structured_context)
-    except Exception as e:
-        log.error("Multimodal search failed: %s", e)
-        return _serialize({"error": str(e)})
-
-
-# ── 2. Property Graph Extraction ──────────────────────────────
+# ── 1. Property Graph Extraction ──────────────────────────────
 
 
 def property_graph_extract(text: str, schema_text: str = "") -> str:

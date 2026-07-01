@@ -42,6 +42,10 @@ from hugegraph_llm.utils.vector_index_utils import (
     clean_vector_index,
     get_vector_index_info,
 )
+from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
+    property_graph_extract,
+    chunk_sim_edges_build,
+)
 
 
 def _dump_json_examples(value):
@@ -432,6 +436,46 @@ def create_vector_graph_block():
                 )
                 build_schema_bt = gr.Button("Generate Schema", variant="primary")
         _create_prompt_helper_block(demo, input_text, info_extract_template)
+
+        # ── Advanced Build Options (from Capability Closure) ──
+        with gr.Accordion("Advanced Build Options / 高级构建选项", open=False):
+            gr.Markdown("Additional extraction and edge building modes beyond the standard pipeline.")
+
+            with gr.Row():
+                with gr.Column(scale=2):
+                    pg_text = gr.Textbox(
+                        label="Input Text (Property Graph)",
+                        placeholder="Paste text to extract a property graph...",
+                        lines=4,
+                    )
+                    pg_schema = gr.Code(
+                        label="Schema JSON (optional)",
+                        language="json",
+                        value='{"vertexlabels": [], "edgelabels": []}',
+                    )
+                    pg_btn = gr.Button("Extract Property Graph", variant="secondary")
+                with gr.Column(scale=2):
+                    pg_out = gr.Code(label="Property Graph Result", language="json")
+
+            with gr.Row():
+                with gr.Column(scale=1):
+                    cs_label = gr.Textbox(value="Chunk", label="Chunk Vertex Label")
+                    cs_top_k = gr.Slider(value=3, minimum=1, maximum=10, step=1, label="KNN Top-K")
+                    cs_min_score = gr.Slider(value=0.5, minimum=0.0, maximum=1.0, step=0.05, label="Min Similarity")
+                    cs_btn = gr.Button("Build SIMILAR Edges", variant="secondary")
+                with gr.Column(scale=2):
+                    cs_out = gr.Code(label="Chunk Similarity Result", language="json")
+
+            pg_btn.click(
+                fn=property_graph_extract,
+                inputs=[pg_text, pg_schema],
+                outputs=[pg_out],
+            )
+            cs_btn.click(
+                fn=chunk_sim_edges_build,
+                inputs=[cs_label, cs_top_k, cs_min_score],
+                outputs=[cs_out],
+            )
 
         vector_index_btn0.click(get_vector_index_info, outputs=out).then(
             store_prompt,

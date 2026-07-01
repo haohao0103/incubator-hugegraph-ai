@@ -41,6 +41,12 @@ from hugegraph_llm.demo.rag_demo.advanced_graphrag_handlers import (
     schema_validate,
     token_budget_demo,
 )
+from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
+    incremental_index_flow,
+    synonym_add,
+    synonym_expand,
+    synonym_list,
+)
 from hugegraph_llm.utils.log import log
 
 
@@ -240,6 +246,67 @@ def create_advanced_graphrag_block():
         fn=_run_token_budget,
         inputs=[tb_query, tb_max_tokens],
         outputs=[tb_summary, tb_context],
+    )
+
+    # ── Section 7: Incremental Index Flow ────────────────────────
+    gr.Markdown("---")
+    gr.Markdown("## 7. Incremental Index Flow")
+    gr.Markdown("Add new documents to an existing graph index without rebuilding from scratch.")
+
+    with gr.Row():
+        with gr.Column(scale=2):
+            inc_text = gr.Textbox(
+                label="New Document Texts",
+                placeholder="Paste new document content. Use '---' to separate multiple documents.",
+                lines=6,
+            )
+            inc_graph = gr.Textbox(value="", label="Graph Name (optional)")
+            inc_btn = gr.Button("Run Incremental Index", variant="secondary")
+        with gr.Column(scale=2):
+            inc_out = gr.Code(label="Incremental Index Result", language="json")
+
+    inc_btn.click(
+        fn=incremental_index_flow,
+        inputs=[inc_text, inc_graph],
+        outputs=[inc_out],
+    )
+
+    # ── Section 8: Synonym Manager ────────────────────────────────
+    gr.Markdown("---")
+    gr.Markdown("## 8. Synonym Manager")
+    gr.Markdown("Manage synonym groups for query expansion and entity normalization.")
+
+    with gr.Row():
+        with gr.Column(scale=1):
+            syn_canonical = gr.Textbox(label="Canonical Term", placeholder="physical car model")
+            syn_aliases = gr.Textbox(label="Aliases (comma-separated)", placeholder="actual car model, vehicle type")
+            syn_category = gr.Textbox(label="Category", value="general")
+            syn_add_btn = gr.Button("Add Synonym Group", variant="secondary")
+        with gr.Column(scale=1):
+            syn_query = gr.Textbox(label="Query to Expand", placeholder="where is the actual car model field")
+            syn_expand_btn = gr.Button("Expand Query", variant="secondary")
+        with gr.Column(scale=1):
+            syn_list_btn = gr.Button("List Synonyms", variant="secondary")
+
+    with gr.Row():
+        syn_add_out = gr.Code(label="Add Result", language="json")
+        syn_expand_out = gr.Code(label="Expanded Query", language="json")
+        syn_list_out = gr.Code(label="Synonym List", language="json")
+
+    syn_add_btn.click(
+        fn=synonym_add,
+        inputs=[syn_canonical, syn_aliases, syn_category],
+        outputs=[syn_add_out],
+    )
+    syn_expand_btn.click(
+        fn=synonym_expand,
+        inputs=[syn_query],
+        outputs=[syn_expand_out],
+    )
+    syn_list_btn.click(
+        fn=synonym_list,
+        inputs=[],
+        outputs=[syn_list_out],
     )
 
 
