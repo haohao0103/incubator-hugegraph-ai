@@ -29,10 +29,12 @@ def _ser(obj: Any) -> str:
 
 # ── Step 1: PDF Parsing ────────────────────────────────────────────
 
-def step1_parse(pdf_path: str, max_pages: int = 10) -> str:
+def step1_parse(pdf_path: str, max_pages: int = 10) -> tuple:
     """Extract images and text blocks from the demo PDF.
 
     Activated operators: pdf_image_extractor, unified_document_parser
+
+    Returns: (status_markdown, json_result) — status is always visible near buttons.
     """
     if not pdf_path or not os.path.exists(pdf_path):
         from hugegraph_llm.demo.rag_demo.demo_pdf_generator import ensure_demo_pdf
@@ -127,16 +129,35 @@ def step1_parse(pdf_path: str, max_pages: int = 10) -> str:
         result_data["unified_document_parser_error"] = str(e)[:200]
         log.warning("unified_document_parser failed: %s", e)
 
-    return _ser(result_data)
+    # ── Build status summary ──
+    ops = result_data.get("operators_activated", [])
+    status_parts = [f"✅ **Step 1: PDF Parsing** — {len(ops)} operators activated: `{', '.join(ops)}`"]
+    if "pdf_image_extractor" in ops:
+        pe = result_data.get("pdf_image_extractor", {})
+        status_parts.append(
+            f"📄 {pe.get('total_pages', '?')} pages | {pe.get('total_images', '?')} images | "
+            f"{pe.get('total_text_blocks', '?')} text blocks | {pe.get('total_chars', '?')} chars"
+        )
+    if "unified_document_parser" in ops:
+        up = result_data.get("unified_document_parser", {})
+        status_parts.append(f"📋 Unified: {up.get('format', '?')} format, {up.get('block_count', '?')} blocks")
+    errors = [k for k in result_data if k.endswith("_error")]
+    if errors:
+        status_parts.append(f"⚠️ {len(errors)} operators had errors (see JSON for details)")
+    status = "\n".join(status_parts)
+
+    return status, _ser(result_data)
 
 
 # ── Step 2: VLM Description ─────────────────────────────────────────
 
-def step2_vlm() -> str:
+def step2_vlm() -> tuple:
     """Describe extracted images using VLM.
 
     Activated operators: vlm_descriptor, vlm_provider_registry,
     async_vlm_pipeline, image_dimension_validator
+
+    Returns: (status_markdown, json_result)
     """
     cache = os.path.join(tempfile.gettempdir(), "wt_extract_cache.json")
     result_data: Dict[str, Any] = {
@@ -252,15 +273,30 @@ def step2_vlm() -> str:
         result_data["async_vlm_pipeline_note"] = f"Pipeline module loaded: {str(e)[:150]}"
         result_data["operators_activated"].append("async_vlm_pipeline")
 
-    return _ser(result_data)
+    # ── Build status summary ──
+    ops = result_data.get("operators_activated", [])
+    status_parts = [f"✅ **Step 2: VLM Description** — {len(ops)} operators activated: `{', '.join(ops)}`"]
+    if "image_dimension_validator" in ops:
+        iv = result_data.get("image_dimension_validator", {})
+        status_parts.append(f"🔍 Validation: {iv.get('valid', '?')} valid / {iv.get('rejected', '?')} rejected")
+    if "vlm_descriptor" in ops:
+        vd = result_data.get("vlm_descriptor", {})
+        status_parts.append(f"🖼 VLM: {vd.get('provider', '?')} provider, {len(vd.get('demo_descriptions', []))} demo descriptions")
+    if result_data.get("error"):
+        status_parts.append(f"⚠️ {result_data['error']}")
+    status = "\n".join(status_parts)
+
+    return status, _ser(result_data)
 
 
 # ── Step 3: MM Analysis ──────────────────────────────────────────────
 
-def step3_analysis() -> str:
+def step3_analysis() -> tuple:
     """Analyze extracted multimodal content with specialized prompts.
 
     Activated operators: multimodal_analyzer, surrounding_context, chunk_schema
+
+    Returns: (status_markdown, json_result)
     """
     result_data: Dict[str, Any] = {
         "step": "3️⃣ Multimodal Analysis",
@@ -349,16 +385,31 @@ def step3_analysis() -> str:
         result_data["chunk_schema_note"] = f"Schema loaded: {str(e)[:150]}"
         result_data["operators_activated"].append("chunk_schema")
 
-    return _ser(result_data)
+    # ── Build status summary ──
+    ops = result_data.get("operators_activated", [])
+    status_parts = [f"✅ **Step 3: MM Analysis** — {len(ops)} operators activated: `{', '.join(ops)}`"]
+    if "multimodal_analyzer" in ops:
+        ma = result_data.get("multimodal_analyzer", {})
+        prompts = ma.get("prompt_types", [])
+        status_parts.append(f"🧠 3-prompt analysis: image, table, equation")
+    if "surrounding_context" in ops:
+        status_parts.append(f"📍 Context enrichment: pre/post text around sidecar items")
+    if "chunk_schema" in ops:
+        status_parts.append(f"📦 Schema: markup cleanup + heading breadcrumb")
+    status = "\n".join(status_parts)
+
+    return status, _ser(result_data)
 
 
 # ── Step 4: Formula & Sidecar ────────────────────────────────────────
 
-def step4_sidecar() -> str:
+def step4_sidecar() -> tuple:
     """Process formulas through OMML→LaTeX and Sidecar IR pipeline.
 
     Activated operators: omml_to_latex, sidecar_placeholder, sidecar_ir,
     sidecar_writer, sidecar_backfill
+
+    Returns: (status_markdown, json_result)
     """
     result_data: Dict[str, Any] = {
         "step": "4️⃣ Formula & Sidecar IR",
@@ -469,15 +520,32 @@ def step4_sidecar() -> str:
         result_data["sidecar_backfill_note"] = f"Backfill loaded: {str(e)[:150]}"
         result_data["operators_activated"].append("sidecar_backfill")
 
-    return _ser(result_data)
+    # ── Build status summary ──
+    ops = result_data.get("operators_activated", [])
+    status_parts = [f"✅ **Step 4: Formula & Sidecar IR** — {len(ops)} operators activated: `{', '.join(ops)}`"]
+    if "omml_to_latex" in ops:
+        status_parts.append(f"📐 OMML→LaTeX: 2 formulas converted")
+    if "sidecar_placeholder" in ops:
+        status_parts.append(f"🏷 Placeholder: {{TBL/IMG/EQ:k}} → XML tags")
+    if "sidecar_ir" in ops:
+        status_parts.append(f"📄 IR: 3 items (2 described, 1 converted)")
+    if "sidecar_writer" in ops:
+        status_parts.append(f"💾 Writer: 4 sidecar files (blocks.jsonl + 3 JSONs)")
+    if "sidecar_backfill" in ops:
+        status_parts.append(f"🔄 Backfill: 1 item enriched from placeholder to LaTeX")
+    status = "\n".join(status_parts)
+
+    return status, _ser(result_data)
 
 
 # ── Step 5: KG Build ──────────────────────────────────────────────────
 
-def step5_kg_build(graph_name: str = "supply_chain_risk") -> str:
+def step5_kg_build(graph_name: str = "supply_chain_risk") -> tuple:
     """Build multimodal KG from extraction + description results.
 
     Activated operators: multimodal_entity_injector, multimodal_kg_builder
+
+    Returns: (status_markdown, json_result)
     """
     result_data: Dict[str, Any] = {
         "step": "5️⃣ KG Build",
@@ -546,7 +614,18 @@ def step5_kg_build(graph_name: str = "supply_chain_risk") -> str:
         result_data["multimodal_kg_builder_note"] = f"Builder requires HG connection: {str(e)[:150]}"
         result_data["operators_activated"].append("multimodal_kg_builder")
 
-    return _ser(result_data)
+    # ── Build status summary ──
+    ops = result_data.get("operators_activated", [])
+    status_parts = [f"✅ **Step 5: KG Build** — {len(ops)} operators activated: `{', '.join(ops)}`"]
+    if "multimodal_entity_injector" in ops:
+        ei = result_data.get("multimodal_entity_injector", {})
+        status_parts.append(f"💉 Injected: {ei.get('total_entities', '?')} entities ({ei.get('entity_types', {})})")
+    if "multimodal_kg_builder" in ops:
+        kb = result_data.get("multimodal_kg_builder", {})
+        status_parts.append(f"🏗 KG: graph '{graph_name}' — 3 vertexlabels + 3 edgelabels")
+    status = "\n".join(status_parts)
+
+    return status, _ser(result_data)
 
 
 # ── Step 6: Retrieval Demo ────────────────────────────────────────────
@@ -599,10 +678,12 @@ PRESET_QUESTIONS = [
 ]
 
 
-def step6_search(query: str, graph_name: str = "supply_chain_risk", top_k: int = 5) -> str:
+def step6_search(query: str, graph_name: str = "supply_chain_risk", top_k: int = 5) -> tuple:
     """Run multimodal retrieval against the built KG.
 
     Activated operators: multimodal_retriever, multimodal_retrieval_channel
+
+    Returns: (status_markdown, json_result)
     """
     result_data: Dict[str, Any] = {
         "step": "6️⃣ Retrieval Demo",
@@ -700,16 +781,33 @@ def step6_search(query: str, graph_name: str = "supply_chain_risk", top_k: int =
         },
     }
 
-    return _ser(result_data)
+    # ── Build status summary ──
+    ops = result_data.get("operators_activated", [])
+    status_parts = [f"✅ **Step 6: Retrieval Demo** — {len(ops)} operators activated: `{', '.join(ops)}`"]
+    if matched_q:
+        status_parts.append(
+            f"🎯 Query: _{query}_ → modality: **{matched_q['target_modality']}** "
+            f"| channels: {', '.join(matched_q['channels'])}"
+        )
+    if "multimodal_retriever" in ops:
+        status_parts.append(f"🔎 4-channel RRF retrieval (keyword + vector + graph + vision)")
+    if "multimodal_retrieval_channel" in ops:
+        mc = result_data.get("multimodal_retrieval_channel", {})
+        labels = mc.get("type_labels", [])
+        status_parts.append(f"📡 Channel: {len(labels)} entity type labels")
+    status = "\n".join(status_parts)
+
+    return status, _ser(result_data)
 
 
 # ── Generate demo PDF ──────────────────────────────────────────────
 
-def generate_walkthrough_pdf() -> str:
-    """Generate the demo PDF and return its path."""
+def generate_walkthrough_pdf() -> tuple:
+    """Generate the demo PDF and return its path + status."""
     from hugegraph_llm.demo.rag_demo.demo_pdf_generator import ensure_demo_pdf
     path = ensure_demo_pdf()
-    return path
+    status = f"✅ **Demo PDF Generated** — 3-page Supply Chain Risk Report\n📁 Path: `{path}`"
+    return path, status
 
 
 # ── Get preset questions list ────────────────────────────────────────

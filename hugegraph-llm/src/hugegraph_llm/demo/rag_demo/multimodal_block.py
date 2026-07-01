@@ -831,6 +831,10 @@ def create_multimodal_block():
 
                 # ── Tab: H. Walkthrough Demo ──
                 with gr.Tab("H. Walkthrough 🎯"):
+                    wt_status = gr.Markdown(
+                        value="👆 Click a step button above to begin — results will appear here and in the Walkthrough tab →",
+                        elem_id="wt_status_banner",
+                    )
                     gr.Markdown(
                         "### End-to-End Walkthrough: Supply Chain Risk Report\n\n"
                         "A guided 6-step demo that walks through the entire multimodal pipeline "
@@ -936,12 +940,12 @@ def create_multimodal_block():
         get_preset_questions,
     )
 
-    wt_pdf_btn.click(fn=generate_walkthrough_pdf, outputs=[wt_pdf_path])
-    wt_step1_btn.click(fn=step1_parse, inputs=[wt_pdf_path], outputs=[wt_result])
-    wt_step2_btn.click(fn=step2_vlm, outputs=[wt_result])
-    wt_step3_btn.click(fn=step3_analysis, outputs=[wt_result])
-    wt_step4_btn.click(fn=step4_sidecar, outputs=[wt_result])
-    wt_step5_btn.click(fn=step5_kg_build, inputs=[mm_graph_name], outputs=[wt_result])
+    wt_pdf_btn.click(fn=generate_walkthrough_pdf, outputs=[wt_pdf_path, wt_status])
+    wt_step1_btn.click(fn=step1_parse, inputs=[wt_pdf_path], outputs=[wt_status, wt_result])
+    wt_step2_btn.click(fn=step2_vlm, outputs=[wt_status, wt_result])
+    wt_step3_btn.click(fn=step3_analysis, outputs=[wt_status, wt_result])
+    wt_step4_btn.click(fn=step4_sidecar, outputs=[wt_status, wt_result])
+    wt_step5_btn.click(fn=step5_kg_build, inputs=[mm_graph_name], outputs=[wt_status, wt_result])
 
     def _search_q1():
         return step6_search("哪些节点风险评分最高？")
@@ -958,12 +962,12 @@ def create_multimodal_block():
     def _search_q5():
         return step6_search("Warehouse-C的完整风险评估？")
 
-    wt_q1_btn.click(fn=_search_q1, outputs=[wt_result])
-    wt_q2_btn.click(fn=_search_q2, outputs=[wt_result])
-    wt_q3_btn.click(fn=_search_q3, outputs=[wt_result])
-    wt_q4_btn.click(fn=_search_q4, outputs=[wt_result])
-    wt_q5_btn.click(fn=_search_q5, outputs=[wt_result])
-    wt_custom_btn.click(fn=step6_search, inputs=[wt_custom_query], outputs=[wt_result])
+    wt_q1_btn.click(fn=_search_q1, outputs=[wt_status, wt_result])
+    wt_q2_btn.click(fn=_search_q2, outputs=[wt_status, wt_result])
+    wt_q3_btn.click(fn=_search_q3, outputs=[wt_status, wt_result])
+    wt_q4_btn.click(fn=_search_q4, outputs=[wt_status, wt_result])
+    wt_q5_btn.click(fn=_search_q5, outputs=[wt_status, wt_result])
+    wt_custom_btn.click(fn=step6_search, inputs=[wt_custom_query], outputs=[wt_status, wt_result])
 
     # ═══════════════════════════════════════════════════════════
     # Auto-load demo data on page load
@@ -1023,6 +1027,10 @@ def create_multimodal_block():
         pipeline_demo = _safe_json(DEMO_PIPELINE_OVERVIEW | {"demo": True})
 
         # H. Walkthrough initial data
+        wt_status_init = (
+            "👆 **Click a step button above to begin** — results will appear here and in the Walkthrough tab →\n\n"
+            "Steps 1→6 cover ALL 18 multimodal operators. Start with **Generate Demo PDF** first."
+        )
         wt_init = _safe_json({
             "note": "Click 'Generate Demo PDF' to create the 3-page Supply Chain Risk Report, "
                     "then walk through Steps 1→6 to see each operator's output.",
@@ -1054,7 +1062,7 @@ def create_multimodal_block():
             omml_demo, placeholder_demo, ir_demo, writer_demo, backfill_demo,
             table_html, eq_md,
             pipeline_demo,
-            wt_init, wt_questions_init,
+            wt_status_init, wt_init, wt_questions_init,
         )
 
     # Return demo data targets for page load
@@ -1067,7 +1075,7 @@ def create_multimodal_block():
         mm_omml_out, mm_placeholder_out, mm_ir_out, mm_writer_out, mm_backfill_out,
         mm_table_out, mm_eq_out,
         mm_pipeline_out,
-        wt_result, wt_questions,
+        wt_status, wt_result, wt_questions,
     ]
 
     return demo_outputs, _load_demo_data
