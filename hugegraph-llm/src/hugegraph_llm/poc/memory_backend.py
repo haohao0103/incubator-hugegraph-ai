@@ -3570,7 +3570,30 @@ def create_app(backend: MemoryPipelineBackend = None) -> Flask:
     @app.route("/api/clear", methods=["POST"])
     def api_clear():
         data = request.json or {}
-        store.clear_all(data.get("user_id", "demo_user"))
+        user_id = data.get("user_id", "demo_user")
+        # Clear all stores: HugeGraph + FAISS + BM25 + SQLite
+        try:
+            store.hg.clear_graph()
+        except Exception as e:
+            print(f"[Clear] HugeGraph error: {e}", file=sys.stderr)
+        store.faiss.clear()
+        try:
+            store.faiss.save()
+        except Exception:
+            pass
+        # BM25: clear by creating a new empty index (BM25FullTextBackend is conditionally imported)
+        if store._bm25 is not None:
+            try:
+                store._bm25 = store._bm25.__class__()  # Create empty instance of same class
+            except Exception:
+                store._bm25 = None
+        try:
+            db = get_metadata_db()
+            db.execute("DELETE FROM memories")
+            db.commit()
+            db.close()
+        except Exception as e:
+            print(f"[Clear] SQLite error: {e}", file=sys.stderr)
         return jsonify({"status": "cleared"})
 
     @app.route("/api/memory/distill", methods=["POST"])

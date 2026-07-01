@@ -761,9 +761,9 @@ async function demoPrivacyFilter(){
 async function demoAgentCheck(){
   try{
     const cases=[
-      {requesting:'agent_b',owner:'agent_a',operation:'read',scope:'SHARED',privacy:'STANDARD'},
-      {requesting:'agent_c',owner:'agent_a',operation:'read',scope:'PRIVATE',privacy:'CONFIDENTIAL'},
-      {requesting:'agent_a',owner:'agent_a',operation:'write',scope:'PRIVATE',privacy:'SENSITIVE'},
+      {requesting_agent_id:'agent_b',owner_agent_id:'agent_a',operation:'read',scope:'SHARED',privacy:'STANDARD'},
+      {requesting_agent_id:'agent_c',owner_agent_id:'agent_a',operation:'read',scope:'PRIVATE',privacy:'CONFIDENTIAL'},
+      {requesting_agent_id:'agent_a',owner_agent_id:'agent_a',operation:'write',scope:'PRIVATE',privacy:'SENSITIVE'},
     ];
     const area=document.getElementById('agentCheckResult');
     let html='';
@@ -771,7 +771,7 @@ async function demoAgentCheck(){
       const r=await apiPost(API+'/agent/check_access',c);
       const color=r.allowed?'var(--green)':'var(--red)';
       const emoji=r.allowed?'✅':'🚫';
-      html+=`<div class="stat-row" style="margin:4px 0;font-size:11px"><span class="stat-key">${c.requesting}→${c.owner} ${c.operation}</span><span class="stat-val2" style="color:${color}">${emoji} ${r.allowed?'允许':'拒绝'}</span></div>`;
+      html+=`<div class="stat-row" style="margin:4px 0;font-size:11px"><span class="stat-key">${c.requesting_agent_id}→${c.owner_agent_id} ${c.operation}</span><span class="stat-val2" style="color:${color}">${emoji} ${r.allowed?'允许':'拒绝'}</span></div>`;
     }
     area.innerHTML=html;
   }catch(e){document.getElementById('agentCheckResult').innerHTML=`<span style="color:var(--red);font-size:10px">失败</span>`;}
