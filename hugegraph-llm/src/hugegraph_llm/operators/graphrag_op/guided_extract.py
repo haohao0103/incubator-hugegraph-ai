@@ -18,25 +18,25 @@
 """
 Guided Mode Extraction — Schema-constrained extraction with Pydantic ResponseModel.
 
-For well-defined domains where the ontology is known a priori (risk control
-enhancement, code graph, financial regulation), Guided mode constrains LLM
-extraction output to match the existing relationship graph's schema.
+For well-defined domains where the KG ontology is known a priori (risk control,
+code graph, financial regulation), Guided mode constrains LLM extraction output
+to match the KG's own known schema types.
 
 This module provides:
 1. Pydantic ResponseModel classes that constrain LLM output to valid schema types
 2. Guided extraction prompt templates that include the schema definition
 3. GuidedExtractOperator that orchestrates schema-constrained extraction
 
-Design: The ResponseModel is dynamically built from the relationship graph's
-vertex types and edge types. Each vertex type becomes an entity class, each
-edge type becomes a relation class. The LLM must output instances of these
-classes — no free-form type strings allowed.
+Design: The ResponseModel is dynamically built from the KG's known vertex types
+and edge types. Each known vertex type becomes an entity class, each known edge
+type becomes a relation class. The LLM must output instances of these classes —
+no free-form type strings allowed.
 
 Context keys:
   IN:
     chunks                — List[str] raw text chunks
     graph_rag_schema_config — GraphRAGSchemaConfig (mode=guided)
-    relationship_graph_types — List[str] vertex type names
+    known_vertex_types    — List[str] known vertex type names from KG registry
     schema                — Optional[Dict] HugeGraph schema dict
 
   OUT:
@@ -108,7 +108,7 @@ class GuidedExtractResponse(BaseModel):
     """Top-level Pydantic model for guided extraction output.
 
     This constrains the LLM to output entities and relations whose labels
-    are from the allowed set derived from the relationship graph schema.
+    are from the allowed set derived from the KG's known schema types.
     """
     entities: List[GuidedEntity] = Field(
         default_factory=list,
@@ -125,11 +125,11 @@ class GuidedExtractResponse(BaseModel):
 # ============================================================
 
 class GuidedResponseModelBuilder:
-    """Build a Pydantic ResponseModel from the relationship graph schema.
+    """Build a Pydantic ResponseModel from the KG's known schema types.
 
-    Takes the list of vertex types and edge types from the relationship graph,
-    and creates a constrained ResponseModel that only allows those types.
-    This is the core mechanism that prevents type noise in guided mode.
+    Takes the list of known vertex types and edge types from the KG's type
+    registry, and creates a constrained ResponseModel that only allows those
+    types. This is the core mechanism that prevents type noise in guided mode.
 
     Usage:
         builder = GuidedResponseModelBuilder(
@@ -148,8 +148,8 @@ class GuidedResponseModelBuilder:
         config: Optional[GraphRAGSchemaConfig] = None,
     ):
         """
-        :param vertex_types: Allowed vertex label names from relationship graph.
-        :param edge_types: Allowed edge label names from relationship graph.
+        :param vertex_types: Known vertex label names from the KG's type registry.
+        :param edge_types: Known edge label names from the KG's type registry.
         :param schema_dict: Full HugeGraph schema dict (vertexlabels/edgelabels)
                            for property validation.
         :param config: GraphRAGSchemaConfig for max_types limits.
@@ -196,7 +196,7 @@ class GuidedResponseModelBuilder:
             def properties_must_match_schema(cls, v, info):
                 label = info.data.get("label", "")
                 allowed_props = cls._vertex_properties.get(label, [])
-                if allowed_props and not self.config.guided_allow_dynamic:
+                if allowed_props:
                     # Filter out properties not in the schema
                     filtered = {
                         k: val for k, val in v.items()
@@ -328,8 +328,8 @@ class GuidedExtractOperator:
     """Schema-constrained extraction using Pydantic ResponseModel.
 
     This operator is activated when GraphRAGSchemaConfig.mode == GUIDED.
-    It constrains the LLM to only output entity/relation types that exist
-    in the relationship graph schema, preventing type noise entirely.
+    It constrains the LLM to only output entity/relation types that are
+    known in the KG's type registry, preventing type noise entirely.
 
     Usage:
         operator = GuidedExtractOperator(llm=my_llm, config=my_config)
@@ -347,7 +347,7 @@ class GuidedExtractOperator:
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute guided extraction.
 
-        Reads: chunks, graph_rag_schema_config, relationship_graph_types,
+        Reads: chunks, graph_rag_schema_config, known_vertex_types,
                schema.
         Writes: vertices, edges, extracted_entities, extracted_relations,
                 call_count.
@@ -372,9 +372,9 @@ class GuidedExtractOperator:
             return context
 
         # Get schema sources
-        rel_types = context.get("relationship_graph_types", [])
+        rel_types = context.get("known_vertex_types", [])
         if not rel_types:
-            rel_types = self.config.relationship_graph_types
+            rel_types = self.config.known_vertex_types
 
         schema_dict = context.get("schema", {})
 

@@ -104,21 +104,21 @@ class TestGraphRAGSchemaConfig:
     def test_guided_mode_config(self):
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.GUIDED,
-            relationship_graph_types=["person", "device", "ip_address"],
+            known_vertex_types=["person", "device", "ip_address"],
         )
         assert config.mode == SchemaMode.GUIDED
-        assert len(config.relationship_graph_types) == 3
+        assert len(config.known_vertex_types) == 3
 
     def test_validate_guided_without_types(self):
         config = GraphRAGSchemaConfig(mode=SchemaMode.GUIDED)
         issues = config.validate()
         assert len(issues) > 0
-        assert "requires relationship_graph_types" in issues[0]
+        assert "requires known_vertex_types" in issues[0]
 
     def test_validate_guided_with_types(self):
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.GUIDED,
-            relationship_graph_types=["person", "device"],
+            known_vertex_types=["person", "device"],
         )
         issues = config.validate()
         assert len(issues) == 0
@@ -135,7 +135,7 @@ class TestGraphRAGSchemaConfig:
         config = GraphRAGSchemaConfig(
             canonicalize_similarity_threshold=0.60,
             canonicalize_suggest_threshold=0.80,
-            relationship_graph_types=["person", "device"],  # satisfy EMBEDDING_SIM check
+            known_vertex_types=["person", "device"],  # satisfy EMBEDDING_SIM check
         )
         issues = config.validate()
         threshold_issues = [i for i in issues if "should be >= " in i]
@@ -144,38 +144,38 @@ class TestGraphRAGSchemaConfig:
     def test_to_dict(self):
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.EVOLVING,
-            relationship_graph_types=["person", "device"],
+            known_vertex_types=["person", "device"],
         )
         d = config.to_dict()
         assert d["mode"] == "evolving"
-        assert d["relationship_graph_types_count"] == 2
+        assert d["known_vertex_types_count"] == 2
 
     def test_from_dict(self):
         d = {
             "mode": "guided",
             "canonicalize_strategy": "exact_match",
-            "relationship_graph_types": ["person", "device"],
+            "known_vertex_types": ["person", "device"],
         }
         config = GraphRAGSchemaConfig.from_dict(d)
         assert config.mode == SchemaMode.GUIDED
         assert config.canonicalize_strategy == CanonicalizeStrategy.EXACT_MATCH
-        assert len(config.relationship_graph_types) == 2
+        assert len(config.known_vertex_types) == 2
 
     def test_merge_from_context(self):
         config = GraphRAGSchemaConfig()
         context = {
             "graph_rag_schema_mode": "guided",
-            "relationship_graph_types": ["person", "company"],
+            "known_vertex_types": ["person", "company"],
             "known_type_registry": {"person": {"description": "A human being"}},
         }
         config.merge_from_context(context)
         assert config.mode == SchemaMode.GUIDED
-        assert len(config.relationship_graph_types) == 2
+        assert len(config.known_vertex_types) == 2
         assert "person" in config.known_type_registry
 
     def test_run_operator_protocol(self):
         config = GraphRAGSchemaConfig(
-            relationship_graph_types=["person", "device"],
+            known_vertex_types=["person", "device"],
         )
         context = {}
         result = config.run(context)
@@ -466,12 +466,12 @@ class TestKGSchemaCanonicalizeOperator:
     def test_exact_match_strategy(self):
         config = GraphRAGSchemaConfig(
             canonicalize_strategy=CanonicalizeStrategy.EXACT_MATCH,
-            relationship_graph_types=["person", "device", "ip_address", "company"],
+            known_vertex_types=["person", "device", "ip_address", "company"],
         )
         op = KGSchemaCanonicalizeOperator(config=config)
         context = {
             "raw_types": ["person", "company", "corporation", "IP_Address"],
-            "relationship_graph_types": ["person", "device", "ip_address", "company"],
+            "known_vertex_types": ["person", "device", "ip_address", "company"],
         }
         result = op.run(context)
         ct = result["canonicalized_types"]
@@ -481,7 +481,7 @@ class TestKGSchemaCanonicalizeOperator:
         assert ct["IP_Address"] == "ip_address"  # Case-insensitive match
 
     def test_embedding_similarity_strategy(self):
-        # Pre-compute embeddings for relationship graph types
+        # Pre-compute embeddings for known vertex types
         rel_types = ["person", "device", "ip_address", "company"]
         rel_embeddings = {t: simple_embed_func(t) for t in rel_types}
 
@@ -489,8 +489,8 @@ class TestKGSchemaCanonicalizeOperator:
             canonicalize_strategy=CanonicalizeStrategy.EMBEDDING_SIM,
             canonicalize_similarity_threshold=0.85,
             canonicalize_suggest_threshold=0.70,
-            relationship_graph_types=rel_types,
-            relationship_graph_type_embeddings=rel_embeddings,
+            known_vertex_types=rel_types,
+            known_type_embeddings=rel_embeddings,
         )
         op = KGSchemaCanonicalizeOperator(
             embed_func=simple_embed_func,
@@ -506,8 +506,8 @@ class TestKGSchemaCanonicalizeOperator:
         context = {
             "raw_types": ["corporation", "individual", "device"],
             "type_definitions": type_definitions,
-            "relationship_graph_types": rel_types,
-            "relationship_graph_type_embeddings": rel_embeddings,
+            "known_vertex_types": rel_types,
+            "known_type_embeddings": rel_embeddings,
         }
         result = op.run(context)
 
@@ -521,12 +521,12 @@ class TestKGSchemaCanonicalizeOperator:
         """When no embeddings are available, fall back to EXACT_MATCH."""
         config = GraphRAGSchemaConfig(
             canonicalize_strategy=CanonicalizeStrategy.EMBEDDING_SIM,
-            relationship_graph_types=["person", "device"],
+            known_vertex_types=["person", "device"],
         )
         op = KGSchemaCanonicalizeOperator(config=config)
         context = {
             "raw_types": ["person", "corporation"],
-            "relationship_graph_types": ["person", "device"],
+            "known_vertex_types": ["person", "device"],
         }
         result = op.run(context)
         # Should fall back to EXACT_MATCH
@@ -544,13 +544,13 @@ class TestKGSchemaCanonicalizeOperator:
         llm = MockLLM(responses=[llm_response])
         config = GraphRAGSchemaConfig(
             canonicalize_strategy=CanonicalizeStrategy.LLM_CLASSIFY,
-            relationship_graph_types=["person", "device", "company", "ip_address"],
+            known_vertex_types=["person", "device", "company", "ip_address"],
         )
         op = KGSchemaCanonicalizeOperator(llm=llm, config=config)
 
         context = {
             "raw_types": ["corporation", "individual", "novel_type"],
-            "relationship_graph_types": ["person", "device", "company", "ip_address"],
+            "known_vertex_types": ["person", "device", "company", "ip_address"],
             "type_definitions": {
                 "corporation": {"description": "A corporation"},
                 "individual": {"description": "An individual person"},
@@ -604,7 +604,7 @@ class TestKGSchemaCanonicalizeOperator:
         assert context["vertices"][0]["label"] == "company"
         assert context["vertices"][0]["raw_label"] == "corporation"
 
-    def test_no_relationship_types_warning(self):
+    def test_no_known_types_warning(self):
         config = GraphRAGSchemaConfig()
         op = KGSchemaCanonicalizeOperator(config=config)
         context = {"raw_types": ["company", "person"]}
@@ -702,7 +702,7 @@ class TestGuidedExtractOperator:
         llm = MockLLM(responses=[llm_response])
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.GUIDED,
-            relationship_graph_types=["person", "device", "ip_address"],
+            known_vertex_types=["person", "device", "ip_address"],
         )
 
         schema_dict = {
@@ -722,7 +722,7 @@ class TestGuidedExtractOperator:
         context = {
             "chunks": ["Alice uses a Phone for work"],
             "schema": schema_dict,
-            "relationship_graph_types": ["person", "device", "ip_address"],
+            "known_vertex_types": ["person", "device", "ip_address"],
         }
         result = op.run(context)
         assert len(result["vertices"]) >= 1
@@ -740,7 +740,7 @@ class TestGuidedExtractOperator:
         llm = MockLLM(responses=[llm_response])
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.GUIDED,
-            relationship_graph_types=["person"],
+            known_vertex_types=["person"],
         )
         op = GuidedExtractOperator(llm=llm, config=config)
         context = {
@@ -777,11 +777,11 @@ class TestEDCPipelineOrchestrator:
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.EVOLVING,
             canonicalize_strategy=CanonicalizeStrategy.EXACT_MATCH,
-            relationship_graph_types=["person", "device", "company", "ip_address"],
+            known_vertex_types=["person", "device", "company", "ip_address"],
         )
 
         # Pre-compute embeddings for canonicalize
-        rel_embeddings = {t: simple_embed_func(t) for t in config.relationship_graph_types}
+        rel_embeddings = {t: simple_embed_func(t) for t in config.known_vertex_types}
 
         orchestrator = EDCPipelineOrchestrator(
             llm=llm,
@@ -799,8 +799,8 @@ class TestEDCPipelineOrchestrator:
                 {"label": "company", "properties": {"name": "摩拜单车"}},
                 {"label": "person", "properties": {"name": "胡玮炜"}},
             ],
-            "relationship_graph_types": config.relationship_graph_types,
-            "relationship_graph_type_embeddings": rel_embeddings,
+            "known_vertex_types": config.known_vertex_types,
+            "known_type_embeddings": rel_embeddings,
         }
 
         result = orchestrator.run(context)
@@ -826,7 +826,7 @@ class TestEDCPipelineOrchestrator:
         llm = MockLLM(responses=[llm_response])
         config = GraphRAGSchemaConfig(
             mode=SchemaMode.GUIDED,
-            relationship_graph_types=["person", "device", "ip_address"],
+            known_vertex_types=["person", "device", "ip_address"],
         )
 
         orchestrator = EDCPipelineOrchestrator(llm=llm, config=config)
@@ -924,7 +924,7 @@ class TestEDCIntegration:
                 "person": {"description": "A human being", "type_category": "entity"},
                 "device": {"description": "A physical device", "type_category": "entity"},
             },
-            relationship_graph_types=["person", "device", "ip_address"],
+            known_vertex_types=["person", "device", "ip_address"],
         )
 
         orchestrator = EDCPipelineOrchestrator(llm=llm, config=config)
@@ -937,7 +937,7 @@ class TestEDCIntegration:
                 {"name": "QuantumComputing", "type": "novel_concept"},
             ],
             "known_type_registry": config.known_type_registry,
-            "relationship_graph_types": config.relationship_graph_types,
+            "known_vertex_types": config.known_vertex_types,
         }
         result = orchestrator.run(context)
 

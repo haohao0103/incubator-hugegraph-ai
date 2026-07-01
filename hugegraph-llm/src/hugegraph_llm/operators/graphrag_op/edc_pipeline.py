@@ -39,8 +39,8 @@ Context keys (full pipeline):
     graph_rag_schema_mode — Optional[str] "evolving" | "guided"
     graph_rag_schema_config — Optional[GraphRAGSchemaConfig]
     known_type_registry   — Optional[Dict] cached type definitions
-    relationship_graph_types — Optional[List[str]] vertex types from cluster
-    relationship_graph_type_embeddings — Optional[Dict] pre-computed embeddings
+    known_vertex_types    — Optional[List[str]] known vertex types from KG registry
+    known_type_embeddings — Optional[Dict] pre-computed embeddings
 
   OUT (evolving mode):
     raw_types             — List[str] raw LLM-extracted type strings
@@ -139,8 +139,8 @@ class EDCPipelineOrchestrator:
         2. Define: KGSchemaDefineOperator generates semantic definitions
            for new types not in known_type_registry.
 
-        3. Canonicalize: KGSchemaCanonicalizeOperator aligns LLM-generated
-           types to existing relationship graph vertex types.
+        3. Canonicalize: KGSchemaCanonicalizeOperator deduplicates/merges
+           synonym types within the KG's own type registry.
         """
         # Phase 1: Extract post-processing — collect raw types
         context = self._extract_post_process(context)

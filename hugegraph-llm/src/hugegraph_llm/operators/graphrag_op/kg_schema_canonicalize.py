@@ -16,39 +16,39 @@
 # under the License.
 
 """
-EDC Canonicalize Operator — Align LLM-generated types to existing
-relationship graph vertex types via embedding similarity.
+EDC Canonicalize Operator — Deduplicate/merge synonym types within the
+KG's own evolving schema via embedding similarity.
 
 Phase 3 of the EDC (Extract → Define → Canonicalize) pipeline.
 
 After the Extract phase freely generates entity/relation types and the
 Define phase enriches them with semantic definitions, Canonicalize maps
-each LLM-generated type to the closest existing vertex type in the
-relationship graph. This ensures cross-layer query compatibility —
-LLM-extracted "corporation" entities can be mapped to the relationship
-graph's "company" vertex type, enabling unified queries across both
-the probabilistic knowledge graph and the deterministic relationship graph.
+each LLM-generated type to the closest known type in the KG's own type
+registry. This prevents type explosion — when the LLM calls the same
+concept by different names across runs (嫌疑人/嫌疑犯/suspect),
+Canonicalize merges them into one unified type, keeping the KG schema
+compact and consistent.
 
 Three canonicalization strategies (controlled by config):
 - EMBEDDING_SIM (default): Compute embedding similarity between type
-  name + description and pre-computed relationship graph type embeddings.
-  Threshold-controlled: high similarity → forced mapping, moderate →
-  suggested mapping, low → keep original type name.
+  name + description and pre-computed known type embeddings from the
+  KG's type registry. Threshold-controlled: high similarity → forced
+  mapping, moderate → suggested mapping, low → keep original type name.
 - EXACT_MATCH: Only case-insensitive string matching. Zero embedding cost.
-- LLM_CLASSIFY: LLM classifies each type into one of the existing types.
-  Highest accuracy, highest cost.
+- LLM_CLASSIFY: LLM classifies each type into one of the existing known
+  types in the KG's type registry. Highest accuracy, highest cost.
 
-Design decision: Pre-computed embeddings stored in HugeGraph vertex type
-properties, not online queries. Vertex type count is limited (~50 in
-risk control), so one-time initialization suffices.
+Design decision: Pre-computed embeddings stored in the KG's type registry,
+not online queries. Known type count is limited (typically ~50 in a domain
+KG), so one-time initialization suffices.
 
 Context keys:
   IN:
     raw_types               — List[str] raw LLM-extracted type strings
     type_definitions        — Dict[str, Dict] semantic definitions from Define
     graph_rag_schema_config — GraphRAGSchemaConfig instance
-    relationship_graph_types — List[str] existing vertex types from cluster
-    relationship_graph_type_embeddings — Dict[str, List[float]] pre-computed embeddings
+    known_vertex_types      — List[str] known vertex types from the KG's type registry
+    known_type_embeddings   — Dict[str, List[float]] pre-computed embeddings
 
   OUT:
     canonicalized_types     — Dict[str, str] raw_type → canonical_type mapping
@@ -75,13 +75,13 @@ from hugegraph_llm.utils.log import log
 LLM_CLASSIFY_PROMPT = """\
 You are a knowledge graph schema classifier. Given a list of new entity/relation
 types discovered by LLM extraction, classify each one into the most appropriate
-existing vertex type from the relationship graph, or mark it as "NEW" if no
+existing KG vertex type from the type registry, or mark it as "NEW" if no
 existing type is a good match.
 
 ## New Types to Classify
 {new_types}
 
-## Existing Relationship Graph Vertex Types
+## Existing KG Vertex Types (from type registry)
 {existing_types}
 
 ## Type Definitions (for context)
@@ -112,7 +112,11 @@ existing type is a good match.
 # ============================================================
 
 class KGSchemaCanonicalizeOperator:
-    """EDC Canonicalize phase: align LLM types to relationship graph types.
+    """EDC Canonicalize phase: deduplicate/merge synonym types within the KG's
+    own type registry.
+
+    Prevents type explosion where the LLM calls the same concept by different
+    names across runs (嫌疑人/嫌疑犯/suspect → unified "suspect" type).
 
     Usage:
         operator = KGSchemaCanonicalizeOperator(llm=my_llm, embed_func=my_embed)
@@ -141,7 +145,7 @@ class KGSchemaCanonicalizeOperator:
         """Execute the Canonicalize phase.
 
         Reads: raw_types, type_definitions, graph_rag_schema_config,
-               relationship_graph_types, relationship_graph_type_embeddings.
+               known_vertex_types, known_type_embeddings.
         Writes: canonicalized_types, canonicalize_details,
                 canonicalize_suggestions.
         """
@@ -172,13 +176,13 @@ class KGSchemaCanonicalizeOperator:
             context["canonicalize_suggestions"] = {}
             return context
 
-        # Get existing relationship graph types
-        rel_types = self._get_relationship_types(context)
+        # Get known types from the KG's type registry
+        known_types = self._get_known_types(context)
 
-        if not rel_types:
+        if not known_types:
             log.warning(
-                "No relationship_graph_types provided — Canonicalize cannot "
-                "align types. All types will remain as-is."
+                "No known_vertex_types provided — Canonicalize cannot "
+                "deduplicate types. All types will remain as-is."
             )
             # No alignment possible: each type maps to itself
             canonicalized = {t: t for t in raw_types}
@@ -194,19 +198,19 @@ class KGSchemaCanonicalizeOperator:
         strategy = self.config.canonicalize_strategy
 
         if strategy == CanonicalizeStrategy.EXACT_MATCH:
-            canonicalized, details, suggestions = self._exact_match(raw_types, rel_types)
+            canonicalized, details, suggestions = self._exact_match(raw_types, known_types)
         elif strategy == CanonicalizeStrategy.EMBEDDING_SIM:
             canonicalized, details, suggestions = self._embedding_similarity(
-                raw_types, rel_types, context
+                raw_types, known_types, context
             )
         elif strategy == CanonicalizeStrategy.LLM_CLASSIFY:
             canonicalized, details, suggestions = self._llm_classify(
-                raw_types, rel_types, context
+                raw_types, known_types, context
             )
         else:
             log.warning("Unknown canonicalize strategy '%s', falling back to EXACT_MATCH",
                         strategy.value)
-            canonicalized, details, suggestions = self._exact_match(raw_types, rel_types)
+            canonicalized, details, suggestions = self._exact_match(raw_types, known_types)
 
         # Write results to context
         context["canonicalized_types"] = canonicalized
@@ -248,13 +252,13 @@ class KGSchemaCanonicalizeOperator:
 
         return types
 
-    def _get_relationship_types(
+    def _get_known_types(
         self, context: Dict[str, Any]
     ) -> List[str]:
-        """Get relationship graph vertex type names from context or config."""
-        types = context.get("relationship_graph_types", [])
+        """Get known vertex type names from the KG's type registry (context or config)."""
+        types = context.get("known_vertex_types", [])
         if not types:
-            types = self.config.relationship_graph_types
+            types = self.config.known_vertex_types
         return types
 
     # ---- Exact Match Strategy ----
@@ -262,22 +266,22 @@ class KGSchemaCanonicalizeOperator:
     def _exact_match(
         self,
         raw_types: Set[str],
-        rel_types: List[str],
+        known_types: List[str],
     ) -> Tuple[Dict[str, str], Dict[str, Dict], Dict[str, str]]:
         """Case-insensitive exact string matching.
 
         Types that match exactly are mapped. Types that don't match any
-        existing type remain as-is.
+        known type remain as-is.
         """
         # Build lowercase lookup
-        rel_types_lower = {t.lower(): t for t in rel_types}
+        known_types_lower = {t.lower(): t for t in known_types}
 
         canonicalized: Dict[str, str] = {}
         details: Dict[str, Dict] = {}
         suggestions: Dict[str, str] = {}
 
         for raw_type in raw_types:
-            matched = rel_types_lower.get(raw_type.lower())
+            matched = known_types_lower.get(raw_type.lower())
             if matched:
                 canonicalized[raw_type] = matched
                 details[raw_type] = {
@@ -301,28 +305,28 @@ class KGSchemaCanonicalizeOperator:
     def _embedding_similarity(
         self,
         raw_types: Set[str],
-        rel_types: List[str],
+        known_types: List[str],
         context: Dict[str, Any],
     ) -> Tuple[Dict[str, str], Dict[str, Dict], Dict[str, str]]:
         """Vector embedding similarity between type descriptions and
-        pre-computed relationship graph type embeddings.
+        pre-computed known type embeddings from the KG's type registry.
 
         Steps:
-        1. Get pre-computed embeddings for relationship graph types
+        1. Get pre-computed embeddings for known types
         2. Compute embeddings for each raw type (name + description)
-        3. Compute cosine similarity between each raw type and each rel type
+        3. Compute cosine similarity between each raw type and each known type
         4. Apply threshold: similarity >= threshold → forced mapping,
            similarity >= suggest_threshold → suggested mapping,
            below both → keep original type
         """
         # Get pre-computed embeddings
-        rel_embeddings = self._get_rel_embeddings(context)
-        if not rel_embeddings:
+        known_embeddings = self._get_known_embeddings(context)
+        if not known_embeddings:
             log.warning(
-                "No relationship_graph_type_embeddings available for "
+                "No known_type_embeddings available for "
                 "EMBEDDING_SIM strategy. Falling back to EXACT_MATCH."
             )
-            return self._exact_match(raw_types, rel_types)
+            return self._exact_match(raw_types, known_types)
 
         # Compute embeddings for raw types
         type_definitions = context.get("type_definitions", {})
@@ -330,7 +334,7 @@ class KGSchemaCanonicalizeOperator:
 
         if not raw_embeddings:
             log.warning("Failed to compute embeddings for raw types, falling back to EXACT_MATCH")
-            return self._exact_match(raw_types, rel_types)
+            return self._exact_match(raw_types, known_types)
 
         # Compute cosine similarity matrix
         threshold = self.config.canonicalize_similarity_threshold
@@ -351,17 +355,17 @@ class KGSchemaCanonicalizeOperator:
                 }
                 continue
 
-            # Find best matching relationship type
+            # Find best matching known type
             best_match: Optional[str] = None
             best_sim: float = 0.0
             all_sims: Dict[str, float] = {}
 
-            for rel_type, rel_emb in rel_embeddings.items():
-                sim = self._cosine_similarity(raw_emb, rel_emb)
-                all_sims[rel_type] = sim
+            for known_type, known_emb in known_embeddings.items():
+                sim = self._cosine_similarity(raw_emb, known_emb)
+                all_sims[known_type] = sim
                 if sim > best_sim:
                     best_sim = sim
-                    best_match = rel_type
+                    best_match = known_type
 
             if best_match and best_sim >= threshold:
                 # High confidence match → forced mapping
@@ -397,30 +401,30 @@ class KGSchemaCanonicalizeOperator:
 
         return canonicalized, details, suggestions
 
-    def _get_rel_embeddings(
+    def _get_known_embeddings(
         self, context: Dict[str, Any]
     ) -> Dict[str, List[float]]:
-        """Get pre-computed embeddings for relationship graph types.
+        """Get pre-computed embeddings for known types in the KG's type registry.
 
         Priority:
-        1. From context (relationship_graph_type_embeddings)
-        2. From config (relationship_graph_type_embeddings)
+        1. From context (known_type_embeddings)
+        2. From config (known_type_embeddings)
         3. Compute at runtime using embed_func (expensive, last resort)
         """
-        embeddings = context.get("relationship_graph_type_embeddings", {})
+        embeddings = context.get("known_type_embeddings", {})
         if not embeddings:
-            embeddings = self.config.relationship_graph_type_embeddings
+            embeddings = self.config.known_type_embeddings
 
         if embeddings:
             return embeddings
 
         # Last resort: compute embeddings at runtime
         if self.embed_func:
-            rel_types = self._get_relationship_types(context)
-            log.info("Computing relationship graph type embeddings at runtime (%d types)",
-                     len(rel_types))
+            known_types = self._get_known_types(context)
+            log.info("Computing known type embeddings at runtime (%d types)",
+                     len(known_types))
             embeddings = {}
-            for type_name in rel_types:
+            for type_name in known_types:
                 try:
                     embeddings[type_name] = self.embed_func(type_name)
                 except Exception as e:  # pylint: disable=broad-except
@@ -477,16 +481,17 @@ class KGSchemaCanonicalizeOperator:
     def _llm_classify(
         self,
         raw_types: Set[str],
-        rel_types: List[str],
+        known_types: List[str],
         context: Dict[str, Any],
     ) -> Tuple[Dict[str, str], Dict[str, Dict], Dict[str, str]]:
-        """LLM classifies each raw type into an existing relationship graph type.
+        """LLM classifies each raw type into an existing known type from the
+        KG's type registry.
 
         Most accurate but most expensive strategy.
         """
         if self.llm is None:
             log.warning("No LLM available for LLM_CLASSIFY strategy, falling back to EXACT_MATCH")
-            return self._exact_match(raw_types, rel_types)
+            return self._exact_match(raw_types, known_types)
 
         type_definitions = context.get("type_definitions", {})
 
@@ -495,7 +500,7 @@ class KGSchemaCanonicalizeOperator:
             f"  - {t}: {type_definitions.get(t, {}).get('description', 'N/A')}"
             for t in sorted(raw_types)
         )
-        existing_types_str = "\n".join(f"  - {t}" for t in rel_types)
+        existing_types_str = "\n".join(f"  - {t}" for t in known_types)
 
         # Include type definitions for context
         defs_str = "\n".join(
@@ -511,10 +516,10 @@ class KGSchemaCanonicalizeOperator:
 
         try:
             response = self.llm.generate(prompt=prompt)
-            classifications = self._parse_llm_classify_response(response, raw_types, rel_types)
+            classifications = self._parse_llm_classify_response(response, raw_types, known_types)
         except Exception as e:  # pylint: disable=broad-except
             log.warning("LLM_CLASSIFY failed: %s, falling back to EXACT_MATCH", e)
-            return self._exact_match(raw_types, rel_types)
+            return self._exact_match(raw_types, known_types)
 
         canonicalized: Dict[str, str] = {}
         details: Dict[str, Dict] = {}
@@ -527,7 +532,7 @@ class KGSchemaCanonicalizeOperator:
                 confidence = classification.get("confidence", 0.0)
                 reason = classification.get("reason", "")
 
-                if classified_as == "NEW" or classified_as not in rel_types:
+                if classified_as == "NEW" or classified_as not in known_types:
                     # LLM decided this is a genuinely new type
                     canonicalized[raw_type] = raw_type
                     details[raw_type] = {
@@ -578,7 +583,7 @@ class KGSchemaCanonicalizeOperator:
         self,
         response: str,
         expected_types: Set[str],
-        rel_types: List[str],
+        known_types: List[str],
     ) -> Dict[str, Dict[str, Any]]:
         """Parse LLM classification response."""
         import json
