@@ -191,7 +191,7 @@ def step2_vlm() -> str:
         from hugegraph_llm.operators.multimodal.vlm_provider_registry import VLMProviderRegistry
 
         registry = VLMProviderRegistry()
-        providers = list(registry._providers.keys()) if hasattr(registry, "_providers") else []
+        providers = list(registry._registry.keys()) if hasattr(registry, "_registry") else []
         result_data["vlm_provider_registry"] = {
             "registered_providers": providers,
         }
@@ -239,11 +239,12 @@ def step2_vlm() -> str:
 
     # ── async_vlm_pipeline ──
     try:
-        from hugegraph_llm.operators.multimodal.async_vlm_pipeline import AsyncVLMPipeline
+        from hugegraph_llm.operators.multimodal.async_vlm_pipeline import AsyncVLMPipeline, VLMPipelineConfig
 
-        pipeline = AsyncVLMPipeline(max_concurrent=2)
+        config = VLMPipelineConfig(max_concurrent=2)
+        pipeline = AsyncVLMPipeline(config=config)
         result_data["async_vlm_pipeline"] = {
-            "max_concurrent": pipeline.max_concurrent if hasattr(pipeline, "max_concurrent") else 2,
+            "max_concurrent": pipeline.config.max_concurrent,
             "note": "Async pipeline enables concurrent VLM calls for batch processing.",
         }
         result_data["operators_activated"].append("async_vlm_pipeline")
@@ -330,9 +331,9 @@ def step3_analysis() -> str:
 
     # ── chunk_schema ──
     try:
-        from hugegraph_llm.operators.multimodal.chunk_schema import ChunkSchema
+        from hugegraph_llm.operators.multimodal.chunk_schema import ChunkSchemaOperator
 
-        schema = ChunkSchema()
+        schema_op = ChunkSchemaOperator()
         result_data["chunk_schema"] = {
             "note": "Defines structured schema for multimodal chunks",
             "fields": ["chunk_id", "modality", "content", "source_page", "embedding"],
@@ -366,9 +367,9 @@ def step4_sidecar() -> str:
 
     # ── omml_to_latex ──
     try:
-        from hugegraph_llm.operators.multimodal.omml_to_latex import OmmlToLatexConverter
+        from hugegraph_llm.operators.multimodal.omml_to_latex import OMMLParser, convert_omml_to_latex
 
-        converter = OmmlToLatexConverter()
+        converter = OMMLParser()
         result_data["omml_to_latex"] = {
             "note": "Converts Office Math Markup (OMML) to LaTeX",
             "demo_conversions": [
@@ -389,9 +390,10 @@ def step4_sidecar() -> str:
 
     # ── sidecar_placeholder ──
     try:
-        from hugegraph_llm.operators.multimodal.sidecar_placeholder import SidecarPlaceholderCreator
+        from hugegraph_llm.operators.multimodal.sidecar_placeholder import (
+            render_table_tag, render_drawing_tag, render_equation_tag, render_template,
+        )
 
-        creator = SidecarPlaceholderCreator()
         result_data["sidecar_placeholder"] = {
             "note": "Creates placeholder sidecar entries for multimodal elements",
             "demo_placeholder": {
@@ -408,9 +410,7 @@ def step4_sidecar() -> str:
 
     # ── sidecar_ir ──
     try:
-        from hugegraph_llm.operators.multimodal.sidecar_ir import SidecarIR
-
-        ir = SidecarIR()
+        from hugegraph_llm.operators.multimodal.sidecar_ir import IRDoc, IRBlock, IRDrawing, IRTable, IREquation
         result_data["sidecar_ir"] = {
             "note": "Intermediate representation for sidecar data — bridges extraction and KG",
             "demo_ir": {
@@ -434,9 +434,7 @@ def step4_sidecar() -> str:
 
     # ── sidecar_writer ──
     try:
-        from hugegraph_llm.operators.multimodal.sidecar_writer import SidecarWriter
-
-        writer = SidecarWriter()
+        from hugegraph_llm.operators.multimodal.sidecar_writer import write_sidecar
         result_data["sidecar_writer"] = {
             "note": "Writes sidecar files to disk — JSON sidecar per document",
             "demo_output": {
@@ -456,9 +454,9 @@ def step4_sidecar() -> str:
 
     # ── sidecar_backfill ──
     try:
-        from hugegraph_llm.operators.multimodal.sidecar_backfill import SidecarBackfill
+        from hugegraph_llm.operators.multimodal.sidecar_backfill import SidecarBackfillOperator
 
-        backfill = SidecarBackfill()
+        backfill_op = SidecarBackfillOperator()
         result_data["sidecar_backfill"] = {
             "note": "Backfills missing sidecar descriptions using VLM — async enrichment",
             "demo_backfill": {
@@ -516,7 +514,7 @@ def step5_kg_build(graph_name: str = "supply_chain_risk") -> str:
     try:
         from hugegraph_llm.operators.multimodal.multimodal_kg_builder import MultimodalKGBuilder
 
-        builder = MultimodalKGBuilder(host="localhost:8080", graph=graph_name)
+        builder = MultimodalKGBuilder(host="http://127.0.0.1:8080", graph=graph_name)
         result_data["multimodal_kg_builder"] = {
             "note": f"Builds KG into HugeGraph graph '{graph_name}'",
             "demo_schema": {
@@ -630,7 +628,7 @@ def step6_search(query: str, graph_name: str = "supply_chain_risk", top_k: int =
         from hugegraph_llm.operators.multimodal.multimodal_retriever import MultiModalRetriever
 
         retriever = MultiModalRetriever(
-            host="localhost:8080", graph=graph_name, final_top_k=top_k,
+            host="http://127.0.0.1:8080", graph=graph_name, final_top_k=top_k,
         )
         result_data["multimodal_retriever"] = {
             "note": f"4-channel RRF retrieval against '{graph_name}'",
