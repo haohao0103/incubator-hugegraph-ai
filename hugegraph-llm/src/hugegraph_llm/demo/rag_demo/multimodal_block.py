@@ -33,6 +33,7 @@ external dependencies (PDF/VLM/HugeGraph) for showcasing.
 """
 
 import json
+import os
 import traceback
 from typing import Any, Dict, List
 
@@ -828,6 +829,39 @@ def create_multimodal_block():
                 with gr.Tab("G. Pipeline DAG"):
                     mm_pipeline_out = gr.Code(label="8-Node DAG Architecture", language="json")
 
+                # ── Tab: H. Walkthrough Demo ──
+                with gr.Tab("H. Walkthrough 🎯"):
+                    gr.Markdown(
+                        "### End-to-End Walkthrough: Supply Chain Risk Report\n\n"
+                        "A guided 6-step demo that walks through the entire multimodal pipeline "
+                        "using a real 3-page PDF (heatmap + table + formula + network diagram).\n\n"
+                        "**Steps**: PDF Parse → VLM Describe → MM Analysis → Formula/Sidecar → KG Build → Search\n\n"
+                        "**5 preset questions** target different modalities: text, image, equation, graph, mixed."
+                    )
+                    with gr.Row():
+                        wt_pdf_btn = gr.Button("📄 Generate Demo PDF", variant="primary")
+                        wt_pdf_path = gr.Textbox(label="Demo PDF Path", interactive=False, value="")
+                    with gr.Row():
+                        wt_step1_btn = gr.Button("1️⃣ Parse PDF", variant="primary")
+                        wt_step2_btn = gr.Button("2️⃣ VLM Describe", variant="secondary")
+                        wt_step3_btn = gr.Button("3️⃣ MM Analysis", variant="secondary")
+                    with gr.Row():
+                        wt_step4_btn = gr.Button("4️⃣ Formula & Sidecar", variant="secondary")
+                        wt_step5_btn = gr.Button("5️⃣ KG Build", variant="secondary")
+                        wt_step6_btn = gr.Button("6️⃣ Search", variant="secondary")
+                    gr.Markdown("---\n### Preset Questions (Step 6)")
+                    with gr.Row():
+                        wt_q1_btn = gr.Button("Q1: 📝 哪些节点风险最高？", variant="secondary")
+                        wt_q2_btn = gr.Button("Q2: 🖼 热力图展示什么？", variant="secondary")
+                        wt_q3_btn = gr.Button("Q3: 📐 R_score公式是什么？", variant="secondary")
+                    with gr.Row():
+                        wt_q4_btn = gr.Button("Q4: 🔗 仓库和供应商关联？", variant="secondary")
+                        wt_q5_btn = gr.Button("Q5: 🎯 Warehouse-C完整评估？(ALL 18 ops)", variant="primary")
+                    wt_custom_query = gr.Textbox(label="Custom Query (Step 6)", placeholder="Ask about the supply chain risk...")
+                    wt_custom_btn = gr.Button("🔍 Search Custom Query", variant="secondary")
+                    wt_result = gr.Code(label="Walkthrough Step Result", language="json", lines=30)
+                    wt_questions = gr.Code(label="Preset Questions Reference", language="json")
+
     # ═══════════════════════════════════════════════════════════
     # Event bindings
     # ═══════════════════════════════════════════════════════════
@@ -893,6 +927,45 @@ def create_multimodal_block():
     mm_pipeline_btn.click(fn=run_pipeline_overview, outputs=[mm_pipeline_out])
 
     # ═══════════════════════════════════════════════════════════
+    # H. Walkthrough Demo event bindings
+    # ═══════════════════════════════════════════════════════════
+
+    from hugegraph_llm.demo.rag_demo.multimodal_walkthrough_handlers import (
+        step1_parse, step2_vlm, step3_analysis, step4_sidecar,
+        step5_kg_build, step6_search, generate_walkthrough_pdf,
+        get_preset_questions,
+    )
+
+    wt_pdf_btn.click(fn=generate_walkthrough_pdf, outputs=[wt_pdf_path])
+    wt_step1_btn.click(fn=step1_parse, inputs=[wt_pdf_path], outputs=[wt_result])
+    wt_step2_btn.click(fn=step2_vlm, outputs=[wt_result])
+    wt_step3_btn.click(fn=step3_analysis, outputs=[wt_result])
+    wt_step4_btn.click(fn=step4_sidecar, outputs=[wt_result])
+    wt_step5_btn.click(fn=step5_kg_build, inputs=[mm_graph_name], outputs=[wt_result])
+
+    def _search_q1():
+        return step6_search("哪些节点风险评分最高？")
+
+    def _search_q2():
+        return step6_search("热力图展示了什么风险分布？")
+
+    def _search_q3():
+        return step6_search("R_score的计算公式是什么？")
+
+    def _search_q4():
+        return step6_search("仓库拥堵和供应商延迟有什么关联？")
+
+    def _search_q5():
+        return step6_search("Warehouse-C的完整风险评估？")
+
+    wt_q1_btn.click(fn=_search_q1, outputs=[wt_result])
+    wt_q2_btn.click(fn=_search_q2, outputs=[wt_result])
+    wt_q3_btn.click(fn=_search_q3, outputs=[wt_result])
+    wt_q4_btn.click(fn=_search_q4, outputs=[wt_result])
+    wt_q5_btn.click(fn=_search_q5, outputs=[wt_result])
+    wt_custom_btn.click(fn=step6_search, inputs=[wt_custom_query], outputs=[wt_result])
+
+    # ═══════════════════════════════════════════════════════════
     # Auto-load demo data on page load
     # ═══════════════════════════════════════════════════════════
 
@@ -949,6 +1022,29 @@ def create_multimodal_block():
         # G. Pipeline Overview
         pipeline_demo = _safe_json(DEMO_PIPELINE_OVERVIEW | {"demo": True})
 
+        # H. Walkthrough initial data
+        wt_init = _safe_json({
+            "note": "Click 'Generate Demo PDF' to create the 3-page Supply Chain Risk Report, "
+                    "then walk through Steps 1→6 to see each operator's output.",
+            "pdf_content": "3 pages: heatmap + data table + risk formula + network diagram",
+            "steps": [
+                "1️⃣ PDF Parse — pdf_image_extractor + unified_document_parser",
+                "2️⃣ VLM Describe — vlm_descriptor + 3 more operators",
+                "3️⃣ MM Analysis — multimodal_analyzer + surrounding_context + chunk_schema",
+                "4️⃣ Formula & Sidecar — omml_to_latex + 4 sidecar operators",
+                "5️⃣ KG Build — multimodal_entity_injector + multimodal_kg_builder",
+                "6️⃣ Search — multimodal_retriever + multimodal_retrieval_channel (5 questions)",
+            ],
+            "operator_coverage": "Steps 1-6 cover ALL 18 multimodal operators",
+        })
+        wt_questions_init = _safe_json([
+            {"id": "Q1", "question": "哪些节点风险评分最高？", "target": "text", "ops": 6},
+            {"id": "Q2", "question": "热力图展示了什么风险分布？", "target": "image", "ops": 9},
+            {"id": "Q3", "question": "R_score的计算公式是什么？", "target": "equation", "ops": 8},
+            {"id": "Q4", "question": "仓库拥堵和供应商延迟有什么关联？", "target": "graph", "ops": 4},
+            {"id": "Q5", "question": "Warehouse-C的完整风险评估？", "target": "mixed (ALL 18 ops)", "ops": 18},
+        ])
+
         return (
             unified_demo, pdf_demo,
             describe_demo, gallery_rows, registry_demo, async_demo, validate_demo,
@@ -958,6 +1054,7 @@ def create_multimodal_block():
             omml_demo, placeholder_demo, ir_demo, writer_demo, backfill_demo,
             table_html, eq_md,
             pipeline_demo,
+            wt_init, wt_questions_init,
         )
 
     # Return demo data targets for page load
@@ -970,6 +1067,7 @@ def create_multimodal_block():
         mm_omml_out, mm_placeholder_out, mm_ir_out, mm_writer_out, mm_backfill_out,
         mm_table_out, mm_eq_out,
         mm_pipeline_out,
+        wt_result, wt_questions,
     ]
 
     return demo_outputs, _load_demo_data
