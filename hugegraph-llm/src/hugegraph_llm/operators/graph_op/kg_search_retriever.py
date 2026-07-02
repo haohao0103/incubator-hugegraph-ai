@@ -44,6 +44,11 @@ from hugegraph_llm.operators.graph_op.query_mode_router import (
 from hugegraph_llm.operators.llm_op.query_rewrite import QueryRewriteResult
 from hugegraph_llm.utils.log import log
 
+# Avoid circular import while keeping type hints informative
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from hugegraph_llm.operators.graph_op.entity_ranker import EntityRanker
+
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +176,7 @@ class KGSearchRetriever:
             Callable[[str, int, int], List[Tuple[str, int, str]]]
         ] = None,
         entity_score_func: Optional[Callable[[str], float]] = None,
+        entity_ranker: Optional["EntityRanker"] = None,
         community_search_func: Optional[Callable[[str, int], List[Dict[str, Any]]]] = None,
         chunk_lookup_func: Optional[Callable[[str], str]] = None,
         config: Optional[KGSearchConfig] = None,
@@ -181,6 +187,10 @@ class KGSearchRetriever:
             router: QueryModeRouter for local/global/hybrid retrieval per sub-query.
             graph_traversal_func: ``f(entity_id, max_depth, max_fanout) -> [(neighbor_id, depth, edge_type), ...]``
             entity_score_func: ``f(entity_id) -> float`` returning a precomputed rank/score.
+                If provided, it takes precedence over ``entity_ranker``.
+            entity_ranker: Optional EntityRanker instance. When ``entity_score_func`` is
+                not provided, the ranker's ``score`` method is used to rank traversed
+                entities via global PageRank.
             community_search_func: ``f(query_text, top_k) -> [community_dict, ...]``
             chunk_lookup_func: ``f(chunk_id) -> chunk_text``
             config: KGSearchConfig.
@@ -188,6 +198,9 @@ class KGSearchRetriever:
         self._router = router
         self._graph_traversal = graph_traversal_func
         self._entity_score = entity_score_func
+        if self._entity_score is None and entity_ranker is not None:
+            self._entity_score = entity_ranker.score
+        self._entity_ranker = entity_ranker
         self._community_search = community_search_func
         self._chunk_lookup = chunk_lookup_func
         self.config = config or KGSearchConfig()
@@ -290,7 +303,11 @@ class KGSearchRetriever:
         for text in router_chunks:
             if self._chunk_lookup is not None:
                 cid = text
-                resolved_text = self._chunk_lookup(cid) or text
+                try:
+                    resolved_text = self._chunk_lookup(cid) or text
+                except Exception:  # pylint: disable=broad-except
+                    logger.debug("Chunk lookup failed for %s", cid)
+                    resolved_text = text
             else:
                 cid = text
                 resolved_text = text
@@ -318,21 +335,17 @@ class KGSearchRetriever:
                     # Avoid duplicate seeds
                     if neighbor_id == seed_id and depth == 0:
                         continue
-                    entity_score = self._compute_entity_score(
+                    final_score, rank_factors = self._compute_entity_score(
                         neighbor_id, depth, sub_query, edge_type
                     )
                     entities.append(
                         ScoredEntity(
                             entity_id=neighbor_id,
                             name=neighbor_id,
-                            score=entity_score,
+                            score=final_score,
                             depth=depth,
                             source_query=sub_query,
-                            rank_factors={
-                                "base_rank": entity_score,
-                                "depth": depth,
-                                "edge_type": edge_type,
-                            },
+                            rank_factors=rank_factors,
                         )
                     )
 
@@ -365,13 +378,16 @@ class KGSearchRetriever:
         depth: int,
         sub_query: str,
         edge_type: str = "",
-    ) -> float:
+    ) -> Tuple[float, Dict[str, float]]:
         """Compute a composite score for a traversed entity.
 
         Combines:
         - Precomputed entity rank (e.g., PageRank)
         - Depth decay (closer to seed = higher score)
         - Edge specificity bonus (typed edges score higher)
+
+        Returns:
+            Tuple of (final_score, rank_factor_dict).
         """
         # Base rank
         base_rank = 0.5
@@ -387,9 +403,22 @@ class KGSearchRetriever:
         # Edge type bonus: typed edges are more informative
         edge_bonus = 0.1 if edge_type else 0.0
 
-        return base_rank * self.config.entity_rank_weight + \
-            depth_decay * self.config.vector_similarity_weight + \
-            edge_bonus * self.config.frequency_weight
+        final_score = (
+            base_rank * self.config.entity_rank_weight
+            + depth_decay * self.config.vector_similarity_weight
+            + edge_bonus * self.config.frequency_weight
+        )
+
+        rank_factors = {
+            "base_rank": base_rank,
+            "depth_decay": depth_decay,
+            "edge_bonus": edge_bonus,
+            "entity_rank_weight": self.config.entity_rank_weight,
+            "vector_similarity_weight": self.config.vector_similarity_weight,
+            "frequency_weight": self.config.frequency_weight,
+            "final_score": final_score,
+        }
+        return final_score, rank_factors
 
     def _merge_chunks(
         self,

@@ -33,6 +33,7 @@ from hugegraph_llm.operators.graph_op.query_mode_router import (
     QueryRouteResult,
 )
 from hugegraph_llm.operators.llm_op.query_rewrite import QueryRewriteResult
+from hugegraph_llm.operators.graph_op.entity_ranker import build_ranker_from_edges
 
 
 class FakeRouter(QueryModeRouter):
@@ -319,6 +320,30 @@ def test_executable_queries_empty_fallback():
     assert result.provenance["sub_queries"] == ["q"]
 
 
+def test_executable_queries_all_empty_uses_original_query():
+    """When rewrite says no queries and original is empty, fall back to method query."""
+    router = FakeRouter(["chunk"])
+    rewrite = QueryRewriteResult(original_query="", needs_rewrite=True, sub_queries=[])
+    retriever = KGSearchRetriever(router=router)
+    result = retriever.retrieve("method_query", rewrite)
+    assert result.provenance["sub_queries"] == ["method_query"]
+
+
+def test_chunk_lookup_failure_ignored():
+    def failing_lookup(chunk_id):
+        raise RuntimeError("lookup failed")
+
+    router = FakeRouter(["cid_1"])
+    retriever = KGSearchRetriever(
+        router=router,
+        chunk_lookup_func=failing_lookup,
+        config=KGSearchConfig(top_k=1),
+    )
+    result = retriever.retrieve("query", None)
+    assert len(result.chunks) == 1
+    assert result.chunks[0].text == "cid_1"  # falls back to original chunk id text
+
+
 def test_graph_traversal_skip_seed():
     def traversal_with_seed(entity_id, max_depth, max_fanout):
         return [(entity_id, 0, ""), ("neighbor", 1, "RELATED_TO")]
@@ -342,6 +367,16 @@ def test_chunk_lookup_empty_text():
     assert ranked[0].text == "resolved"
 
 
+def test_rank_chunks_lookup_failure_ignored():
+    def failing_lookup(chunk_id):
+        raise RuntimeError("lookup failed")
+
+    chunk = ScoredChunk(chunk_id="cid_1", text="", score=0.5)
+    retriever = KGSearchRetriever(chunk_lookup_func=failing_lookup, config=KGSearchConfig(top_k=1))
+    ranked = retriever._rank_chunks([chunk])  # pylint: disable=protected-access
+    assert ranked[0].text == ""  # text remains empty after failed lookup
+
+
 def test_result_to_dict():
     result = KGSearchResult(
         chunks=[ScoredChunk(chunk_id="c1", text="text", score=0.5)],
@@ -353,3 +388,67 @@ def test_result_to_dict():
     assert d["chunks"][0]["chunk_id"] == "c1"
     assert d["entities"][0]["entity_id"] == "e1"
     assert d["communities"][0]["id"] == "c1"
+
+
+# ---------------------------------------------------------------------------
+# EntityRanker integration
+# ---------------------------------------------------------------------------
+
+
+def test_retriever_uses_entity_ranker_for_scoring():
+    """When entity_ranker is provided, its score() is used as entity_score_func."""
+    edges = [("seed", "hub", 1.0), ("hub", "leaf", 1.0)]
+    ranker = build_ranker_from_edges(edges)
+    router = FakeRouter(["seed"])
+
+    def traversal(entity_id, max_depth, max_fanout):
+        return [("hub", 1, "RELATED_TO"), ("leaf", 2, "RELATED_TO")]
+
+    retriever = KGSearchRetriever(
+        router=router,
+        graph_traversal_func=traversal,
+        entity_ranker=ranker,
+        config=KGSearchConfig(max_depth=2, top_k=10),
+    )
+    result = retriever.retrieve("query", None)
+    assert len(result.entities) == 2
+    for entity in result.entities:
+        assert 0.0 <= entity.score <= 1.0
+
+
+def test_explicit_entity_score_func_overrides_ranker():
+    """If both entity_score_func and entity_ranker are provided, the explicit func wins."""
+    edges = [("seed", "hub", 1.0)]
+    ranker = build_ranker_from_edges(edges)
+    router = FakeRouter(["seed"])
+
+    def traversal(entity_id, max_depth, max_fanout):
+        return [("hub", 1, "RELATED_TO")]
+
+    retriever = KGSearchRetriever(
+        router=router,
+        graph_traversal_func=traversal,
+        entity_score_func=lambda eid: 0.42,
+        entity_ranker=ranker,
+        config=KGSearchConfig(max_depth=1),
+    )
+    result = retriever.retrieve("query", None)
+    assert result.entities[0].rank_factors["base_rank"] == 0.42
+
+
+def test_entity_ranker_scores_in_rank_factors():
+    edges = [("seed", "hub", 1.0)]
+    ranker = build_ranker_from_edges(edges)
+    router = FakeRouter(["seed"])
+
+    def traversal(entity_id, max_depth, max_fanout):
+        return [("hub", 1, "RELATED_TO")]
+
+    retriever = KGSearchRetriever(
+        router=router,
+        graph_traversal_func=traversal,
+        entity_ranker=ranker,
+        config=KGSearchConfig(max_depth=1),
+    )
+    result = retriever.retrieve("query", None)
+    assert "base_rank" in result.entities[0].rank_factors
