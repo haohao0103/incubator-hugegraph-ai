@@ -41,11 +41,6 @@ from hugegraph_llm.utils.vector_index_utils import (
     clean_vector_index,
     get_vector_index_info,
 )
-from hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers import (
-    EXAMPLE_BATCH_DOCUMENTS,
-    generate_batch_schema_draft,
-    load_example_batch_document,
-)
 from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
     property_graph_extract,
     chunk_sim_edges_build,
@@ -254,28 +249,13 @@ def create_vector_graph_block():
             graph_index_rebuild_bt = gr.Button("Update Vid Embedding")
 
         gr.Markdown("---")
-        with gr.Accordion("Graph Schema Generator (AutoSchemaKG)", open=False):
+        with gr.Accordion("Auto-Generate Schema?", open=False):
             gr.Markdown(
-                "Paste one or more documents below, or choose a preset multi-document example. "
-                "AutoSchemaKG will infer a HugeGraph schema, merge multi-document results, and report conflicts. "
-                "The generated schema is written to the **Graph Schema** editor on the right."
+                "Need a HugeGraph schema but don't have one? Go to "
+                '**Tab X: Schema & KG Construction** to use **AutoSchemaKG** '
+                "— paste your document, let the LLM infer the schema (property keys, "
+                "vertex labels, edge labels), review it, then come back here to extract."
             )
-            with gr.Row():
-                batch_example_dropdown = gr.Dropdown(
-                    choices=list(EXAMPLE_BATCH_DOCUMENTS.keys()),
-                    value=None,
-                    label="Load Multi-doc Example",
-                    info="Populates the Input Doc(s) box with a batch example.",
-                )
-                batch_example_note = gr.Markdown(label="Example Note")
-            schema_instructions = gr.Textbox(
-                label="Instructions (optional)",
-                placeholder="e.g., focus on supply-chain entities, include timestamp properties",
-                lines=2,
-            )
-            with gr.Row():
-                build_schema_bt = gr.Button("Generate Schema", variant="primary")
-                schema_preview_md = gr.Markdown(label="Schema Preview")
         _create_prompt_helper_block(demo, input_text, info_extract_template)
 
         # ── Advanced Build Options (from Capability Closure) ──
@@ -413,27 +393,6 @@ def create_vector_graph_block():
                 info_extract_template,
                 graph_split_type,
             ],
-        )
-
-        # TODO: we should store the examples after the user changed them.
-        build_schema_bt.click(
-            generate_batch_schema_draft,
-            inputs=[input_text, schema_instructions],
-            outputs=[schema_preview_md, input_schema, out],
-        ).then(
-            store_prompt,
-            inputs=[
-                input_text,
-                input_schema,
-                info_extract_template,
-                graph_split_type,
-            ],
-        )
-
-        batch_example_dropdown.change(
-            fn=load_example_batch_document,
-            inputs=[batch_example_dropdown],
-            outputs=[input_text, batch_example_note],
         )
 
         def on_tab_select(input_f, input_t, evt: gr.SelectData):

@@ -51,7 +51,9 @@ from hugegraph_llm.demo.rag_demo.agent_handlers import (
     global_search,
     graph_rag_search,
 )
-from hugegraph_llm.demo.rag_demo.auto_schema_kg_block import create_auto_schema_kg_block
+from hugegraph_llm.demo.rag_demo.schema_construction_block import (
+    create_schema_construction_block,
+)
 from hugegraph_llm.demo.rag_demo.capability_map_block import create_capability_map_block
 from hugegraph_llm.demo.rag_demo.configs_block import (
     apply_embedding_config,
@@ -73,7 +75,6 @@ from hugegraph_llm.demo.rag_demo.graphrag_enhancement_block import (
     create_graphrag_enhancement_block,
 )
 from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
-from hugegraph_llm.demo.rag_demo.edc_schema_block import create_edc_schema_block
 from hugegraph_llm.resources.demo.css import CSS
 from hugegraph_llm.utils.log import log
 
@@ -126,33 +127,31 @@ def init_rag_ui() -> gr.Interface:
 
         with gr.Tab(label="1. Build RAG Index 💡"):
             textbox_input_text, textbox_input_schema, textbox_info_extract_template = create_vector_graph_block()
-        with gr.Tab(label="2. (Graph)RAG & User Functions 📖"):
+        with gr.Tab(label="2. Schema Studio 🧬"):
+            studio_demo_outputs, studio_load_demo = create_schema_construction_block()
+        with gr.Tab(label="3. (Graph)RAG & User Functions 📖"):
             (
                 textbox_inp,
                 textbox_answer_prompt_input,
                 textbox_keywords_extract_prompt_input,
                 textbox_custom_related_information,
             ) = create_rag_block()
-        with gr.Tab(label="3. Text2gremlin ⚙️"):
+        with gr.Tab(label="4. Text2gremlin ⚙️"):
             textbox_gremlin_inp, textbox_gremlin_schema, textbox_gremlin_prompt = create_text2gremlin_block()
-        with gr.Tab(label="4. Agent & Global Search 🤖"):
+        with gr.Tab(label="5. Agent & Global Search 🤖"):
             create_agent_block()
-        with gr.Tab(label="5. Graph Tools 🚧"):
+        with gr.Tab(label="6. Graph Tools 🚧"):
             create_other_block()
-        with gr.Tab(label="6. Admin Tools 🛠"):
+        with gr.Tab(label="7. Admin Tools 🛠"):
             create_admin_block()
-        with gr.Tab(label="7. Advanced GraphRAG 🚀"):
+        with gr.Tab(label="8. Advanced GraphRAG 🚀"):
             create_advanced_graphrag_block()
-        with gr.Tab(label="8. GraphRAG Enhancement 🧪"):
+        with gr.Tab(label="9. GraphRAG Enhancement 🧪"):
             create_graphrag_enhancement_block()
-        with gr.Tab(label="9. Capability Map 🗺️"):
+        with gr.Tab(label="10. Capability Map 🗺️"):
             create_capability_map_block()
-        with gr.Tab(label="10. Multimodal GraphRAG 🎨"):
+        with gr.Tab(label="11. Multimodal GraphRAG 🎨"):
             mm_demo_outputs, mm_load_demo = create_multimodal_block()
-        with gr.Tab(label="11. Schema EDC Pipeline 🧬"):
-            edc_demo_outputs, edc_load_demo = create_edc_schema_block()
-        with gr.Tab(label="12. AutoSchemaKG 🧬"):
-            create_auto_schema_kg_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
@@ -163,8 +162,8 @@ def init_rag_ui() -> gr.Interface:
             # Load multimodal demo data
             mm_demo = mm_load_demo()
 
-            # Load EDC schema demo data
-            edc_demo = edc_load_demo()
+            # Load Schema Studio demo data (AutoSchemaKG + EDC)
+            studio_demo = studio_load_demo()
 
             return (
                 huge_settings.graph_url,
@@ -182,7 +181,7 @@ def init_rag_ui() -> gr.Interface:
                 prompt.default_question,
                 huge_settings.graph_name,
                 prompt.gremlin_generate_prompt,
-            ) + tuple(mm_demo) + tuple(edc_demo)
+            ) + tuple(mm_demo) + tuple(studio_demo)
 
         hugegraph_llm_ui.load(  # pylint: disable=E1101
             fn=refresh_ui_config_prompt,
@@ -202,7 +201,7 @@ def init_rag_ui() -> gr.Interface:
                 textbox_gremlin_inp,
                 textbox_gremlin_schema,
                 textbox_gremlin_prompt,
-            ] + mm_demo_outputs + edc_demo_outputs,
+            ] + mm_demo_outputs + studio_demo_outputs,
         )
 
     return hugegraph_llm_ui
