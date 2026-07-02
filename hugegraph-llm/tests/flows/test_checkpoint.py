@@ -73,7 +73,7 @@ def test_atomic_write_uses_temp():
 def test_get_resume_stage_from_scratch():
     with tempfile.TemporaryDirectory() as tmpdir:
         manager = IncrementalCheckpointManager(checkpoint_dir=tmpdir, job_id="j1")
-        assert manager.get_resume_stage() == "chunk_split"
+        assert manager.get_resume_stage() == "auto_schema_kg"
 
 
 def test_get_resume_stage_after_completion():

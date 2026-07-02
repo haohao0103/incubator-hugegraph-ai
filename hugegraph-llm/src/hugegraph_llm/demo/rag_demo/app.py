@@ -51,6 +51,7 @@ from hugegraph_llm.demo.rag_demo.agent_handlers import (
     global_search,
     graph_rag_search,
 )
+from hugegraph_llm.demo.rag_demo.auto_schema_kg_block import create_auto_schema_kg_block
 from hugegraph_llm.demo.rag_demo.capability_map_block import create_capability_map_block
 from hugegraph_llm.demo.rag_demo.configs_block import (
     apply_embedding_config,
@@ -150,6 +151,8 @@ def init_rag_ui() -> gr.Interface:
             mm_demo_outputs, mm_load_demo = create_multimodal_block()
         with gr.Tab(label="11. Schema EDC Pipeline 🧬"):
             edc_demo_outputs, edc_load_demo = create_edc_schema_block()
+        with gr.Tab(label="12. AutoSchemaKG 🧬"):
+            create_auto_schema_kg_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload

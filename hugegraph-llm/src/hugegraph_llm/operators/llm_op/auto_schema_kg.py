@@ -493,3 +493,118 @@ JSON:"""
         except Exception as e:  # pylint: disable=broad-except
             log.error("Failed to commit AutoSchemaKG schema: %s", e)
             return False, str(e)
+
+
+# ---------------------------------------------------------------------------
+# Multimodal input support
+# ---------------------------------------------------------------------------
+
+def multimodal_result_to_document(
+    pdf_extraction_result: Optional[Dict[str, Any]] = None,
+    vlm_descriptions: Optional[List[Dict[str, Any]]] = None,
+    text_blocks: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """Convert multimodal extraction results into a single text document.
+
+    The output is suitable as the ``document`` argument of ``AutoSchemaKGOperator``.
+    It preserves page-level text, headings, and VLM-generated image/table descriptions
+    so that the schema inference can cover both textual and visual content.
+    """
+    lines: List[str] = []
+
+    # Page text blocks (if a full pdf_extraction_result is provided)
+    if pdf_extraction_result:
+        pages = pdf_extraction_result.get("pages", [])
+        for page in pages:
+            page_num = page.get("page_num", 0)
+            lines.append(f"--- Page {page_num + 1} ---")
+            for tb in page.get("text_blocks", []):
+                text = str(tb.get("text", "")).strip()
+                if not text:
+                    continue
+                if tb.get("is_heading"):
+                    lines.append(f"# {text}")
+                else:
+                    lines.append(text)
+            lines.append("")
+
+    # Standalone text blocks (e.g. from UnifiedDocumentParser)
+    if text_blocks:
+        lines.append("--- Text Blocks ---")
+        for tb in text_blocks:
+            text = str(tb.get("text", tb.get("content", ""))).strip()
+            if not text:
+                continue
+            if tb.get("is_heading"):
+                lines.append(f"# {text}")
+            else:
+                lines.append(text)
+        lines.append("")
+
+    # VLM image / chart / table descriptions
+    if vlm_descriptions:
+        lines.append("--- Image and Chart Descriptions ---")
+        for desc in vlm_descriptions:
+            image_id = desc.get("image_id", "unknown")
+            lines.append(f"Image {image_id}:")
+            if desc.get("caption"):
+                lines.append(f"  Caption: {desc['caption']}")
+            if desc.get("detailed_description"):
+                lines.append(f"  Description: {desc['detailed_description']}")
+            if desc.get("chart_type"):
+                lines.append(f"  Type: {desc['chart_type']}")
+            if desc.get("key_insights"):
+                lines.append(f"  Key insights: {', '.join(str(x) for x in desc['key_insights'])}")
+            if desc.get("related_keywords"):
+                lines.append(f"  Keywords: {', '.join(str(x) for x in desc['related_keywords'])}")
+            if desc.get("object_labels"):
+                lines.append(f"  Objects: {', '.join(str(x) for x in desc['object_labels'])}")
+            lines.append("")
+
+    return "\n".join(lines).strip()
+
+
+class MultimodalAutoSchemaKGOperator(AutoSchemaKGOperator):
+    """AutoSchemaKG variant that accepts multimodal extraction results.
+
+    Inputs may include:
+    * ``pdf_extraction_result``: output of ``PDFImageExtractor`` / ``MultimodalExtractNode``
+    * ``vlm_descriptions``: output of ``VLMDescribeNode``
+    * ``text_blocks``: plain text blocks from a document parser
+
+    The operator concatenates these sources into a single document string and
+    then runs the standard AutoSchemaKG pipeline.
+    """
+
+    def run(
+        self,
+        document: Optional[str] = None,
+        pdf_extraction_result: Optional[Dict[str, Any]] = None,
+        vlm_descriptions: Optional[List[Dict[str, Any]]] = None,
+        text_blocks: Optional[List[Dict[str, Any]]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> AutoSchemaKGResult:
+        """Infer a schema from text and/or multimodal inputs.
+
+        At least one of ``document``, ``pdf_extraction_result``, ``vlm_descriptions``,
+        or ``text_blocks`` must be provided.
+        """
+        if document is None:
+            document = multimodal_result_to_document(
+                pdf_extraction_result=pdf_extraction_result,
+                vlm_descriptions=vlm_descriptions,
+                text_blocks=text_blocks,
+            )
+        else:
+            # Still append multimodal context if a primary document is provided.
+            multimodal_doc = multimodal_result_to_document(
+                pdf_extraction_result=pdf_extraction_result,
+                vlm_descriptions=vlm_descriptions,
+                text_blocks=text_blocks,
+            )
+            if multimodal_doc:
+                document = f"{document}\n\n{multimodal_doc}".strip()
+
+        if not document:
+            raise ValueError("No document or multimodal input provided")
+        return super().run(document, context=context)

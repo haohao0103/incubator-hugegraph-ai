@@ -45,6 +45,7 @@ from hugegraph_llm.utils.log import log
 # Stage order for the incremental indexing pipeline.  The manager uses this list
 # to determine which stage should run next after a restart.
 INCREMENTAL_STAGES: List[str] = [
+    "auto_schema_kg",
     "chunk_split",
     "extract_info",
     "entity_resolution",

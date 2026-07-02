@@ -209,7 +209,7 @@ def test_incremental_index_flow_builds_with_checkpoint():
         pipeline = flow.build_flow(texts=["hello world"])
         assert pipeline is not None
         assert flow._checkpoint_manager is not None
-        assert flow._checkpoint_manager.get_resume_stage() == "chunk_split"
+        assert flow._checkpoint_manager.get_resume_stage() == "auto_schema_kg"
 
 
 def test_incremental_index_flow_post_deal_no_pipeline():

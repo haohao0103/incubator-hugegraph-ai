@@ -120,6 +120,7 @@ class IncrementalIndexFlow(BaseFlow):
         from hugegraph_llm.nodes.document_node.chunk_split import ChunkSplitNode
         from hugegraph_llm.nodes.hugegraph_node.commit_to_hugegraph import Commit2GraphNode
         from hugegraph_llm.nodes.hugegraph_node.entity_resolution_node import EntityResolutionNode
+        from hugegraph_llm.nodes.llm_node.auto_schema_kg_node import AutoSchemaKGNode
         from hugegraph_llm.nodes.llm_node.extract_info import ExtractNode
 
         pipeline = GPipeline()
@@ -128,6 +129,9 @@ class IncrementalIndexFlow(BaseFlow):
         self.prepare(prepared_input, **kwargs)
         pipeline.createGParam(prepared_input, "wkflow_input")
         pipeline.createGParam(WkFlowState(), "wkflow_state")
+
+        # Node 0: AutoSchemaKG (schema inference when not explicitly provided)
+        schema_node = AutoSchemaKGNode()
 
         # Node 1: ChunkSplit
         chunk_node = ChunkSplitNode()
@@ -163,6 +167,9 @@ class IncrementalIndexFlow(BaseFlow):
 
         # Wrap with checkpoint-aware nodes if checkpointing is enabled.
         if self._checkpoint_manager is not None:
+            schema_node = CheckpointingNode(
+                self._checkpoint_manager, "auto_schema_kg", schema_node
+            )
             chunk_node = CheckpointingNode(
                 self._checkpoint_manager, "chunk_split", chunk_node
             )
@@ -186,7 +193,8 @@ class IncrementalIndexFlow(BaseFlow):
             )
 
         # Register DAG: linear chain with vector add parallel to report.
-        pipeline.registerGElement(chunk_node, set(), "chunk_split")
+        pipeline.registerGElement(schema_node, set(), "auto_schema_kg")
+        pipeline.registerGElement(chunk_node, {schema_node}, "chunk_split")
         pipeline.registerGElement(extract_node, {chunk_node}, "extract_info")
         pipeline.registerGElement(resolution_node, {extract_node}, "entity_resolution")
         pipeline.registerGElement(commit_node, {resolution_node}, "commit_new")
@@ -214,6 +222,8 @@ class IncrementalIndexFlow(BaseFlow):
             "affected_communities": state_json.get("affected_community_count", 0),
             "vectors_added": state_json.get("vectors_added", 0),
             "community_reports_updated": state_json.get("community_reports_updated", 0),
+            "schema_inferred": state_json.get("schema_draft") is not None,
+            "schema_preview": state_json.get("schema_draft", {}).get("human_readable", ""),
         }
         if self._checkpoint_manager is not None:
             result["checkpoint"] = self._checkpoint_manager.get_summary()
