@@ -40,11 +40,10 @@ from hugegraph_llm.api.admin_api import admin_http_api
 from hugegraph_llm.api.graph_extract_api import graph_extract_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.config import admin_settings, huge_settings, prompt
-from hugegraph_llm.demo.rag_demo.admin_block import create_admin_block, log_stream
+from hugegraph_llm.demo.rag_demo.admin_ops_block import create_admin_ops_block, log_stream
 from hugegraph_llm.demo.rag_demo.agent_block import create_agent_block
-from hugegraph_llm.demo.rag_demo.advanced_graphrag_block import (
-    create_advanced_graphrag_block,
-)
+from hugegraph_llm.demo.rag_demo.graphrag_core_block import create_graphrag_core_block
+from hugegraph_llm.demo.rag_demo.other_block import lifespan
 from hugegraph_llm.demo.rag_demo.agent_handlers import (
     agent_answer,
     community_build,
@@ -63,7 +62,6 @@ from hugegraph_llm.demo.rag_demo.configs_block import (
     create_configs_block,
     get_header_with_language_indicator,
 )
-from hugegraph_llm.demo.rag_demo.other_block import create_other_block, lifespan
 from hugegraph_llm.demo.rag_demo.rag_block import create_rag_block, rag_answer
 from hugegraph_llm.demo.rag_demo.text2gremlin_block import (
     create_text2gremlin_block,
@@ -71,9 +69,6 @@ from hugegraph_llm.demo.rag_demo.text2gremlin_block import (
     gremlin_generate_selective,
 )
 from hugegraph_llm.demo.rag_demo.vector_graph_block import create_vector_graph_block
-from hugegraph_llm.demo.rag_demo.graphrag_enhancement_block import (
-    create_graphrag_enhancement_block,
-)
 from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
 from hugegraph_llm.resources.demo.css import CSS
 from hugegraph_llm.utils.log import log
@@ -125,33 +120,42 @@ def init_rag_ui() -> gr.Interface:
 
         textbox_array_graph_config = create_configs_block()
 
+        # ── Phase 0-1: Build & Schema ───────────────────────
         with gr.Tab(label="1. Build RAG Index 💡"):
             textbox_input_text, textbox_input_schema, textbox_info_extract_template = create_vector_graph_block()
         with gr.Tab(label="2. Schema Studio 🧬"):
             studio_demo_outputs, studio_load_demo = create_schema_construction_block()
-        with gr.Tab(label="3. (Graph)RAG & User Functions 📖"):
+
+        # ── Phase 1+2: GraphRAG Core Capabilities ─────────────
+        with gr.Tab(label="3. GraphRAG Core 🔍"):
+            create_graphrag_core_block()
+
+        # ── Phase 3: Agentic Reasoning ──────────────────────
+        with gr.Tab(label="4. Agent & Global Search 🤖"):
+            create_agent_block()
+
+        # ── Tools ───────────────────────────────────────────
+        with gr.Tab(label="5. (Graph)RAG Q&A 📖"):
             (
                 textbox_inp,
                 textbox_answer_prompt_input,
                 textbox_keywords_extract_prompt_input,
                 textbox_custom_related_information,
             ) = create_rag_block()
-        with gr.Tab(label="4. Text2gremlin ⚙️"):
+        with gr.Tab(label="6. Text2Gremlin ⚙️"):
             textbox_gremlin_inp, textbox_gremlin_schema, textbox_gremlin_prompt = create_text2gremlin_block()
-        with gr.Tab(label="5. Agent & Global Search 🤖"):
-            create_agent_block()
-        with gr.Tab(label="6. Graph Tools 🚧"):
-            create_other_block()
-        with gr.Tab(label="7. Admin Tools 🛠"):
-            create_admin_block()
-        with gr.Tab(label="8. Advanced GraphRAG 🚀"):
-            create_advanced_graphrag_block()
-        with gr.Tab(label="9. GraphRAG Enhancement 🧪"):
-            create_graphrag_enhancement_block()
-        with gr.Tab(label="10. Capability Map 🗺️"):
-            create_capability_map_block()
-        with gr.Tab(label="11. Multimodal GraphRAG 🎨"):
+
+        # ── Phase 4: Multimodal ─────────────────────────────
+        with gr.Tab(label="7. Multimodal GraphRAG 🎨"):
             mm_demo_outputs, mm_load_demo = create_multimodal_block()
+
+        # ── Operations ──────────────────────────────────────
+        with gr.Tab(label="8. Admin & Ops 🛠️"):
+            create_admin_ops_block()
+
+        # ── Overview ────────────────────────────────────────
+        with gr.Tab(label="9. Capability Map 🗺️"):
+            create_capability_map_block()
 
         def refresh_ui_config_prompt() -> tuple:
             # we can use its __init__() for in-place reload
