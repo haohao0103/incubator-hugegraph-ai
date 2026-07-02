@@ -39,6 +39,17 @@ sys.modules["pyhugegraph"] = mock_pyhugegraph
 sys.modules["pyhugegraph.utils"] = mock_pyhugegraph_utils
 sys.modules["pyhugegraph.utils.log"] = mock_pyhugegraph_utils_log
 
+# Also mock pyhugegraph.client so Commit2Graph can be imported in tests.
+mock_pyhugegraph_client = MagicMock()
+mock_pyhugegraph_client.PyHugeClient = MagicMock
+sys.modules["pyhugegraph.client"] = mock_pyhugegraph_client
+mock_pyhugegraph.client = mock_pyhugegraph_client
+
+# Mock pyhugegraph.utils.exceptions as well.
+mock_pyhugegraph_utils_exceptions = MagicMock()
+sys.modules["pyhugegraph.utils.exceptions"] = mock_pyhugegraph_utils_exceptions
+mock_pyhugegraph_utils.exceptions = mock_pyhugegraph_utils_exceptions
+
 # Mock log module should also provide a pre-configured logger
 # This is used by hugegraph_llm.utils.log which imports init_logger
 mock_pyhugegraph.utils.log.init_logger = mock_init_logger

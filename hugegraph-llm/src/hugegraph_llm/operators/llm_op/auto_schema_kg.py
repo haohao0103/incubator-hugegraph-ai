@@ -52,7 +52,8 @@ class PropertyKeyDef:
     cardinality: str = "single"
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"name": self.name, "data_type": self.data_type, "cardinality": self.cardinality}
+        # HugeGraph Commit2Graph expects uppercase data_type / cardinality values.
+        return {"name": self.name, "data_type": self.data_type.upper(), "cardinality": self.cardinality.upper()}
 
 
 @dataclass
@@ -492,6 +493,518 @@ JSON:"""
             return True, ""
         except Exception as e:  # pylint: disable=broad-except
             log.error("Failed to commit AutoSchemaKG schema: %s", e)
+            return False, str(e)
+
+
+# ---------------------------------------------------------------------------
+# Schema merge / diff / conflict detection
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SchemaConflict:
+    """A single conflict detected between schema drafts or within one draft."""
+
+    conflict_type: str  # e.g., "duplicate_property", "type_mismatch", "primary_key_mismatch", "edge_endpoint_missing"
+    name: str  # affected label or property name
+    details: str
+    source_drafts: List[int] = field(default_factory=list)  # indices into the draft list; [-1] for intra-draft
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "conflict_type": self.conflict_type,
+            "name": self.name,
+            "details": self.details,
+            "source_drafts": self.source_drafts,
+        }
+
+
+@dataclass
+class SchemaDiff:
+    """Diff between two schema drafts (base -> target)."""
+
+    added_property_keys: List[PropertyKeyDef] = field(default_factory=list)
+    removed_property_keys: List[PropertyKeyDef] = field(default_factory=list)
+    modified_property_keys: List[Dict[str, Any]] = field(default_factory=list)
+    added_vertex_labels: List[VertexLabelDef] = field(default_factory=list)
+    removed_vertex_labels: List[VertexLabelDef] = field(default_factory=list)
+    modified_vertex_labels: List[Dict[str, Any]] = field(default_factory=list)
+    added_edge_labels: List[EdgeLabelDef] = field(default_factory=list)
+    removed_edge_labels: List[EdgeLabelDef] = field(default_factory=list)
+    modified_edge_labels: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "added_property_keys": [p.to_dict() for p in self.added_property_keys],
+            "removed_property_keys": [p.to_dict() for p in self.removed_property_keys],
+            "modified_property_keys": self.modified_property_keys,
+            "added_vertex_labels": [v.to_dict() for v in self.added_vertex_labels],
+            "removed_vertex_labels": [v.to_dict() for v in self.removed_vertex_labels],
+            "modified_vertex_labels": self.modified_vertex_labels,
+            "added_edge_labels": [e.to_dict() for e in self.added_edge_labels],
+            "removed_edge_labels": [e.to_dict() for e in self.removed_edge_labels],
+            "modified_edge_labels": self.modified_edge_labels,
+        }
+
+
+class SchemaDiffCalculator:
+    """Calculate structural differences between two schema drafts."""
+
+    def diff(self, base: SchemaDraft, target: SchemaDraft) -> SchemaDiff:
+        """Return the diff from ``base`` to ``target``."""
+        base_pk = {pk.name: pk for pk in base.property_keys}
+        target_pk = {pk.name: pk for pk in target.property_keys}
+
+        added_pks = [target_pk[name] for name in target_pk if name not in base_pk]
+        removed_pks = [base_pk[name] for name in base_pk if name not in target_pk]
+        modified_pks = []
+        for name in base_pk:
+            if name in target_pk and base_pk[name] != target_pk[name]:
+                modified_pks.append({
+                    "name": name,
+                    "base": base_pk[name].to_dict(),
+                    "target": target_pk[name].to_dict(),
+                })
+
+        base_vl = {vl.name: vl for vl in base.vertex_labels}
+        target_vl = {vl.name: vl for vl in target.vertex_labels}
+        added_vls = [target_vl[name] for name in target_vl if name not in base_vl]
+        removed_vls = [base_vl[name] for name in base_vl if name not in target_vl]
+        modified_vls = []
+        for name in base_vl:
+            if name in target_vl and base_vl[name] != target_vl[name]:
+                modified_vls.append({
+                    "name": name,
+                    "base": base_vl[name].to_dict(),
+                    "target": target_vl[name].to_dict(),
+                })
+
+        base_el = {el.name: el for el in base.edge_labels}
+        target_el = {el.name: el for el in target.edge_labels}
+        added_els = [target_el[name] for name in target_el if name not in base_el]
+        removed_els = [base_el[name] for name in base_el if name not in target_el]
+        modified_els = []
+        for name in base_el:
+            if name in target_el and base_el[name] != target_el[name]:
+                modified_els.append({
+                    "name": name,
+                    "base": base_el[name].to_dict(),
+                    "target": target_el[name].to_dict(),
+                })
+
+        return SchemaDiff(
+            added_property_keys=added_pks,
+            removed_property_keys=removed_pks,
+            modified_property_keys=modified_pks,
+            added_vertex_labels=added_vls,
+            removed_vertex_labels=removed_vls,
+            modified_vertex_labels=modified_vls,
+            added_edge_labels=added_els,
+            removed_edge_labels=removed_els,
+            modified_edge_labels=modified_els,
+        )
+
+
+class SchemaConflictDetector:
+    """Detect conflicts within or across schema drafts."""
+
+    def detect_intra_draft(self, draft: SchemaDraft) -> List[SchemaConflict]:
+        """Detect conflicts inside a single draft."""
+        conflicts: List[SchemaConflict] = []
+        pk_names = {pk.name: pk for pk in draft.property_keys}
+        vl_names = {vl.name: vl for vl in draft.vertex_labels}
+
+        # Duplicate property keys with different definitions
+        seen_pk: Dict[str, PropertyKeyDef] = {}
+        for pk in draft.property_keys:
+            if pk.name in seen_pk and pk != seen_pk[pk.name]:
+                conflicts.append(SchemaConflict(
+                    conflict_type="duplicate_property",
+                    name=pk.name,
+                    details=f"Property '{pk.name}' has conflicting definitions.",
+                    source_drafts=[-1],
+                ))
+            seen_pk[pk.name] = pk
+
+        # Duplicate vertex labels with different definitions
+        seen_vl: Dict[str, VertexLabelDef] = {}
+        for vl in draft.vertex_labels:
+            if vl.name in seen_vl and vl != seen_vl[vl.name]:
+                conflicts.append(SchemaConflict(
+                    conflict_type="duplicate_vertex_label",
+                    name=vl.name,
+                    details=f"Vertex label '{vl.name}' has conflicting definitions.",
+                    source_drafts=[-1],
+                ))
+            seen_vl[vl.name] = vl
+
+        # Duplicate edge labels with different endpoints
+        seen_el: Dict[str, EdgeLabelDef] = {}
+        for el in draft.edge_labels:
+            if el.name in seen_el and el != seen_el[el.name]:
+                conflicts.append(SchemaConflict(
+                    conflict_type="duplicate_edge_label",
+                    name=el.name,
+                    details=(
+                        f"Edge label '{el.name}' has conflicting source/target labels: "
+                        f"{seen_el[el.name].source_label}→{seen_el[el.name].target_label} vs "
+                        f"{el.source_label}→{el.target_label}."
+                    ),
+                    source_drafts=[-1],
+                ))
+            seen_el[el.name] = el
+
+        # Primary key properties missing or wrong type
+        for vl in draft.vertex_labels:
+            for pk in vl.primary_keys:
+                if pk not in pk_names:
+                    conflicts.append(SchemaConflict(
+                        conflict_type="undefined_primary_key",
+                        name=pk,
+                        details=f"Vertex label '{vl.name}' primary key '{pk}' is not defined as a property key.",
+                        source_drafts=[-1],
+                    ))
+                elif pk_names[pk].cardinality != "single":
+                    conflicts.append(SchemaConflict(
+                        conflict_type="non_single_primary_key",
+                        name=pk,
+                        details=f"Primary key '{pk}' must be single cardinality, got '{pk_names[pk].cardinality}'.",
+                        source_drafts=[-1],
+                    ))
+
+        # Edge endpoints missing
+        for el in draft.edge_labels:
+            if el.source_label not in vl_names:
+                conflicts.append(SchemaConflict(
+                    conflict_type="edge_source_missing",
+                    name=el.source_label,
+                    details=f"Edge label '{el.name}' source '{el.source_label}' is not a vertex label.",
+                    source_drafts=[-1],
+                ))
+            if el.target_label not in vl_names:
+                conflicts.append(SchemaConflict(
+                    conflict_type="edge_target_missing",
+                    name=el.target_label,
+                    details=f"Edge label '{el.name}' target '{el.target_label}' is not a vertex label.",
+                    source_drafts=[-1],
+                ))
+            for prop in el.properties:
+                if prop not in pk_names:
+                    conflicts.append(SchemaConflict(
+                        conflict_type="undefined_edge_property",
+                        name=prop,
+                        details=f"Edge label '{el.name}' uses undefined property '{prop}'.",
+                        source_drafts=[-1],
+                    ))
+
+        return conflicts
+
+    def detect_cross_draft(self, drafts: List[SchemaDraft]) -> List[SchemaConflict]:
+        """Detect conflicts across multiple drafts, e.g., type mismatches on shared labels."""
+        conflicts: List[SchemaConflict] = []
+        if len(drafts) < 2:
+            return conflicts
+
+        # Property key conflicts across drafts
+        pk_groups: Dict[str, List[Tuple[int, PropertyKeyDef]]] = {}
+        for idx, draft in enumerate(drafts):
+            for pk in draft.property_keys:
+                pk_groups.setdefault(pk.name, []).append((idx, pk))
+        for name, entries in pk_groups.items():
+            definitions = {json.dumps(e[1].to_dict(), sort_keys=True) for e in entries}
+            if len(definitions) > 1:
+                conflict_indices = sorted({e[0] for e in entries})
+                details = "; ".join(
+                    f"draft {idx}: {e[1].to_dict()}" for idx, e in enumerate(entries) if e[0] in conflict_indices
+                )
+                conflicts.append(SchemaConflict(
+                    conflict_type="cross_draft_property_type_mismatch",
+                    name=name,
+                    details=f"Property key '{name}' has inconsistent definitions across drafts: {details}.",
+                    source_drafts=conflict_indices,
+                ))
+
+        # Vertex label conflicts across drafts (same name, different properties/primary keys)
+        vl_groups: Dict[str, List[Tuple[int, VertexLabelDef]]] = {}
+        for idx, draft in enumerate(drafts):
+            for vl in draft.vertex_labels:
+                vl_groups.setdefault(vl.name, []).append((idx, vl))
+        for name, entries in vl_groups.items():
+            definitions = {json.dumps(e[1].to_dict(), sort_keys=True) for e in entries}
+            if len(definitions) > 1:
+                conflict_indices = sorted({e[0] for e in entries})
+                conflicts.append(SchemaConflict(
+                    conflict_type="cross_draft_vertex_label_mismatch",
+                    name=name,
+                    details=f"Vertex label '{name}' has inconsistent definitions across drafts.",
+                    source_drafts=conflict_indices,
+                ))
+
+        # Edge label conflicts across drafts (same name, different endpoints)
+        el_groups: Dict[str, List[Tuple[int, EdgeLabelDef]]] = {}
+        for idx, draft in enumerate(drafts):
+            for el in draft.edge_labels:
+                el_groups.setdefault(el.name, []).append((idx, el))
+        for name, entries in el_groups.items():
+            endpoints = {(e[1].source_label, e[1].target_label) for e in entries}
+            if len(endpoints) > 1:
+                conflict_indices = sorted({e[0] for e in entries})
+                conflicts.append(SchemaConflict(
+                    conflict_type="cross_draft_edge_endpoint_mismatch",
+                    name=name,
+                    details=f"Edge label '{name}' connects different endpoints across drafts.",
+                    source_drafts=conflict_indices,
+                ))
+
+        return conflicts
+
+    def detect(self, drafts: List[SchemaDraft]) -> List[SchemaConflict]:
+        """Detect both intra-draft and cross-draft conflicts."""
+        conflicts: List[SchemaConflict] = []
+        for draft in drafts:
+            conflicts.extend(self.detect_intra_draft(draft))
+        conflicts.extend(self.detect_cross_draft(drafts))
+        return conflicts
+
+
+class SchemaMerger:
+    """Merge multiple schema drafts into a single unified schema draft.
+
+    Merge strategy:
+    - Property keys: union by name; on type/cardinality conflict, keep the first definition and flag it.
+    - Vertex labels: union by name; merge properties and primary keys; on conflict, keep the union.
+    - Edge labels: union by name; on endpoint conflict, keep the first definition and flag it.
+    """
+
+    def __init__(self) -> None:
+        self.conflict_detector = SchemaConflictDetector()
+        self.diff_calculator = SchemaDiffCalculator()
+
+    def merge(self, drafts: List[SchemaDraft]) -> Tuple[SchemaDraft, List[SchemaConflict]]:
+        """Merge ``drafts`` into a unified ``SchemaDraft`` and return conflicts."""
+        if not drafts:
+            return SchemaDraft(), []
+        if len(drafts) == 1:
+            return drafts[0], self.conflict_detector.detect_intra_draft(drafts[0])
+
+        conflicts = self.conflict_detector.detect(drafts)
+
+        merged_property_keys: List[PropertyKeyDef] = []
+        pk_map: Dict[str, PropertyKeyDef] = {}
+        for draft in drafts:
+            for pk in draft.property_keys:
+                if pk.name not in pk_map:
+                    pk_map[pk.name] = pk
+                    merged_property_keys.append(pk)
+
+        merged_vertex_labels: List[VertexLabelDef] = []
+        vl_map: Dict[str, VertexLabelDef] = {}
+        for draft in drafts:
+            for vl in draft.vertex_labels:
+                if vl.name not in vl_map:
+                    vl_map[vl.name] = VertexLabelDef(
+                        name=vl.name,
+                        properties=list(vl.properties),
+                        primary_keys=list(vl.primary_keys),
+                        nullable_keys=list(vl.nullable_keys),
+                    )
+                else:
+                    existing = vl_map[vl.name]
+                    existing.properties = list(dict.fromkeys(existing.properties + vl.properties))
+                    existing.primary_keys = list(dict.fromkeys(existing.primary_keys + vl.primary_keys))
+                    existing.nullable_keys = list(dict.fromkeys(existing.nullable_keys + vl.nullable_keys))
+
+        for vl in vl_map.values():
+            # Ensure primary keys are still present in the merged properties
+            for pk in vl.primary_keys:
+                if pk not in vl.properties:
+                    vl.properties.append(pk)
+            merged_vertex_labels.append(vl)
+
+        merged_edge_labels: List[EdgeLabelDef] = []
+        el_map: Dict[str, EdgeLabelDef] = {}
+        for draft in drafts:
+            for el in draft.edge_labels:
+                if el.name not in el_map:
+                    el_map[el.name] = EdgeLabelDef(
+                        name=el.name,
+                        source_label=el.source_label,
+                        target_label=el.target_label,
+                        properties=list(el.properties),
+                        nullable_keys=list(el.nullable_keys),
+                    )
+                else:
+                    existing = el_map[el.name]
+                    existing.properties = list(dict.fromkeys(existing.properties + el.properties))
+                    existing.nullable_keys = list(dict.fromkeys(existing.nullable_keys + el.nullable_keys))
+
+        merged_edge_labels = list(el_map.values())
+
+        # Merge source documents for traceability
+        source_documents = []
+        for draft in drafts:
+            if draft.source_document:
+                source_documents.append(draft.source_document)
+        merged_source = "\n\n".join(source_documents)
+
+        merged = SchemaDraft(
+            property_keys=merged_property_keys,
+            vertex_labels=merged_vertex_labels,
+            edge_labels=merged_edge_labels,
+            source_document=merged_source[:2000],  # keep a preview for UI
+        )
+
+        # Re-normalize to ensure merged properties have keys
+        existing_pk_names = {pk.name for pk in merged.property_keys}
+        for vl in merged.vertex_labels:
+            for prop in vl.properties:
+                if prop not in existing_pk_names:
+                    merged.property_keys.append(PropertyKeyDef(name=prop, data_type="text", cardinality="single"))
+                    existing_pk_names.add(prop)
+        for el in merged.edge_labels:
+            for prop in el.properties:
+                if prop not in existing_pk_names:
+                    merged.property_keys.append(PropertyKeyDef(name=prop, data_type="text", cardinality="single"))
+                    existing_pk_names.add(prop)
+
+        return merged, conflicts
+
+
+# ---------------------------------------------------------------------------
+# Batch / multi-document schema inference
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BatchAutoSchemaKGResult:
+    """Result of inferring schema from multiple documents."""
+
+    merged_draft: SchemaDraft
+    per_document_results: List[AutoSchemaKGResult]
+    conflicts: List[SchemaConflict]
+    diff_from_first: Optional[SchemaDiff] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "merged_schema": self.merged_draft.to_schema_dict(),
+            "human_readable": self.merged_draft.to_human_readable(),
+            "conflicts": [c.to_dict() for c in self.conflicts],
+            "document_count": len(self.per_document_results),
+            "diff_from_first": self.diff_from_first.to_dict() if self.diff_from_first else None,
+        }
+
+
+class BatchAutoSchemaKGOperator:
+    """Infer schema from multiple documents and merge them into one unified draft.
+
+    This operator is designed for enterprise-scale use cases where the full corpus is
+    too large to feed into a single LLM call. It samples documents, infers a schema
+    per document, merges the results, and reports conflicts for human review.
+    """
+
+    def __init__(
+        self,
+        llm: Optional[BaseLLM] = None,
+        schema_commit_client: Optional[Any] = None,
+        review_callback: Optional[AutoSchemaKGReviewCallback] = None,
+        allow_commit: bool = True,
+        instructions: str = "",
+        max_workers: int = 1,
+    ):
+        self.llm = llm
+        self.schema_commit_client = schema_commit_client
+        self.review_callback = review_callback
+        self.allow_commit = allow_commit
+        self.instructions = instructions
+        self.max_workers = max_workers
+        self._single_operator = AutoSchemaKGOperator(
+            llm=self.llm,
+            schema_commit_client=None,  # commit happens at batch level after merge
+            review_callback=None,
+            allow_commit=False,
+            instructions=self.instructions,
+        )
+        self._merger = SchemaMerger()
+
+    def run(
+        self,
+        documents: List[str],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> BatchAutoSchemaKGResult:
+        """Infer a merged schema from ``documents``.
+
+        Args:
+            documents: List of text documents. Empty strings are skipped.
+            context: Optional dictionary for downstream compatibility.
+
+        Returns:
+            BatchAutoSchemaKGResult containing the merged draft, per-document results,
+            detected conflicts, and a diff from the first document's draft.
+        """
+        if context is None:
+            context = {}
+
+        valid_documents = [doc for doc in documents if isinstance(doc, str) and doc.strip()]
+        if not valid_documents:
+            raise ValueError("At least one non-empty document is required")
+
+        per_document_results: List[AutoSchemaKGResult] = []
+        for doc in valid_documents:
+            try:
+                result = self._single_operator.run(doc, context=context)
+                per_document_results.append(result)
+            except Exception as e:  # pylint: disable=broad-except
+                log.error("AutoSchemaKG failed for one document: %s", e)
+                # Placeholder result with empty draft so the batch can continue
+                per_document_results.append(
+                    AutoSchemaKGResult(
+                        draft=SchemaDraft(source_document=doc),
+                        review=SchemaReviewResult(approved=False, reason=f"Failed: {e}"),
+                    )
+                )
+
+        drafts = [r.draft for r in per_document_results if r.draft.property_keys or r.draft.vertex_labels]
+        merged_draft, conflicts = self._merger.merge(drafts)
+
+        diff = None
+        if len(drafts) >= 2:
+            diff = self._merger.diff_calculator.diff(drafts[0], merged_draft)
+
+        # Optional review + commit at the merged level
+        review = self._review_merged(merged_draft)
+        committed = False
+        commit_error = ""
+        if review.approved:
+            committed, commit_error = self._commit_if_allowed(merged_draft)
+
+        if not committed and commit_error:
+            log.warning("Batch AutoSchemaKG commit skipped or failed: %s", commit_error)
+
+        return BatchAutoSchemaKGResult(
+            merged_draft=merged_draft,
+            per_document_results=per_document_results,
+            conflicts=conflicts,
+            diff_from_first=diff,
+        )
+
+    def _review_merged(self, draft: SchemaDraft) -> SchemaReviewResult:
+        if self.review_callback is not None:
+            return self.review_callback(draft)
+        return SchemaReviewResult(approved=True, reason="Auto-approved (no review callback)")
+
+    def _commit_if_allowed(self, schema: SchemaDraft) -> Tuple[bool, str]:
+        if not self.allow_commit:
+            return False, "Commit disabled (allow_commit=False)"
+        if self.schema_commit_client is None:
+            return False, "No schema_commit_client provided"
+        try:
+            self.schema_commit_client.init_schema_if_need(schema.to_schema_dict())
+            log.info(
+                "Batch AutoSchemaKG committed schema with %d vertex labels and %d edge labels",
+                len(schema.vertex_labels),
+                len(schema.edge_labels),
+            )
+            return True, ""
+        except Exception as e:  # pylint: disable=broad-except
+            log.error("Failed to commit batch AutoSchemaKG schema: %s", e)
             return False, str(e)
 
 

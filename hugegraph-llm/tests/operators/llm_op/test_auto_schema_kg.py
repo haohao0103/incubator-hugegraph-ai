@@ -25,9 +25,13 @@ import pytest
 from hugegraph_llm.operators.llm_op.auto_schema_kg import (
     AutoSchemaKGOperator,
     AutoSchemaKGResult,
+    BatchAutoSchemaKGOperator,
     EdgeLabelDef,
     PropertyKeyDef,
+    SchemaConflictDetector,
+    SchemaDiffCalculator,
     SchemaDraft,
+    SchemaMerger,
     SchemaReviewResult,
     VertexLabelDef,
 )
@@ -436,3 +440,221 @@ def test_validation_warnings_for_undefined_and_bad_references():
     assert any("source 'Company' not in vertex labels" in w for w in warnings)
     assert any("target 'Office' not in vertex labels" in w for w in warnings)
     assert any("undefined property 'since'" in w for w in warnings)
+
+
+# ---------------------------------------------------------------------------
+# Schema merge / diff / conflict detection
+# ---------------------------------------------------------------------------
+
+
+def _person_schema() -> SchemaDraft:
+    return SchemaDraft(
+        property_keys=[
+            PropertyKeyDef(name="name", data_type="text", cardinality="single"),
+            PropertyKeyDef(name="age", data_type="int", cardinality="single"),
+        ],
+        vertex_labels=[VertexLabelDef(name="Person", properties=["name", "age"], primary_keys=["name"])],
+        edge_labels=[EdgeLabelDef(name="KNOWS", source_label="Person", target_label="Person")],
+    )
+
+
+def _company_schema() -> SchemaDraft:
+    return SchemaDraft(
+        property_keys=[
+            PropertyKeyDef(name="name", data_type="text", cardinality="single"),
+            PropertyKeyDef(name="age", data_type="int", cardinality="single"),
+            PropertyKeyDef(name="founded_year", data_type="int", cardinality="single"),
+            PropertyKeyDef(name="since", data_type="text", cardinality="single"),
+        ],
+        vertex_labels=[
+            VertexLabelDef(name="Person", properties=["name", "age"], primary_keys=["name"]),
+            VertexLabelDef(name="Company", properties=["name", "founded_year"], primary_keys=["name"]),
+        ],
+        edge_labels=[
+            EdgeLabelDef(name="WORKS_AT", source_label="Person", target_label="Company", properties=["since"])
+        ],
+    )
+
+
+def test_merge_unions_labels_and_properties():
+    merger = SchemaMerger()
+    merged, conflicts = merger.merge([_person_schema(), _company_schema()])
+
+    pk_names = {pk.name for pk in merged.property_keys}
+    assert pk_names == {"name", "age", "founded_year", "since"}
+    assert len(merged.vertex_labels) == 2
+    assert len(merged.edge_labels) == 2
+    assert not conflicts
+
+
+def test_merge_detects_incomplete_schema_conflicts():
+    """If a per-document schema references labels not defined in that document, conflicts are reported."""
+    incomplete = SchemaDraft(
+        property_keys=[PropertyKeyDef(name="name")],
+        vertex_labels=[VertexLabelDef(name="Company", properties=["name"], primary_keys=["name"])],
+        edge_labels=[EdgeLabelDef(name="WORKS_AT", source_label="Person", target_label="Company", properties=["since"])],
+    )
+    merger = SchemaMerger()
+    merged, conflicts = merger.merge([_person_schema(), incomplete])
+    assert "Person" in {v.name for v in merged.vertex_labels}
+    assert "since" in {p.name for p in merged.property_keys}
+    assert any(c.conflict_type == "edge_source_missing" for c in conflicts)
+    assert any(c.conflict_type == "undefined_edge_property" for c in conflicts)
+
+def test_merge_detects_property_type_conflict_across_drafts():
+    draft_a = SchemaDraft(
+        property_keys=[PropertyKeyDef(name="score", data_type="int", cardinality="single")],
+        vertex_labels=[VertexLabelDef(name="Item", properties=["score"], primary_keys=["score"])],
+    )
+    draft_b = SchemaDraft(
+        property_keys=[PropertyKeyDef(name="score", data_type="double", cardinality="single")],
+        vertex_labels=[VertexLabelDef(name="Item", properties=["score"], primary_keys=["score"])],
+    )
+    merger = SchemaMerger()
+    merged, conflicts = merger.merge([draft_a, draft_b])
+    assert merged.property_keys[0].data_type == "int"  # first wins
+    assert any(c.conflict_type == "cross_draft_property_type_mismatch" for c in conflicts)
+
+
+def test_merge_detects_edge_endpoint_conflict():
+    draft_a = SchemaDraft(
+        vertex_labels=[
+            VertexLabelDef(name="Person", properties=["name"], primary_keys=["name"]),
+            VertexLabelDef(name="Company", properties=["name"], primary_keys=["name"]),
+        ],
+        edge_labels=[EdgeLabelDef(name="MANAGES", source_label="Person", target_label="Company")],
+    )
+    draft_b = SchemaDraft(
+        vertex_labels=[
+            VertexLabelDef(name="Person", properties=["name"], primary_keys=["name"]),
+            VertexLabelDef(name="Company", properties=["name"], primary_keys=["name"]),
+        ],
+        edge_labels=[EdgeLabelDef(name="MANAGES", source_label="Person", target_label="Person")],
+    )
+    merger = SchemaMerger()
+    _, conflicts = merger.merge([draft_a, draft_b])
+    assert any(c.conflict_type == "cross_draft_edge_endpoint_mismatch" for c in conflicts)
+
+
+def test_intra_draft_conflict_detects_missing_primary_key():
+    draft = SchemaDraft(
+        property_keys=[],
+        vertex_labels=[VertexLabelDef(name="Person", properties=["name"], primary_keys=["id"])],
+    )
+    detector = SchemaConflictDetector()
+    conflicts = detector.detect_intra_draft(draft)
+    assert any(c.conflict_type == "undefined_primary_key" for c in conflicts)
+
+
+def test_intra_draft_conflict_detects_edge_source_missing():
+    draft = SchemaDraft(
+        property_keys=[PropertyKeyDef(name="name")],
+        vertex_labels=[VertexLabelDef(name="Person", properties=["name"], primary_keys=["name"])],
+        edge_labels=[EdgeLabelDef(name="WORKS_AT", source_label="Company", target_label="Person")],
+    )
+    detector = SchemaConflictDetector()
+    conflicts = detector.detect_intra_draft(draft)
+    assert any(c.conflict_type == "edge_source_missing" for c in conflicts)
+
+
+def test_diff_calculator_reports_added_and_removed():
+    base = _person_schema()
+    target = SchemaDraft(
+        property_keys=[PropertyKeyDef(name="name"), PropertyKeyDef(name="founded_year", data_type="int")],
+        vertex_labels=[VertexLabelDef(name="Company", properties=["name", "founded_year"], primary_keys=["name"])],
+    )
+    diff = SchemaDiffCalculator().diff(base, target)
+    assert len(diff.added_vertex_labels) == 1
+    assert diff.added_vertex_labels[0].name == "Company"
+    assert len(diff.removed_vertex_labels) == 1
+    assert diff.removed_vertex_labels[0].name == "Person"
+
+
+# ---------------------------------------------------------------------------
+# Batch AutoSchemaKG
+# ---------------------------------------------------------------------------
+
+
+def test_batch_infers_and_merges_multiple_documents():
+    def llm_response(doc: str) -> str:
+        if "Person" in doc or "Alice" in doc:
+            return json.dumps({
+                "propertykeys": [{"name": "name", "data_type": "text", "cardinality": "single"}],
+                "vertexlabels": [{"name": "Person", "properties": ["name"], "primary_keys": ["name"]}],
+                "edgelabels": [],
+            })
+        return json.dumps({
+            "propertykeys": [{"name": "name", "data_type": "text", "cardinality": "single"}],
+            "vertexlabels": [{"name": "Company", "properties": ["name"], "primary_keys": ["name"]}],
+            "edgelabels": [],
+        })
+
+    class SwitchingLLM:
+        def __init__(self):
+            self.prompts: list = []
+
+        def generate(self, prompt: str) -> str:
+            self.prompts.append(prompt)
+            return llm_response(prompt)
+
+    llm = SwitchingLLM()
+    batch = BatchAutoSchemaKGOperator(llm=llm, allow_commit=False)
+    result = batch.run(["Alice is a person.", "Acme is a company."])
+
+    assert len(result.per_document_results) == 2
+    vl_names = {vl.name for vl in result.merged_draft.vertex_labels}
+    assert vl_names == {"Person", "Company"}
+    assert result.diff_from_first is not None
+
+
+def test_batch_empty_documents_raises():
+    batch = BatchAutoSchemaKGOperator(llm=FakeLLM("{}"), allow_commit=False)
+    with pytest.raises(ValueError, match="At least one non-empty document"):
+        batch.run(["", "   "])
+
+
+def test_batch_commit_with_review_callback():
+    commit = FakeCommitClient()
+
+    def approve(_draft):
+        return SchemaReviewResult(approved=True)
+
+    batch = BatchAutoSchemaKGOperator(
+        llm=FakeLLM(make_valid_schema_response()),
+        schema_commit_client=commit,
+        review_callback=approve,
+        allow_commit=True,
+    )
+    result = batch.run(["Doc one.", "Doc two."])
+    assert len(commit.schemas) == 1
+    assert result.merged_draft.vertex_labels[0].name == "Person"
+
+
+# ---------------------------------------------------------------------------
+# Gradio handlers
+# ---------------------------------------------------------------------------
+
+
+def test_gradio_handler_generate_batch_schema_draft():
+    from unittest.mock import patch
+
+    fake_llm = FakeLLM(make_valid_schema_response())
+    with patch("hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers.LLMs") as mock_llms:
+        mock_llms.return_value.get_extract_llm.return_value = fake_llm
+        from hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers import generate_batch_schema_draft
+
+        md, schema_json, status = generate_batch_schema_draft(
+            "Alice is 30.\n\nBob is 25.",
+            instructions="focus on people",
+        )
+        assert "Person" in md
+        assert '"Person"' in schema_json
+        assert "Merged schema from 2 document(s)" in status
+
+
+def test_gradio_handler_empty_input():
+    from hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers import generate_batch_schema_draft
+
+    md, schema_json, status = generate_batch_schema_draft("   ")
+    assert "Error" in status
+    assert not schema_json

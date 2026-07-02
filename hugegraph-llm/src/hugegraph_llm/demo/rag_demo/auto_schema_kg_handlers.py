@@ -27,6 +27,8 @@ from hugegraph_llm.models.llms.init_llm import LLMs
 from hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph import Commit2Graph
 from hugegraph_llm.operators.llm_op.auto_schema_kg import (
     AutoSchemaKGOperator,
+    BatchAutoSchemaKGOperator,
+    SchemaDraft,
     SchemaReviewResult,
 )
 from hugegraph_llm.utils.log import log
@@ -73,6 +75,67 @@ def generate_schema_draft(
         )
     except Exception as e:  # pylint: disable=broad-except
         log.error("AutoSchemaKG generate failed: %s", e)
+        return (
+            "",
+            "",
+            f"Error: {e}",
+        )
+
+
+def generate_batch_schema_draft(
+    documents_text: str,
+    instructions: str = "",
+    document_separator: str = "\n\n",
+) -> Tuple[str, str, str]:
+    """Generate a merged schema draft from multiple documents.
+
+    Args:
+        documents_text: Text containing one or more documents separated by ``document_separator``.
+        instructions: Optional domain guidance.
+        document_separator: String used to split ``documents_text`` into separate documents.
+
+    Returns:
+        A tuple of (markdown_preview, schema_json, status_message).
+    """
+    if not documents_text or not documents_text.strip():
+        return (
+            "",
+            "",
+            "Error: please provide one or more non-empty documents.",
+        )
+
+    documents = [doc.strip() for doc in documents_text.split(document_separator) if doc.strip()]
+    if not documents:
+        documents = [documents_text.strip()]
+
+    try:
+        llm = LLMs().get_extract_llm()
+        batch = BatchAutoSchemaKGOperator(
+            llm=llm,
+            schema_commit_client=None,
+            review_callback=None,
+            allow_commit=False,
+            instructions=instructions or "",
+        )
+        result = batch.run(documents)
+        _LATEST_DRAFT["draft"] = result.merged_draft
+
+        schema_json = json.dumps(result.merged_draft.to_schema_dict(), ensure_ascii=False, indent=2)
+        status_lines = [
+            f"Merged schema from {len(result.per_document_results)} document(s).",
+        ]
+        if result.conflicts:
+            status_lines.append(f"Detected {len(result.conflicts)} conflict(s); review before commit.")
+        else:
+            status_lines.append("No conflicts detected.")
+
+        return (
+            result.merged_draft.to_human_readable(),
+            schema_json,
+            "\n".join(status_lines),
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        log.error("Batch AutoSchemaKG generate failed: %s", e)
         return (
             "",
             "",

@@ -27,7 +27,6 @@ from hugegraph_llm.config import huge_settings, prompt, resource_path
 from hugegraph_llm.flows import FlowName
 from hugegraph_llm.flows.scheduler import SchedulerSingleton
 from hugegraph_llm.utils.graph_index_utils import (
-    build_schema,
     clean_all_graph_data,
     clean_all_graph_index,
     extract_graph,
@@ -42,114 +41,13 @@ from hugegraph_llm.utils.vector_index_utils import (
     clean_vector_index,
     get_vector_index_info,
 )
+from hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers import (
+    generate_batch_schema_draft,
+)
 from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
     property_graph_extract,
     chunk_sim_edges_build,
 )
-
-
-def _dump_json_examples(value):
-    return json.dumps(value, indent=2, ensure_ascii=False)
-
-
-def _normalize_schema_generator_query_examples(examples):
-    examples = (examples or "").strip()
-    if not examples:
-        return ""
-
-    try:
-        parsed_examples = json.loads(examples)
-    except json.JSONDecodeError as exc:
-        raise gr.Error(
-            f"Query examples must be valid JSON: {exc.msg} at line {exc.lineno}, column {exc.colno}"
-        ) from exc
-
-    if not isinstance(parsed_examples, list):
-        raise gr.Error("Query examples must be a JSON list.")
-
-    normalized_examples = []
-    for index, item in enumerate(parsed_examples):
-        if isinstance(item, str):
-            description = item.strip()
-            if not description:
-                raise gr.Error(f"Query examples[{index}] must be a non-empty string.")
-            normalized_examples.append(
-                {
-                    "description": description,
-                    "gremlin": "",
-                }
-            )
-            continue
-
-        if isinstance(item, dict):
-            description = item.get("description")
-            gremlin = item.get("gremlin")
-            if not isinstance(description, str) or not description.strip():
-                raise gr.Error("Each query example object must contain a non-empty `description` string.")
-            if not isinstance(gremlin, str):
-                raise gr.Error("Each query example object must contain a `gremlin` string.")
-            normalized_examples.append(
-                {
-                    "description": description.strip(),
-                    "gremlin": gremlin.strip(),
-                }
-            )
-            continue
-
-        raise gr.Error("Query examples must contain strings or objects with `description` and `gremlin` fields.")
-
-    return _dump_json_examples(normalized_examples)
-
-
-def _validate_schema_generator_few_shot_examples(examples):
-    examples = (examples or "").strip()
-    if not examples:
-        return ""
-
-    try:
-        parsed_examples = json.loads(examples)
-    except json.JSONDecodeError as exc:
-        raise gr.Error(
-            f"Few-shot schema examples must be valid JSON: {exc.msg} at line {exc.lineno}, column {exc.colno}"
-        ) from exc
-
-    if not isinstance(parsed_examples, dict):
-        raise gr.Error("Few-shot schema examples must be a JSON object.")
-
-    return _dump_json_examples(parsed_examples)
-
-
-def _load_persisted_json_examples(examples, label):
-    examples = (examples or "").strip()
-    if not examples:
-        return ""
-    try:
-        json.loads(examples)
-    except json.JSONDecodeError as exc:
-        log.warning("Ignoring invalid persisted %s: %s", label, exc)
-        return ""
-    return examples
-
-
-def _persist_schema_generator_examples(query_examples, few_shot_examples):
-    validated_query_examples = _normalize_schema_generator_query_examples(query_examples)
-    validated_few_shot_examples = _validate_schema_generator_few_shot_examples(few_shot_examples)
-
-    changed = False
-    if getattr(prompt, "schema_generator_query_examples", "") != validated_query_examples:
-        prompt.schema_generator_query_examples = validated_query_examples
-        changed = True
-
-    if getattr(prompt, "schema_generator_few_shot_examples", "") != validated_few_shot_examples:
-        prompt.schema_generator_few_shot_examples = validated_few_shot_examples
-        changed = True
-
-    if changed:
-        prompt.update_yaml_file()
-
-    effective_query_examples = validated_query_examples or load_query_examples()
-    effective_few_shot_examples = validated_few_shot_examples or load_schema_fewshot_examples()
-    return effective_query_examples, effective_few_shot_examples
 
 
 def store_prompt(
@@ -198,57 +96,6 @@ def load_example_names():
         return [example.get("name", "Unnamed example") for example in examples]
     except (FileNotFoundError, json.JSONDecodeError):
         return ["No available examples"]
-
-
-def load_query_examples():
-    """Load query examples from JSON file based on the prompt language setting"""
-    persisted_examples = _load_persisted_json_examples(
-        getattr(prompt, "schema_generator_query_examples", ""),
-        "schema generator query examples",
-    )
-    if persisted_examples:
-        return _normalize_schema_generator_query_examples(persisted_examples)
-
-    try:
-        language = getattr(
-            prompt,
-            "language",
-            (getattr(prompt.llm_settings, "language", "EN") if hasattr(prompt, "llm_settings") else "EN"),
-        )
-        if language.upper() == "CN":
-            examples_path = os.path.join(resource_path, "prompt_examples", "query_examples_CN.json")
-        else:
-            examples_path = os.path.join(resource_path, "prompt_examples", "query_examples.json")
-
-        with open(examples_path, "r", encoding="utf-8") as f:
-            examples = json.load(f)
-        return _normalize_schema_generator_query_examples(json.dumps(examples, ensure_ascii=False))
-    except (FileNotFoundError, json.JSONDecodeError):
-        try:
-            examples_path = os.path.join(resource_path, "prompt_examples", "query_examples.json")
-            with open(examples_path, "r", encoding="utf-8") as f:
-                examples = json.load(f)
-            return _normalize_schema_generator_query_examples(json.dumps(examples, ensure_ascii=False))
-        except (FileNotFoundError, json.JSONDecodeError):
-            return "[]"
-
-
-def load_schema_fewshot_examples():
-    """Load few-shot examples from a JSON file"""
-    persisted_examples = _load_persisted_json_examples(
-        getattr(prompt, "schema_generator_few_shot_examples", ""),
-        "schema generator few-shot examples",
-    )
-    if persisted_examples:
-        return _validate_schema_generator_few_shot_examples(persisted_examples)
-
-    try:
-        examples_path = os.path.join(resource_path, "prompt_examples", "schema_examples.json")
-        with open(examples_path, "r", encoding="utf-8") as f:
-            examples = json.load(f)
-        return _validate_schema_generator_few_shot_examples(json.dumps(examples, ensure_ascii=False))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "[]"
 
 
 def update_example_preview(example_name):
@@ -331,15 +178,6 @@ def _create_prompt_helper_block(demo, input_text, info_extract_template):
         )
 
 
-def _build_schema_and_provide_feedback(input_text, query_example, few_shot):
-    query_example, few_shot = _persist_schema_generator_examples(query_example, few_shot)
-    gr.Info("Generating schema, please wait...")
-    # Call the original build_schema function
-    generated_schema = build_schema(input_text, query_example, few_shot)
-    gr.Info("Schema generated successfully!")
-    return generated_schema
-
-
 def create_vector_graph_block():
     # pylint: disable=no-member
     # pylint: disable=C0301
@@ -414,27 +252,20 @@ def create_vector_graph_block():
             graph_index_rebuild_bt = gr.Button("Update Vid Embedding")
 
         gr.Markdown("---")
-        with gr.Accordion("Graph Schema Generator", open=False):
+        with gr.Accordion("Graph Schema Generator (AutoSchemaKG)", open=False):
             gr.Markdown(
-                "Provide **query examples** and **few-shot examples**, "
-                "then click **Generate Schema** to automatically create graph schema."
+                "Paste one or more documents below. AutoSchemaKG will infer a HugeGraph schema, "
+                "merge multi-document results, and report conflicts. The generated schema is written "
+                "to the **Graph Schema** editor on the right."
+            )
+            schema_instructions = gr.Textbox(
+                label="Instructions (optional)",
+                placeholder="e.g., focus on supply-chain entities, include timestamp properties",
+                lines=2,
             )
             with gr.Row():
-                query_example = gr.Code(
-                    value=load_query_examples(),
-                    label="Query Examples",
-                    language="json",
-                    lines=10,
-                    max_lines=15,
-                )
-                few_shot = gr.Code(
-                    value=load_schema_fewshot_examples(),
-                    label="Few-shot Example",
-                    language="json",
-                    lines=10,
-                    max_lines=15,
-                )
                 build_schema_bt = gr.Button("Generate Schema", variant="primary")
+                schema_preview_md = gr.Markdown(label="Schema Preview")
         _create_prompt_helper_block(demo, input_text, info_extract_template)
 
         # ── Advanced Build Options (from Capability Closure) ──
@@ -576,9 +407,9 @@ def create_vector_graph_block():
 
         # TODO: we should store the examples after the user changed them.
         build_schema_bt.click(
-            _build_schema_and_provide_feedback,
-            inputs=[input_text, query_example, few_shot],
-            outputs=[input_schema],
+            generate_batch_schema_draft,
+            inputs=[input_text, schema_instructions],
+            outputs=[schema_preview_md, input_schema, out],
         ).then(
             store_prompt,
             inputs=[
@@ -586,7 +417,7 @@ def create_vector_graph_block():
                 input_schema,
                 info_extract_template,
                 graph_split_type,
-            ],  # Persist the updated schema-generator examples
+            ],
         )
 
         def on_tab_select(input_f, input_t, evt: gr.SelectData):
