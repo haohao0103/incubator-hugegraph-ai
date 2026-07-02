@@ -288,3 +288,42 @@ def load_example_batch_document(example_name: str) -> Tuple[str, str]:
 def get_suggested_questions() -> str:
     """Return suggested review questions for the generated schema."""
     return "\n".join(f"- {q}" for q in SUGGESTED_QUESTIONS)
+
+
+def export_to_guided_mode(schema_json: str) -> Tuple[str, str, str]:
+    """Export AutoSchemaKG schema to EDC Guided Mode constraints.
+
+    Takes the current schema JSON and converts it into:
+    - allowed_vertex_labels: comma-separated vertex label names
+    - allowed_edge_labels: comma-separated edge label names
+
+    These can be pasted into the EDC Pipeline Section B Guided Mode
+    to constrain schema evolution within the bounds set by AutoSchemaKG.
+    """
+    if not schema_json or not schema_json.strip():
+        return ("", "", "Error: no schema JSON. Generate a schema draft first.")
+
+    try:
+        schema_dict = json.loads(schema_json)
+    except json.JSONDecodeError as e:
+        return ("", "", f"Error: invalid JSON - {e}")
+
+    vl_names = [v["name"] for v in schema_dict.get("vertexlabels", [])]
+    el_names = [e["name"] for e in schema_dict.get("edgelabels", [])]
+
+    if not vl_names and not el_names:
+        return ("", "", "Warning: schema has no vertex or edge labels.")
+
+    vl_str = ", ".join(vl_names)
+    el_str = ", ".join(el_names)
+
+    preview = (
+        f"### Exported for EDC Guided Mode\n\n"
+        f"| Constraint | Value |\n|-----------|-------|\n"
+        f"| **allowed_vertex_labels** | `{vl_str}` |\n"
+        f"| **allowed_edge_labels** | `{el_str}` |\n\n"
+        f"Copy these values into **Section B: EDC Pipeline → Guided Mode**\n"
+        f"to constrain schema evolution to the AutoSchemaKG output.\n"
+    )
+
+    return (preview, vl_str, el_str)
