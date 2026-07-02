@@ -452,3 +452,47 @@ def test_entity_ranker_scores_in_rank_factors():
     )
     result = retriever.retrieve("query", None)
     assert "base_rank" in result.entities[0].rank_factors
+
+
+# ---------------------------------------------------------------------------
+# External seed entity IDs
+# ---------------------------------------------------------------------------
+
+
+def test_external_seed_entity_ids_are_used_in_traversal():
+    """External seeds should be passed to graph traversal in addition to query seeds."""
+    traversed = []
+
+    def traversal(entity_id, max_depth, max_fanout):
+        traversed.append(entity_id)
+        if entity_id == "external_seed":
+            return [("external_neighbor", 1, "LINK")]
+        return []
+
+    retriever = KGSearchRetriever(
+        graph_traversal_func=traversal,
+        external_seed_entity_ids=["external_seed"],
+        config=KGSearchConfig(max_depth=1),
+    )
+    result = retriever.retrieve("query", None)
+    assert "external_seed" in traversed
+    assert any(e.entity_id == "external_neighbor" for e in result.entities)
+
+
+def test_external_seed_deduplication():
+    """If external seed matches a query-derived seed, it should not be traversed twice."""
+    traversed = []
+
+    def traversal(entity_id, max_depth, max_fanout):
+        traversed.append(entity_id)
+        return []
+
+    router = FakeRouter(["seed"])
+    retriever = KGSearchRetriever(
+        router=router,
+        graph_traversal_func=traversal,
+        external_seed_entity_ids=["seed"],
+        config=KGSearchConfig(max_depth=1),
+    )
+    retriever.retrieve("query", None)
+    assert traversed.count("seed") == 1

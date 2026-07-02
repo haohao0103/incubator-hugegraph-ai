@@ -179,6 +179,7 @@ class KGSearchRetriever:
         entity_ranker: Optional["EntityRanker"] = None,
         community_search_func: Optional[Callable[[str, int], List[Dict[str, Any]]]] = None,
         chunk_lookup_func: Optional[Callable[[str], str]] = None,
+        external_seed_entity_ids: Optional[List[str]] = None,
         config: Optional[KGSearchConfig] = None,
     ) -> None:
         """Initialize KGSearchRetriever.
@@ -193,6 +194,9 @@ class KGSearchRetriever:
                 entities via global PageRank.
             community_search_func: ``f(query_text, top_k) -> [community_dict, ...]``
             chunk_lookup_func: ``f(chunk_id) -> chunk_text``
+            external_seed_entity_ids: Optional list of entity IDs to include as graph
+                traversal seeds in addition to those extracted from the query.
+                Used by multimodal fusion to propagate from image-matched entities.
             config: KGSearchConfig.
         """
         self._router = router
@@ -203,6 +207,7 @@ class KGSearchRetriever:
         self._entity_ranker = entity_ranker
         self._community_search = community_search_func
         self._chunk_lookup = chunk_lookup_func
+        self._external_seed_entity_ids = external_seed_entity_ids or []
         self.config = config or KGSearchConfig()
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -324,6 +329,15 @@ class KGSearchRetriever:
 
         # 2. Extract seed entities from router result or use sub-query as seed
         seed_entity_ids = self._extract_seed_entities(sub_query, router_chunks)
+
+        # Add externally provided seeds (e.g., from image search) for cross-modal
+        # propagation. External seeds are appended with deduplication.
+        if self._external_seed_entity_ids:
+            seen = set(seed_entity_ids)
+            for seed_id in self._external_seed_entity_ids:
+                if seed_id not in seen:
+                    seed_entity_ids.append(seed_id)
+                    seen.add(seed_id)
 
         # 3. N-hop graph traversal + scoring
         if self._graph_traversal is not None:
