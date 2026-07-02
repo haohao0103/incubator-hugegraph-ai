@@ -42,7 +42,9 @@ from hugegraph_llm.utils.vector_index_utils import (
     get_vector_index_info,
 )
 from hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers import (
+    EXAMPLE_BATCH_DOCUMENTS,
     generate_batch_schema_draft,
+    load_example_batch_document,
 )
 from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
     property_graph_extract,
@@ -254,10 +256,18 @@ def create_vector_graph_block():
         gr.Markdown("---")
         with gr.Accordion("Graph Schema Generator (AutoSchemaKG)", open=False):
             gr.Markdown(
-                "Paste one or more documents below. AutoSchemaKG will infer a HugeGraph schema, "
-                "merge multi-document results, and report conflicts. The generated schema is written "
-                "to the **Graph Schema** editor on the right."
+                "Paste one or more documents below, or choose a preset multi-document example. "
+                "AutoSchemaKG will infer a HugeGraph schema, merge multi-document results, and report conflicts. "
+                "The generated schema is written to the **Graph Schema** editor on the right."
             )
+            with gr.Row():
+                batch_example_dropdown = gr.Dropdown(
+                    choices=list(EXAMPLE_BATCH_DOCUMENTS.keys()),
+                    value=None,
+                    label="Load Multi-doc Example",
+                    info="Populates the Input Doc(s) box with a batch example.",
+                )
+                batch_example_note = gr.Markdown(label="Example Note")
             schema_instructions = gr.Textbox(
                 label="Instructions (optional)",
                 placeholder="e.g., focus on supply-chain entities, include timestamp properties",
@@ -418,6 +428,12 @@ def create_vector_graph_block():
                 info_extract_template,
                 graph_split_type,
             ],
+        )
+
+        batch_example_dropdown.change(
+            fn=load_example_batch_document,
+            inputs=[batch_example_dropdown],
+            outputs=[input_text, batch_example_note],
         )
 
         def on_tab_select(input_f, input_t, evt: gr.SelectData):

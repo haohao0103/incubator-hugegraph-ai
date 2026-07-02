@@ -40,6 +40,57 @@ from hugegraph_llm.utils.log import log
 _LATEST_DRAFT: Dict[str, Any] = {}
 
 
+# Preset demo documents for the AutoSchemaKG Gradio tab.
+# These let users see the operator in action without writing a document from scratch.
+EXAMPLE_DOCUMENTS: Dict[str, str] = {
+    "Simple Person Network": (
+        "Alice is a 30-year-old software engineer who works at Acme Corp. "
+        "Bob is a 35-year-old product manager who also works at Acme Corp. "
+        "Alice and Bob are colleagues and know each other."
+    ),
+    "Supply Chain Risk": (
+        "Supplier-Y provides critical components to Warehouse-C. "
+        "Warehouse-C distributes goods to Transport-Z. "
+        "Warehouse-C has a congestion risk of 0.91 and a cost risk of 0.92. "
+        "Supplier-Y has a disruption risk of 0.93. Transport-Z has a quality risk of 0.85."
+    ),
+    "E-commerce Order": (
+        "Customer John ordered a Laptop from Seller TechShop. "
+        "The order was shipped by Courier FastBox. The Laptop costs 1200 dollars. "
+        "John gave the order a 5-star rating."
+    ),
+}
+
+EXAMPLE_BATCH_DOCUMENTS: Dict[str, str] = {
+    "People + Companies": (
+        "Alice is a 30-year-old software engineer. Bob is a 35-year-old product manager. "
+        "Alice and Bob are colleagues and know each other.\n\n"
+        "Acme Corp is a technology company founded in 2010. "
+        "Bob manages the product team at Acme Corp. Alice works as an engineer at Acme Corp."
+    ),
+    "Supply Chain Risk (multi-doc)": (
+        "Supplier-Y provides critical components to Warehouse-C. "
+        "Supplier-Y has a disruption risk of 0.93.\n\n"
+        "Warehouse-C distributes goods to Transport-Z. Warehouse-C has a congestion risk of 0.91 "
+        "and a cost risk of 0.92. Transport-Z has a quality risk of 0.85."
+    ),
+    "E-commerce + Product Catalog": (
+        "Customer John ordered a Laptop from Seller TechShop. The order was shipped by Courier FastBox. "
+        "John gave the order a 5-star rating.\n\n"
+        "Laptop is a product in the Electronics category. TechShop is the seller. "
+        "The Laptop has a brand, price, and stock quantity."
+    ),
+}
+
+SUGGESTED_QUESTIONS: Tuple[str, ...] = (
+    "What entity types did the LLM infer?",
+    "Which properties are primary keys?",
+    "Does the schema contain any conflicts?",
+    "How does the merged schema differ from the first document?",
+    "Can this schema be committed directly to HugeGraph?",
+)
+
+
 def generate_schema_draft(
     document: str,
     instructions: str = "",
@@ -204,3 +255,36 @@ def reset_schema_draft() -> Tuple[str, str, str]:
     """Clear the cached draft and editor content."""
     _LATEST_DRAFT.clear()
     return ("", "", "Draft cleared.")
+
+
+def load_example_document(example_name: str) -> Tuple[str, str]:
+    """Return the document text and a short capability note for the selected example."""
+    doc = EXAMPLE_DOCUMENTS.get(example_name, "")
+    note = {
+        "Simple Person Network": (
+            "Expected: Person vertex, possibly Company vertex, and KNOWS / WORKS_AT edges."
+        ),
+        "Supply Chain Risk": (
+            "Expected: Supplier, Warehouse, Transport vertices with risk-score properties and supply edges."
+        ),
+        "E-commerce Order": (
+            "Expected: Customer, Order, Product, Seller, Courier vertices with order / ship / rate edges."
+        ),
+    }.get(example_name, "")
+    return doc, note
+
+
+def load_example_batch_document(example_name: str) -> Tuple[str, str]:
+    """Return the multi-doc text and a short capability note for the selected example."""
+    doc = EXAMPLE_BATCH_DOCUMENTS.get(example_name, "")
+    note = {
+        "People + Companies": "Demonstrates multi-document merge of Person and Company schemas.",
+        "Supply Chain Risk (multi-doc)": "Demonstrates cross-document conflict detection and merge.",
+        "E-commerce + Product Catalog": "Demonstrates schema union across e-commerce and product catalog.",
+    }.get(example_name, "")
+    return doc, note
+
+
+def get_suggested_questions() -> str:
+    """Return suggested review questions for the generated schema."""
+    return "\n".join(f"- {q}" for q in SUGGESTED_QUESTIONS)

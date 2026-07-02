@@ -23,8 +23,11 @@ Single-document → LLM schema draft → human review → commit to HugeGraph.
 import gradio as gr
 
 from hugegraph_llm.demo.rag_demo.auto_schema_kg_handlers import (
+    EXAMPLE_DOCUMENTS,
     approve_and_commit,
     generate_schema_draft,
+    get_suggested_questions,
+    load_example_document,
     reset_schema_draft,
 )
 
@@ -33,19 +36,27 @@ def create_auto_schema_kg_block():
     """Create the AutoSchemaKG Gradio UI tab."""
     gr.Markdown("# AutoSchemaKG 🧬")
     gr.Markdown(
-        "Paste a document below. The LLM will infer a HugeGraph schema draft "
+        "Paste a document below, or pick a preset example. The LLM will infer a HugeGraph schema draft "
         "(property keys, vertex labels, edge labels). Review the draft, edit the JSON if needed, "
         "then click **Approve & Commit** to write the schema to HugeGraph."
     )
 
     with gr.Row():
         with gr.Column(scale=2):
+            with gr.Row():
+                example_dropdown = gr.Dropdown(
+                    choices=list(EXAMPLE_DOCUMENTS.keys()),
+                    value=None,
+                    label="Load Preset Example",
+                    info="Select an example to populate the document box.",
+                )
             doc_input = gr.Textbox(
                 label="Document",
                 placeholder="Paste your document here...",
                 lines=12,
                 show_copy_button=True,
             )
+            example_note = gr.Markdown(label="Example Note")
         with gr.Column(scale=1):
             instructions_input = gr.Textbox(
                 label="Instructions (optional)",
@@ -82,3 +93,12 @@ def create_auto_schema_kg_block():
         inputs=[],
         outputs=[preview_output, schema_json_output, status_output],
     )
+
+    example_dropdown.change(
+        fn=load_example_document,
+        inputs=[example_dropdown],
+        outputs=[doc_input, example_note],
+    )
+
+    with gr.Accordion("Suggested Review Questions", open=False):
+        gr.Markdown(get_suggested_questions())
