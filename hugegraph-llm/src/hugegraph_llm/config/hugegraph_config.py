@@ -66,3 +66,17 @@ class HugeGraphConfig(BaseConfig):
     # DRIFT config (Sprint 4)
     drift_max_depth: int = 2  # Max iteration depth for parallel local search (1-3)
     drift_communities_top_k: int = 5  # Number of top communities to match
+
+    # Vid Embedding Strategy (P0: entity→vector representation)
+    # Options: "fastrag" | "lightrag" | "ms_graphrag" | "hipporag"
+    # - fastrag (default): [{type}] name\n[DESCRIPTION] {properties} — type-aware, rich semantics
+    # - lightrag: {name}\n{description} — simple name+desc concat
+    # - ms_graphrag: {title}:{description} + dual-vector (name + desc separately)
+    # - hipporag: {name} only — minimal, pure name string (legacy HugeGraph behavior)
+    vid_embed_strategy: str = "fastrag"
+
+    # Vid Embedding: max token budget for the text sent to embedding model
+    vid_embed_max_chars: int = 512  # Truncate description if exceeds this
+
+    # Vid Embedding: property keys to exclude from description (e.g., IDs, timestamps)
+    vid_embed_exclude_props: str = ""  # Comma-separated, e.g. "id,created_at,updated_at"

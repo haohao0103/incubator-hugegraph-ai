@@ -16,7 +16,7 @@
 # under the License.
 
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pyhugegraph.client import PyHugeClient
 
@@ -34,11 +34,15 @@ class FetchGraphData:
         self.v_limit = v_limit
         self.e_limit = e_limit
 
-    def _fetch_all_vertices(self) -> list:
-        """Fetch vertex IDs via REST API, paginated by label."""
+    def _fetch_all_vertices(self) -> List[str]:
+        """Fetch vertex IDs via REST API, paginated by label.
+
+        Returns a flat list of VID strings. Kept for backward compatibility.
+        For enriched data with properties+label, use _fetch_all_vertices_detail().
+        """
         schema = self.graph.schema()
         vertex_labels = schema.getVertexLabels()
-        all_vids = []
+        all_vids: List[str] = []
         for vl in vertex_labels:
             label = vl.get("name") if isinstance(vl, dict) else getattr(vl, "name", str(vl))
             page = ""
@@ -62,9 +66,56 @@ class FetchGraphData:
                 page = next_page
         return all_vids
 
-    def _fetch_all_edges(self) -> list:
+    def _fetch_all_vertices_detail(self) -> List[Dict[str, Any]]:
+        """Fetch vertex IDs + properties + label, paginated.
+
+        Returns a list of dicts:
+        [
+          {"vid": "Person:张三", "label": "Person", "properties": {"name": "张三", "age": 35, ...}},
+          ...
+        ]
+        Used by BuildSemanticIndex for rich entity text construction (vid_embed_strategy).
+        """
+        schema = self.graph.schema()
+        vertex_labels = schema.getVertexLabels()
+        all_details: List[Dict[str, Any]] = []
+
+        for vl in vertex_labels:
+            label = vl.get("name") if isinstance(vl, dict) else getattr(vl, "name", str(vl))
+            page = ""
+            fetched = 0
+            while fetched < self.v_limit:
+                batch_size = min(200, self.v_limit - fetched)  # Smaller batch for property payload
+                try:
+                    vertices, next_page = self.graph.graph().getVertexByPage(
+                        label=label, limit=batch_size, page=page if page else None
+                    )
+                except Exception as e:
+                    log.warning("FetchGraphData: failed to fetch vertex details for label '%s': %s", label, e)
+                    break
+                if not vertices:
+                    break
+                for v in vertices:
+                    props: Dict[str, Any] = {}
+                    if hasattr(v, "properties") and v.properties:
+                        try:
+                            props = dict(v.properties) if hasattr(v.properties, "items") else {}
+                        except Exception:
+                            props = {}
+                    all_details.append({
+                        "vid": v.id,
+                        "label": label,
+                        "properties": props,
+                    })
+                fetched += len(vertices)
+                if not next_page or len(vertices) < batch_size:
+                    break
+                page = next_page
+        return all_details
+
+    def _fetch_all_edges(self) -> List[str]:
         """Fetch edge IDs via REST API, paginated."""
-        all_eids = []
+        all_eids: List[str] = []
         page = ""
         fetched = 0
         while fetched < self.e_limit:
@@ -102,11 +153,20 @@ class FetchGraphData:
             graph_summary["edge_num"] = 0
 
         try:
+            # Always fetch flat VID list (backward compat for SemanticIdQuery etc.)
             vertices = self._fetch_all_vertices()
             graph_summary["vertices"] = vertices
         except Exception as e:
             log.error("FetchGraphData: failed to fetch vertices: %s", e)
             graph_summary["vertices"] = []
+
+        try:
+            # Also fetch enriched details (vid + label + properties) for BuildSemanticIndex
+            vertex_details = self._fetch_all_vertices_detail()
+            graph_summary["vertex_details"] = vertex_details
+        except Exception as e:
+            log.error("FetchGraphData: failed to fetch vertex details: %s", e)
+            graph_summary["vertex_details"] = []
 
         try:
             edges = self._fetch_all_edges()
