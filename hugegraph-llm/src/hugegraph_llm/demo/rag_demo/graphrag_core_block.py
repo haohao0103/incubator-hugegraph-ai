@@ -17,30 +17,38 @@
 
 """Gradio UI block for GraphRAG Core capabilities.
 
-Merges the former \"Advanced GraphRAG\" (Tab 8) and \"GraphRAG Enhancement\"
-(Tab 9) tabs into a single unified tab organized by **retrieval pipeline**:
+**⚠️ EXPERIMENTAL / ROADMAP** — This tab showcases **planned or experimental**
+enhancement capabilities that are **NOT yet connected** to the production
+retrieval pipeline (RAGGraphVectorFlow).
 
-  Section A — Graph Retrieval Engines (Phase 2 core)
-    PPR Retriever / Cascade Propagation / Identity Edge Builder
-    + Property Graph Extract (from old Tab 1)
+**Current production retrieval chain:**
+```
+VectorQuery ‖ KeywordExtract → SemanticIdQuery → Schema → N-hop GraphQuery → RRF MergeRerank → LLM Answer
+```
 
-  Section B — Retrieval Enhancement
+Everything in this tab is either:
+- A **Prototype** with real operator code but no production integration yet
+- A **Roadmap item** that demonstrates the intended UX for future work
+
+Organized by retrieval pipeline stage:
+
+  Section A — Graph Retrieval Engines (Roadmap)
+    PPR Retriever / Identity Edge Builder
+
+  Section B — Retrieval Enhancement (Prototype)
     Dual Keyword / HyDE / RRF Multi-Channel Fusion
 
-  Section C — Reasoning & Refinement (Phase 1→2 transition)
+  Section C — Reasoning & Refinement (Roadmap)
     DRIFT Multi-Hop Search / Gleaning / Token Budget Control
 
-  Section D — Trustworthy Output
+  Section D — Trustworthy Output (Prototype)
     Provenance Answer / Entity Resolution / Schema Validation
 
-  Section E — Keyword Fallback
+  Section E — Keyword Fallback (Production Plugin)
     BM25 Exact Match
 
-  Section F — Chunk Graph Enhancement (from old Tab 1)
-    Chunk Similarity Edges (SIMILAR edges via KNN)
-
-This layout tells the full GraphRAG retrieval story: pick engine → enhance query →
-reason deeply → output trustworthy results → fall back to keywords.
+  Section F — Chunk Graph Enhancement (Prototype)
+    Chunk Similarity Edges (SIMILAR edges via KNN) / Property Graph Extract
 """
 
 import json
@@ -60,7 +68,6 @@ from hugegraph_llm.demo.rag_demo.capability_closure_handlers import (
 )
 from hugegraph_llm.demo.rag_demo.graphrag_enhancement_handlers import (
     bm25_demo,
-    cascade_propagation_demo,
     dual_keyword_demo,
     gleaning_demo,
     hyde_demo,
@@ -72,19 +79,33 @@ from hugegraph_llm.utils.log import log
 
 
 def create_graphrag_core_block():
-    """Create the unified GraphRAG Core Gradio UI tab."""
+    """Create the unified GraphRAG Core Gradio UI tab (Experimental/Roadmap)."""
 
-    gr.Markdown("# GraphRAG Core")
+    # ══════════════════════════════════════════════════════════
+    # ⚠️ EXPERIMENTAL BANNER
+    # ══════════════════════════════════════════════════════════
     gr.Markdown(
-        "**Complete GraphRAG capability set** — organized by retrieval pipeline stage.\n\n"
-        "| Phase | Section | What it does | Competitor对标 |\n"
-        "|-------|---------|-------------|----------------|\n"
-        "| Phase 2 | **A. Retrieval Engine** | PPR / Cascade / Identity Edge | Fast-GraphRAG, HippoRAG2 |\n"
-        "| Phase 1+2 | **B. Enhancement** | Dual Keyword / HyDE / RRF | LightRAG |\n"
-        "| Phase 1+2 | **C. Reasoning** | DRIFT / Gleaning / Token Budget | MS-GraphRAG |\n"
-        "| Production | **D. Trustworthy Output** | Provenance / ER / Validate | Enterprise requirement |\n"
-        "| Fallback | **E. Keyword** | BM25 exact match | Our unique plugin |\n"
-        "| Enhancement | **F. Chunk Graph** | SIMILAR edges via KNN | Internal innovation |"
+        "> **⚠️ This tab is EXPERIMENTAL.** "
+        "The capabilities below are **not** connected to the production retrieval chain.\n"
+        "> \n"
+        "> **Production pipeline**: `RAGGraphVectorFlow` = VectorQuery ‖ KeywordExtract → "
+        "SemanticIdQuery → Schema → N-hop GraphQuery → RRF MergeRerank → LLM\n"
+        "> \n"
+        "> Items below are either **Prototypes** (code exists, needs integration) or "
+        "**Roadmap** (UX mockup for planned work). Click buttons to see demo output."
+    )
+
+    gr.Markdown("# GraphRAG Enhancements (Experimental)")
+    gr.Markdown(
+        "**Planned enhancement capabilities** — organized by retrieval pipeline stage.\n\n"
+        "| Section | Status | What it does | Competitor对标 |\n"
+        "|---------|--------|-------------|----------------|\n"
+        "| **A. Graph Retrieval Engine** | 📋 Roadmap | PPR / Identity Edge | Fast-GraphRAG, HippoRAG2 |\n"
+        "| **B. Enhancement** | 🔧 Prototype | Dual Keyword / HyDE / RRF | LightRAG |\n"
+        "| **C. Reasoning** | 📋 Roadmap | DRIFT / Gleaning / Token Budget | MS-GraphRAG |\n"
+        "| **D. Trustworthy Output** | 🔧 Prototype | Provenance / ER / Validate | Enterprise requirement |\n"
+        "| **E. Keyword Fallback** | ✅ Plugin | BM25 exact match (optional plugin) | Our unique feature |\n"
+        "| **F. Chunk Graph** | 🔧 Prototype | SIMILAR edges via KNN | Internal innovation |"
     )
 
     # ══════════════════════════════════════════════════════════
@@ -127,42 +148,11 @@ def create_graphrag_core_block():
         ppr_btn.click(fn=_run_ppr, inputs=[ppr_query, ppr_alpha, ppr_depth, ppr_top_k],
                      outputs=[ppr_result, ppr_scores, ppr_context])
 
-        # --- A2: Cascade Propagation ---
-        gr.Markdown("---")
-        gr.Markdown("### Cascade Propagation (三层传播) 🌊")
-
-        with gr.Row():
-            with gr.Column(scale=3):
-                cascade_query = gr.Textbox(
-                    label="查询 / Query",
-                    placeholder="Enter a query for cascade propagation...",
-                    lines=2,
-                )
-                cascade_trace = gr.JSON(label="传播步骤 / Propagation Trace")
-
-            with gr.Column(scale=1):
-                cascade_alpha = gr.Slider(
-                    label="PPR Alpha", minimum=0.01, maximum=0.99,
-                    value=0.15, step=0.01,
-                )
-                cascade_threshold = gr.Slider(
-                    label="Entity Threshold", minimum=0.001, maximum=0.1,
-                    value=0.01, step=0.001,
-                )
-                cascade_top_k = gr.Slider(
-                    label="Chunk Top-K", minimum=1, maximum=30, value=10, step=1,
-                )
-                cascade_btn = gr.Button("Run Cascade", variant="secondary")
-
-        with gr.Row():
-            cascade_entity_scores = gr.JSON(label="Entity Layer Scores")
-            cascade_relation_scores = gr.JSON(label="Relation Layer Scores")
-            cascade_chunk_scores = gr.JSON(label="Chunk Layer Scores")
-
-        cascade_btn.click(fn=_run_cascade,
-                          inputs=[cascade_query, cascade_alpha, cascade_threshold, cascade_top_k],
-                          outputs=[cascade_trace, cascade_entity_scores,
-                                   cascade_relation_scores, cascade_chunk_scores])
+        # --- A2: REMOVED: Cascade Propagation ---
+        # Cascade Propagation (Entity→Relation→Chunk 3-layer propagation) has been
+        # removed from this experimental showcase. It was a demo-only prototype that
+        # passed empty data and is not connected to any production pipeline.
+        # See git history for previous implementation if needed for reference.
 
         # --- A3: Identity Edge Builder ---
         gr.Markdown("---")
@@ -508,19 +498,6 @@ def _run_ppr(query, alpha, depth, top_k):
     if result.get("error"):
         context = f"**Error:** {result['error']}"
     return summary, scores, context
-
-
-def _run_cascade(query, alpha, threshold, top_k):
-    result = cascade_propagation_demo(query, alpha, threshold, top_k)
-    trace = result.get("propagation_trace", [])
-    if result.get("error"):
-        trace = [{"error": result["error"]}]
-    return (
-        trace,
-        result.get("entity_scores", {}),
-        result.get("relation_scores", {}),
-        result.get("chunk_scores", {}),
-    )
 
 
 def _run_identity(entities_text, threshold, top_k):

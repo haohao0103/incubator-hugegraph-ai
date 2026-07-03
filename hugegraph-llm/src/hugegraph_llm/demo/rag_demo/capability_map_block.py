@@ -51,27 +51,29 @@ def create_capability_map_block():
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown(
-                "### ✅ Exposed in UI\n"
-                "- Build RAG Index (Tab 1)\n"
-                "- RAG & User Functions (Tab 2)\n"
-                "- Text2Gremlin (Tab 3)\n"
-                "- Agent & Global Search (Tab 4)\n"
-                "- Graph Tools (Tab 5)\n"
-                "- Admin Tools (Tab 6)\n"
-                "- Advanced GraphRAG (Tab 7)\n"
-                "- GraphRAG Enhancement (Tab 8)"
+                "### ✅ Exposed in UI (Production)\n"
+                "- Build RAG Index (Tab 1) — Production\n"
+                "- (Graph)RAG Q&A (Tab 2) — Production Core\n"
+                "- Agent & Global Search (Tab 3) — Production\n"
+                "- Text2Gremlin (Tab 4) — Production\n"
+                "- Admin & Ops (Tab 5) — Production\n"
+                "\n### 🔬 Experimental / Roadmap\n"
+                "- GraphRAG Enhancements (Tab 6) — Prototype + Roadmap\n"
+                "- Schema Studio (Tab 7) — Experimental\n"
+                "- Multimodal GraphRAG (Tab 8) — Demo/Prototype"
             )
         with gr.Column(scale=1):
             gr.Markdown(
-                "### ⚠️ Missing / Partial\n"
-                "- Multimodal RAG\n"
-                "- Property Graph Extraction\n"
-                "- Incremental Index Update\n"
-                "- Gremlin Self-Correction Validator\n"
-                "- Agent Memory (other branch)\n"
-                "- Code Graph + MCP (other branch)\n"
-                "- Skills Graph / Code-Review (other branch)\n"
-                "- Supply Chain Agent (other branch)"
+                "### ⚠️ Not in Production Pipeline\n"
+                "- GraphRAG Enhancements (Tab 6) — PPR/DRIFT/HyDE etc. are experimental\n"
+                "- Multimodal RAG (Tab 8) — Demo data only, not integrated into RAGGraphVectorFlow\n"
+                "- Property Graph Extraction (Tab 6) — Standalone operator, not in DAG\n"
+                "- Schema Studio AutoSchemaKG (Tab 7) — Not connected to BuildIndex flow\n"
+                "\n### 📋 In Other Branches (not merged)\n"
+                "- Agent Memory (`feature/agent-memory-collection`)\n"
+                "- Code Graph + MCP (`poc/0614-codegraph-hugegraph-mcp`)\n"
+                "- Skills Graph / Code-Review (`poc/0618-skills-graph-code-review-wiki`)\n"
+                "- Supply Chain Agent (`poc/0615-supply-chain-agent-router`)"
             )
 
     # ── Capability matrix DataFrame ───────────────────────────

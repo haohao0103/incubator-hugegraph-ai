@@ -17,6 +17,13 @@
 """
 Gradio UI block for Multimodal GraphRAG — dedicated tab.
 
+**⚠️ EXPERIMENTAL / DEMO** — All 18 multimodal operators shown here are in
+**prototype/demo stage** with self-contained demo data. They are **NOT**
+connected to the production retrieval pipeline (RAGGraphVectorFlow).
+
+The real operator code exists under `hugegraph_llm/operators/multimodal/` and
+can be integrated into the production DAG as a future enhancement.
+
 Showcases ALL 18 multimodal operators across 7 functional areas:
   A. Document Parsing   (unified_document_parser, pdf_image_extractor)
   B. VLM Description    (vlm_descriptor, vlm_provider_registry,
@@ -693,14 +700,25 @@ OPERATOR_MATRIX = [
 # ═══════════════════════════════════════════════════════════════
 
 def create_multimodal_block():
-    """Create the Multimodal GraphRAG tab with ALL 18 operators showcased."""
+    """Create the Multimodal GraphRAG tab (Experimental/Demo)."""
 
     with gr.Row():
         # ── Left column: Input controls ──
         with gr.Column(scale=1):
+            # ══════════════════════════════════════════════════
+            # ⚠️ EXPERIMENTAL BANNER
+            # ══════════════════════════════════════════════════
             gr.Markdown(
-                "## Multimodal GraphRAG\n\n"
+                "> **⚠️ EXPERIMENTAL / DEMO** — All 18 operators below use "
+                "**self-contained demo data** and are **not connected** to the\n"
+                "> production RAGGraphVectorFlow pipeline. Real operator code exists "
+                "under `operators/multimodal/` for future integration."
+            )
+
+            gr.Markdown(
+                "## Multimodal GraphRAG (Experimental)\n\n"
                 "18 operators | 7 functional areas | Image + Table + Equation\n\n"
+                "**Status**: Prototype/Demo — **not production-ready**\n"
                 "**Operator coverage**: All 18 multimodal operators are showcased below."
             )
 

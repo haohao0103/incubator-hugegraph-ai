@@ -17,6 +17,10 @@
 
 """Gradio UI block for Schema Studio — unified schema construction tab.
 
+**⚠️ EXPERIMENTAL** — AutoSchemaKG and EDC Pipeline are **prototype tools**
+for schema construction and evolution. They are **not** connected to the
+production RAG indexing pipeline (RAGGraphVectorFlow → BuildSemanticIndex).
+
 Merges AutoSchemaKG (Section A) and EDC Pipeline (Section B) into one tab.
 Replaces the old separate Tab 11 (EDC) and Tab 12 (AutoSchemaKG).
 
@@ -57,9 +61,20 @@ from hugegraph_llm.demo.rag_demo.edc_schema_block import (
 
 
 def create_schema_construction_block():
-    """Create the Schema Studio Gradio UI tab (Sections A + B)."""
+    """Create the Schema Studio Gradio UI tab (Experimental)."""
 
-    gr.Markdown("# Schema Studio")
+    # ══════════════════════════════════════════════════════════
+    # ⚠️ EXPERIMENTAL BANNER
+    # ══════════════════════════════════════════════════════════
+    gr.Markdown(
+        "> **⚠️ This tab is EXPERIMENTAL.** "
+        "AutoSchemaKG and EDC Pipeline are **prototype tools** for schema construction.\n"
+        "> \n"
+        "> They are **not** connected to the production RAG indexing pipeline. "
+        "Production indexing uses pre-defined schemas via `Build RAG Index` (Tab 1)."
+    )
+
+    gr.Markdown("# Schema Studio (Experimental)")
     gr.Markdown(
         "**Build and evolve HugeGraph schemas in one place.**\n\n"
         "| Section | What it does | When to use |"

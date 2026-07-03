@@ -120,40 +120,38 @@ def init_rag_ui() -> gr.Interface:
 
         textbox_array_graph_config = create_configs_block()
 
-        # ── Phase 0-1: Build & Schema ───────────────────────
+        # ── PRODUCTION Tabs (接入 RAGGraphVectorFlow 生产链路) ──────
         with gr.Tab(label="1. Build RAG Index 💡"):
             textbox_input_text, textbox_input_schema, textbox_info_extract_template = create_vector_graph_block()
-        with gr.Tab(label="2. Schema Studio 🧬"):
-            studio_demo_outputs, studio_load_demo = create_schema_construction_block()
 
-        # ── Phase 1+2: GraphRAG Core Capabilities ─────────────
-        with gr.Tab(label="3. GraphRAG Core 🔍"):
-            create_graphrag_core_block()
-
-        # ── Phase 3: Agentic Reasoning ──────────────────────
-        with gr.Tab(label="4. Agent & Global Search 🤖"):
-            create_agent_block()
-
-        # ── Tools ───────────────────────────────────────────
-        with gr.Tab(label="5. (Graph)RAG Q&A 📖"):
+        with gr.Tab(label="2. (Graph)RAG Q&A 📖"):
             (
                 textbox_inp,
                 textbox_answer_prompt_input,
                 textbox_keywords_extract_prompt_input,
                 textbox_custom_related_information,
             ) = create_rag_block()
-        with gr.Tab(label="6. Text2Gremlin ⚙️"):
+
+        with gr.Tab(label="3. Agent & Global Search 🤖"):
+            create_agent_block()
+
+        with gr.Tab(label="4. Text2Gremlin ⚙️"):
             textbox_gremlin_inp, textbox_gremlin_schema, textbox_gremlin_prompt = create_text2gremlin_block()
 
-        # ── Phase 4: Multimodal ─────────────────────────────
-        with gr.Tab(label="7. Multimodal GraphRAG 🎨"):
-            mm_demo_outputs, mm_load_demo = create_multimodal_block()
-
-        # ── Operations ──────────────────────────────────────
-        with gr.Tab(label="8. Admin & Ops 🛠️"):
+        with gr.Tab(label="5. Admin & Ops 🛠️"):
             create_admin_ops_block()
 
-        # ── Overview ────────────────────────────────────────
+        # ── EXPERIMENTAL Tabs (未接入生产链路 / Roadmap 阶段) ────
+        with gr.Tab(label="6. GraphRAG Enhancements 🔬 Experimental"):
+            create_graphrag_core_block()
+
+        with gr.Tab(label="7. Schema Studio 🔬 Experimental"):
+            studio_demo_outputs, studio_load_demo = create_schema_construction_block()
+
+        with gr.Tab(label="8. Multimodal GraphRAG 🔬 Experimental"):
+            mm_demo_outputs, mm_load_demo = create_multimodal_block()
+
+        # ── Overview ───────────────────────────────────────────────
         with gr.Tab(label="9. Capability Map 🗺️"):
             create_capability_map_block()
 
