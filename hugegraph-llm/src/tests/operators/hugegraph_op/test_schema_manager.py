@@ -704,6 +704,51 @@ class TestSchemaManagerIdempotentSchema(unittest.TestCase):
             {"property_keys": 0, "vertex_labels": 0, "edge_labels": 0, "index_labels": 0},
         )
 
+    @staticmethod
+    def _idx(name, base_value, fields):
+        idx = MagicMock()
+        idx.name = name
+        idx.baseType = "VERTEX_LABEL"
+        idx.baseValue = base_value
+        idx.fields = fields
+        idx.indexType = "SECONDARY"
+        return idx
+
+    def test_list_indexes_all(self):
+        self.mock_schema.getIndexLabels.return_value = [
+            self._idx("entities_name", "entities", ["name"]),
+            self._idx("entities_status", "entities", ["status"]),
+        ]
+        indexes = self.sm.list_indexes()
+        self.assertEqual(len(indexes), 2)
+        self.assertEqual(indexes[0]["name"], "entities_name")
+        self.assertEqual(indexes[0]["fields"], ["name"])
+        self.assertEqual(indexes[0]["index_type"], "SECONDARY")
+
+    def test_list_indexes_filtered_by_label(self):
+        self.mock_schema.getIndexLabels.return_value = [
+            self._idx("entities_name", "entities", ["name"]),
+            self._idx("documents_title", "documents", ["title"]),
+        ]
+        indexes = self.sm.list_indexes(base_label="entities")
+        self.assertEqual(len(indexes), 1)
+        self.assertEqual(indexes[0]["name"], "entities_name")
+
+    def test_list_indexes_empty_and_error(self):
+        self.mock_schema.getIndexLabels.return_value = None
+        self.assertEqual(self.sm.list_indexes(), [])
+        self.mock_schema.getIndexLabels.side_effect = RequestException("down")
+        self.assertEqual(self.sm.list_indexes(), [])
+
+    def test_get_index_info_found_and_missing(self):
+        self.mock_schema.getIndexLabel.return_value = self._idx("entities_name", "entities", ["name"])
+        info = self.sm.get_index_info("entities_name")
+        self.assertEqual(info["base_value"], "entities")
+        self.mock_schema.getIndexLabel.return_value = None
+        self.assertIsNone(self.sm.get_index_info("nope"))
+        self.mock_schema.getIndexLabel.side_effect = RequestException("down")
+        self.assertIsNone(self.sm.get_index_info("nope"))
+
     def test_probe_capabilities_success(self):
         self.mock_schema.getSchema.return_value = {"vertexlabels": [{"name": "x"}]}
         caps = self.sm.probe_capabilities()

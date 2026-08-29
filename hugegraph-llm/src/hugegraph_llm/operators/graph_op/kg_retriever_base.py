@@ -32,6 +32,7 @@ retriever produced the result.
 
 from __future__ import annotations
 
+import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -107,6 +108,45 @@ class KGRetriever(ABC):
     def get_result_formatter(self) -> Callable[[Any], RetrieverResultItem]:
         """Return the function mapping one raw item to a RetrieverResultItem."""
         return self._default_formatter
+
+    def get_parameters(
+        self, parameter_descriptions: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """Infer tool parameters from the :meth:`get_search_results` signature.
+
+        Generalized from neo4j-graphrag-python's ``Retriever.get_parameters``:
+        lets an LLM / MCP layer expose this retriever as a callable tool
+        without hand-written schemas. ``*args``/``**kwargs`` are skipped;
+        parameters without defaults are marked required.
+
+        Returns ``{"properties": {name: {type, description, required}},
+        "required": [names]}``.
+        """
+        descriptions = parameter_descriptions or {}
+        signature = inspect.signature(self.get_search_results)
+        properties: Dict[str, Any] = {}
+        required: List[str] = []
+        for param_name, param in signature.parameters.items():
+            if param_name == "self":  # pragma: no cover - bound methods drop self
+                continue
+            if param.kind in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            ):
+                continue
+            is_required = param.default is inspect.Parameter.empty
+            annotation = param.annotation
+            type_name = getattr(annotation, "__name__", None) or str(annotation)
+            if type_name in ("Any", "NoneType") or "typing." in type_name:
+                type_name = "string"
+            properties[param_name] = {
+                "type": type_name,
+                "description": descriptions.get(param_name, ""),
+                "required": is_required,
+            }
+            if is_required:
+                required.append(param_name)
+        return {"properties": properties, "required": required}
 
     def _result_items(self, raw: Any) -> List[Any]:
         """Extract the iterable of items from :meth:`get_search_results` output."""

@@ -16,6 +16,7 @@
 # under the License.
 
 import unittest
+from typing import Any
 
 import pytest
 
@@ -101,6 +102,38 @@ class TestRetrieverResult(unittest.TestCase):
         self.assertFalse(
             RetrieverResult(items=[RetrieverResultItem(content="a")]).is_empty
         )
+
+
+class TestGetParameters(unittest.TestCase):
+    def test_infers_required_and_optional(self):
+        class _P(KGRetriever):
+            def get_search_results(self, query: str, rewrite=None, **kwargs):
+                return []
+
+        params = _P().get_parameters(parameter_descriptions={"query": "the question"})
+        self.assertEqual(params["required"], ["query"])
+        self.assertEqual(params["properties"]["query"]["type"], "str")
+        self.assertEqual(params["properties"]["query"]["description"], "the question")
+        self.assertTrue(params["properties"]["query"]["required"])
+        self.assertFalse(params["properties"]["rewrite"]["required"])
+        self.assertNotIn("kwargs", params["properties"])
+
+    def test_skips_args_and_normalizes_types(self):
+        class _P(KGRetriever):
+            def get_search_results(self, *args, query: Any = "x"):
+                return []
+
+        params = _P().get_parameters()
+        self.assertNotIn("args", params["properties"])
+        self.assertEqual(params["properties"]["query"]["type"], "string")  # Any -> string
+
+    def test_returns_empty_for_no_params(self):
+        class _P(KGRetriever):
+            def get_search_results(self):
+                return []
+
+        params = _P().get_parameters()
+        self.assertEqual(params, {"properties": {}, "required": []})
 
 
 class TestKGRetriever(unittest.TestCase):

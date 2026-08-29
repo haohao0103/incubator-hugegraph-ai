@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from pyhugegraph.client import PyHugeClient
@@ -340,6 +340,46 @@ class SchemaManager:
             builder.valueSet()
         else:  # pragma: no cover - Enum conversion already rejects unknown cardinalities
             log.error("Unknown cardinality %s for property_key %s", cardinality, builder)
+
+    def list_indexes(self, base_label: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List index label metadata (generalized from neo4j's index introspection).
+
+        Optionally filters to indexes on a given base vertex label. Returns
+        ``[{name, base_type, base_value, fields, index_type}, ...]``; network
+        failures degrade to an empty list.
+        """
+        try:
+            indexes = self.schema.getIndexLabels() or []
+        except RequestException as exc:
+            log.warning("list_indexes failed for graph '%s': %s", self.graph_name, exc)
+            return []
+        result: List[Dict[str, Any]] = []
+        for idx in indexes:
+            info = self._index_info(idx)
+            if base_label is None or info["base_value"] == base_label:
+                result.append(info)
+        return result
+
+    def get_index_info(self, name: str) -> Optional[Dict[str, Any]]:
+        """Fetch metadata for one index label, or None when absent/unreachable."""
+        try:
+            idx = self.schema.getIndexLabel(name)
+        except RequestException as exc:
+            log.warning("get_index_info(%s) failed: %s", name, exc)
+            return None
+        if idx is None:
+            return None
+        return self._index_info(idx)
+
+    @staticmethod
+    def _index_info(idx: Any) -> Dict[str, Any]:
+        return {
+            "name": idx.name,
+            "base_type": idx.baseType,
+            "base_value": idx.baseValue,
+            "fields": list(idx.fields or []),
+            "index_type": idx.indexType,
+        }
 
     def probe_capabilities(self) -> Dict[str, bool]:
         """Fail-fast capability probe (generalized from neo4j-graphrag-python).
