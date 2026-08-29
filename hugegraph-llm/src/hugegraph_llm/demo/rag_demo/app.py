@@ -40,6 +40,8 @@ from hugegraph_llm.api.admin_api import admin_http_api
 from hugegraph_llm.api.feishu_ingest_api import feishu_ingest_http_api
 from hugegraph_llm.api.graph_extract_api import graph_extract_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
+from hugegraph_llm.api.unified_ingest_api import unified_ingest_http_api
+from hugegraph_llm.api.unified_query_api import unified_query_http_api
 from hugegraph_llm.config import admin_settings, huge_settings, prompt
 from hugegraph_llm.demo.rag_demo.admin_ops_block import create_admin_ops_block, log_stream
 from hugegraph_llm.demo.rag_demo.agent_block import create_agent_block
@@ -71,6 +73,7 @@ from hugegraph_llm.demo.rag_demo.text2gremlin_block import (
 )
 from hugegraph_llm.demo.rag_demo.vector_graph_block import create_vector_graph_block
 from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
+from hugegraph_llm.demo.rag_demo.unified_io_block import create_unified_io_block
 from hugegraph_llm.resources.demo.css import CSS
 from hugegraph_llm.utils.log import log
 
@@ -120,6 +123,9 @@ def init_rag_ui() -> gr.Interface:
         """
 
         textbox_array_graph_config = create_configs_block()
+
+        # ── Unified single-entry Import & Query (库表/指标/飞书 → 同一张 KG 图) ──
+        create_unified_io_block()
 
         # ── PRODUCTION Tabs (接入 RAGGraphVectorFlow 生产链路) ──────
         with gr.Tab(label="1. Build RAG Index 💡"):
@@ -238,6 +244,8 @@ def create_app():
     admin_http_api(api_auth, log_stream)
     graph_extract_http_api(api_auth)
     feishu_ingest_http_api(api_auth)
+    unified_ingest_http_api(api_auth)
+    unified_query_http_api(api_auth)
 
     app.include_router(api_auth)
     # Mount Gradio inside FastAPI
