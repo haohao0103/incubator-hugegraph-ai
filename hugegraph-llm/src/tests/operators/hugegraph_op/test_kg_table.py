@@ -68,6 +68,7 @@ class TestKgTable(unittest.TestCase):
         self.mock_schema = self.mock_client.schema.return_value
         self.mock_schema.getPropertyKey.return_value = None
         self.mock_schema.getVertexLabel.return_value = None
+        self.mock_schema.getIndexLabel.return_value = None
         # Chain the schema builders back to themselves so call chains are
         # observable on a single mock.
         for schema_method in ("propertyKey", "vertexLabel", "edgeLabel", "indexLabel"):
@@ -372,6 +373,107 @@ class TestKgTable(unittest.TestCase):
         table = KgTable(self.mock_client, "kv")
         props = table._serialize_props({"id": 1, "a": 1, "b": "x"})
         self.assertEqual(props, {"value": json.dumps({"a": 1, "b": "x"})})
+
+
+    # -- index_fields ----------------------------------------------------------
+
+    def test_init_default_no_index_fields(self):
+        table = KgTable(self.mock_client, "entities", schema={"name": "TEXT"})
+        self.assertEqual(table.index_fields, [])
+
+    def test_init_index_fields(self):
+        table = KgTable(
+            self.mock_client,
+            "entities",
+            schema={"name": "TEXT", "status": "TEXT"},
+            index_fields=["name"],
+        )
+        self.assertEqual(table.index_fields, ["name"])
+
+    def test_ensure_schema_creates_secondary_indexes(self):
+        table = KgTable(
+            self.mock_client,
+            "entities",
+            schema={"name": "TEXT", "status": "TEXT"},
+            index_fields=["name", "status"],
+        )
+        table._ensure_schema()
+        self.assertEqual(self.mock_schema.indexLabel.call_count, 2)
+        self.mock_schema.indexLabel.assert_any_call("entities_name")
+        self.mock_schema.indexLabel.assert_any_call("entities_status")
+        index_builder = self.mock_schema.indexLabel.return_value
+        index_builder.secondary.assert_called()
+        table._ensure_schema()
+        self.assertEqual(self.mock_schema.indexLabel.call_count, 2)
+
+    def test_ensure_schema_skips_index_field_not_in_schema(self):
+        table = KgTable(
+            self.mock_client,
+            "entities",
+            schema={"name": "TEXT"},
+            index_fields=["name", "ghost"],
+        )
+        table._ensure_schema()
+        self.assertEqual(self.mock_schema.indexLabel.call_count, 1)
+        self.mock_schema.indexLabel.assert_called_once_with("entities_name")
+
+    @patch("pyhugegraph.api.rebuild.RebuildManager")
+    def test_rebuild_indexes_triggers_tasks(self, mock_rebuild_cls):
+        table = KgTable(
+            self.mock_client,
+            "entities",
+            schema={"name": "TEXT", "status": "TEXT"},
+            index_fields=["name", "status"],
+        )
+        mock_rebuild = MagicMock()
+        mock_rebuild.rebuild_indexlabels.side_effect = [
+            {"task_id": 10},
+            {"task_id": 11},
+        ]
+        mock_rebuild_cls.return_value = mock_rebuild
+
+        tasks = table.rebuild_indexes()
+
+        self.assertEqual(tasks, {"entities_name": 10, "entities_status": 11})
+        mock_rebuild.rebuild_indexlabels.assert_any_call("entities_name")
+        mock_rebuild.rebuild_indexlabels.assert_any_call("entities_status")
+
+    @patch("pyhugegraph.api.rebuild.RebuildManager")
+    def test_rebuild_indexes_skips_field_not_in_schema(self, mock_rebuild_cls):
+        table = KgTable(
+            self.mock_client,
+            "entities",
+            schema={"name": "TEXT"},
+            index_fields=["ghost"],
+        )
+        mock_rebuild = MagicMock()
+        mock_rebuild_cls.return_value = mock_rebuild
+        tasks = table.rebuild_indexes()
+        self.assertEqual(tasks, {})
+        mock_rebuild.rebuild_indexlabels.assert_not_called()
+
+    @patch("pyhugegraph.api.rebuild.RebuildManager")
+    def test_rebuild_indexes_handles_non_dict_and_errors(self, mock_rebuild_cls):
+        table = KgTable(
+            self.mock_client,
+            "entities",
+            schema={"name": "TEXT"},
+            index_fields=["name"],
+        )
+        mock_rebuild = MagicMock()
+        mock_rebuild.rebuild_indexlabels.return_value = None  # no task id
+        mock_rebuild_cls.return_value = mock_rebuild
+        tasks = table.rebuild_indexes()
+        self.assertEqual(tasks, {"entities_name": None})
+
+        mock_rebuild.rebuild_indexlabels.side_effect = RuntimeError("rebuild down")
+        tasks = table.rebuild_indexes()
+        self.assertEqual(tasks, {})
+
+    def test_kv_mode_index_field_skipped(self):
+        table = KgTable(self.mock_client, "kv", index_fields=["name"])
+        table._ensure_schema()
+        self.assertEqual(self.mock_schema.indexLabel.call_count, 0)
 
 
 if __name__ == "__main__":

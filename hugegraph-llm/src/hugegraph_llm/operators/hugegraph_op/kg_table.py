@@ -91,12 +91,14 @@ class KgTable:
         schema: Optional[Dict[str, str]] = None,
         page_size: int = 500,
         label_prefix: str = "",
+        index_fields: Optional[List[str]] = None,
     ) -> None:
         self._client = client
         self._table_name = table_name
         self._schema = dict(schema or {}) or dict(_DEFAULT_SCHEMA)
         self._page_size = max(1, int(page_size))
         self._label = f"{label_prefix}{sanitize_label(table_name)}"
+        self._index_fields = list(index_fields or [])
         self._schema_ensured = False
         self._schema_manager = SchemaManager(table_name, client=client)
 
@@ -114,10 +116,20 @@ class KgTable:
         """The column -> HugeGraph-type mapping used by this table."""
         return dict(self._schema)
 
+    @property
+    def index_fields(self) -> List[str]:
+        """Fields that get a secondary index so ``.has(field, ...)`` works."""
+        return list(self._index_fields)
+
     # -- schema ----------------------------------------------------------------
 
     def _ensure_schema(self) -> None:
-        """Create propertykeys + vertexlabel idempotently (once per instance)."""
+        """Create propertykeys + vertexlabel + secondary indexes idempotently.
+
+        Secondary indexes for ``index_fields`` are required for ``.has()``
+        property filtering (HugeGraph rejects filters on non-indexed keys);
+        this is what makes a KgTable-backed label queryable by attribute.
+        """
         if self._schema_ensured:
             return
         properties = list(self._schema.keys())
@@ -129,10 +141,51 @@ class KgTable:
             id_strategy="CUSTOMIZE_STRING",
             nullable_keys=properties,
         )
+        for field in self._index_fields:
+            if field not in self._schema:
+                log.warning(
+                    "index field %r is not in schema of table %r, skip",
+                    field,
+                    self._table_name,
+                )
+                continue
+            self._schema_manager.create_index_label(
+                f"{self._label}_{field}",
+                self._label,
+                field,
+                index_type="SECONDARY",
+            )
         self._schema_ensured = True
 
     def _known_props(self) -> set:
         return set(self._schema.keys())
+
+    def rebuild_indexes(self) -> Dict[str, Any]:
+        """Trigger a rebuild task for each indexed field.
+
+        HugeGraph creates secondary indexes in ``CREATING`` status; they only
+        become queryable after the rebuild task completes (see the real-HG
+        verification note in this module's history). Returns a mapping of
+        ``index_name -> task_id``; poll task status via
+        ``client.task().get_task(task_id)``.
+        """
+        self._ensure_schema()
+        from pyhugegraph.api.rebuild import RebuildManager
+
+        # Reuse the schema manager's session (PyHugeClient does not expose it;
+        # the schema manager holds one via its underlying HGraphContext).
+        rebuild = RebuildManager(self._schema_manager.schema._sess)
+        tasks: Dict[str, Any] = {}
+        for field in self._index_fields:
+            if field not in self._schema:
+                continue
+            index_name = f"{self._label}_{field}"
+            try:
+                resp = rebuild.rebuild_indexlabels(index_name)
+                tasks[index_name] = resp.get("task_id") if isinstance(resp, dict) else None
+            except Exception as exc:  # noqa: BLE001
+                log.warning("rebuild index %r failed: %s", index_name, exc)
+        return tasks
 
     # -- id helpers ------------------------------------------------------------
 
