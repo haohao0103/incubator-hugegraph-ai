@@ -229,58 +229,13 @@ class Commit2Graph:
             self._handle_graph_creation(self.client.graph().addEdge, label, start, end, properties)
 
     def init_schema_if_need(self, schema: dict):
-        properties = schema["propertykeys"]
-        vertices = schema["vertexlabels"]
-        edges = schema["edgelabels"]
+        # Delegate to SchemaManager's idempotent schema layer (exists-probe
+        # before create, nullable-everything labels, `name` secondary index).
+        from hugegraph_llm.operators.hugegraph_op.schema_manager import SchemaManager
 
-        for prop in properties:
-            self._create_property(prop)
-
-        # Server-side primary keys are authoritative for already-existing labels
-        # (a label may have been created earlier with a different id strategy).
-        server_pk: dict = {}
-        try:
-            s = self.client.schema().getSchema()
-            for vl in s.get("vertexlabels", []):
-                server_pk[vl["name"]] = set(vl.get("primary_keys", []))
-        except Exception as exc:  # pylint: disable=broad-except
-            log.warning("Could not fetch server schema for PK check: %s", exc)
-
-        for vertex in vertices:
-            vertex_label = vertex["name"]
-            properties = vertex["properties"]
-            nullable_keys = vertex.get("nullable_keys", [])
-            primary_keys = vertex["primary_keys"]
-            self.schema.vertexLabel(vertex_label).properties(*properties).nullableKeys(
-                *nullable_keys
-            ).usePrimaryKeyId().primaryKeys(*primary_keys).ifNotExist().create()
-
-            # Secondary index on `name` is required for `.has('name', ...)` filtering
-            # (HugeGraph rejects property filters on non-indexed keys). Skip when
-            # `name` is already a primary key (auto-indexed, and HugeGraph forbids a
-            # secondary index on a PK property). Use the SERVER PK when available.
-            if "name" in properties:
-                pk = server_pk.get(vertex_label)
-                if pk is None:
-                    pk = set(primary_keys)
-                if "name" not in pk:
-                    try:
-                        self.schema.indexLabel(f"{vertex_label}ByName").onV(vertex_label).by(
-                            "name"
-                        ).secondary().ifNotExist().create()
-                    except Exception as exc:  # noqa: BLE001
-                        # Benign: index already exists, or name is (still) a PK.
-                        if "No need to build index" not in str(exc):
-                            raise
-
-        for edge in edges:
-            edge_label = edge["name"]
-            source_vertex_label = edge["source_label"]
-            target_vertex_label = edge["target_label"]
-            properties = edge["properties"]
-            self.schema.edgeLabel(edge_label).sourceLabel(source_vertex_label).targetLabel(
-                target_vertex_label
-            ).properties(*properties).nullableKeys(*properties).ifNotExist().create()
+        sm = SchemaManager(huge_settings.graph_name, client=self.client)
+        summary = sm.ensure_schema(schema)
+        log.info("Schema ensured: %s", summary)
 
     def schema_free_mode(self, data):
         self.schema.propertyKey("name").asText().ifNotExist().create()
@@ -297,63 +252,6 @@ class Commit2Graph:
             s_id = self.client.graph().addVertex("vertex", {"name": s}, id=s).id
             t_id = self.client.graph().addVertex("vertex", {"name": o}, id=o).id
             self.client.graph().addEdge("edge", s_id, t_id, {"name": p})
-
-    def _create_property(self, prop: dict):
-        name = prop["name"]
-        try:
-            data_type = PropertyDataType(prop["data_type"])
-            cardinality = PropertyCardinality(prop["cardinality"])
-        except ValueError:
-            log.critical(
-                "Invalid data type %s / cardinality %s for property %s, skip & should check it again",
-                prop["data_type"],
-                prop["cardinality"],
-                name,
-            )
-            return
-
-        property_key = self.schema.propertyKey(name)
-        self._set_property_data_type(property_key, data_type)
-        self._set_property_cardinality(property_key, cardinality)
-        property_key.ifNotExist().create()
-
-    def _set_property_data_type(self, property_key, data_type):
-        if data_type == PropertyDataType.BOOLEAN:
-            log.error("Boolean type is not supported")
-        elif data_type == PropertyDataType.BYTE:
-            log.warning("Byte type is not supported, use int instead")
-            property_key.asInt()
-        elif data_type == PropertyDataType.INT:
-            property_key.asInt()
-        elif data_type == PropertyDataType.LONG:
-            property_key.asLong()
-        elif data_type == PropertyDataType.FLOAT:
-            log.warning("Float type is not supported, use double instead")
-            property_key.asDouble()
-        elif data_type == PropertyDataType.DOUBLE:
-            property_key.asDouble()
-        elif data_type == PropertyDataType.TEXT:
-            property_key.asText()
-        elif data_type == PropertyDataType.BLOB:
-            log.warning("Blob type is not supported, use text instead")
-            property_key.asText()
-        elif data_type == PropertyDataType.DATE:
-            property_key.asDate()
-        elif data_type == PropertyDataType.UUID:
-            log.warning("UUID type is not supported, use text instead")
-            property_key.asText()
-        else:
-            log.error("Unknown data type %s for property_key %s", data_type, property_key)
-
-    def _set_property_cardinality(self, property_key, cardinality):
-        if cardinality == PropertyCardinality.SINGLE:
-            property_key.valueSingle()
-        elif cardinality == PropertyCardinality.LIST:
-            property_key.valueList()
-        elif cardinality == PropertyCardinality.SET:
-            property_key.valueSet()
-        else:
-            log.error("Unknown cardinality %s for property_key %s", cardinality, property_key)
 
     def _check_property_data_type(self, data_type: str, cardinality: str, value) -> bool:
         if cardinality in (

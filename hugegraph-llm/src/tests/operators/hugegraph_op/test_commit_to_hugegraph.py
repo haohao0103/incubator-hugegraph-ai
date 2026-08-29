@@ -158,6 +158,29 @@ class TestCommit2Graph(unittest.TestCase):
         # Verify the results
         self.assertEqual(result, data)
 
+    @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.Commit2Graph._create_provenance_links")
+    @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.huge_settings")
+    @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.Commit2Graph.load_into_graph")
+    @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.Commit2Graph.init_schema_if_need")
+    def test_run_with_provenance_enabled(
+        self, mock_init_schema, mock_load_into_graph, mock_settings, mock_provenance
+    ):
+        """Test run records provenance link count when enabled and metadata exists."""
+        mock_settings.enable_provenance = True
+        mock_provenance.return_value = 3
+
+        data = {
+            "schema": self.schema,
+            "vertices": self.vertices,
+            "edges": self.edges,
+            "chunk_metadata": [{"doc_name": "d1", "text": "Tom Hanks"}],
+        }
+
+        result = self.commit2graph.run(data)
+
+        mock_provenance.assert_called_once_with(data)
+        self.assertEqual(result["provenance_link_count"], 3)
+
     @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.Commit2Graph._check_property_data_type")
     def test_set_default_property(self, mock_check_property_data_type):
         """Test _set_default_property method."""
@@ -280,28 +303,25 @@ class TestCommit2Graph(unittest.TestCase):
             "index_label": mock_index_label,
         }
 
-    @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.Commit2Graph._create_property")
-    @patch("hugegraph_llm.operators.hugegraph_op.commit_to_hugegraph.Commit2Graph._handle_graph_creation")
-    def test_init_schema_if_need(self, mock_handle_graph_creation, mock_create_property):
-        """Test init_schema_if_need method."""
-        # Setup mocks
-        mock_handle_graph_creation.return_value = None
-        mock_create_property.return_value = None
+    @patch("hugegraph_llm.operators.hugegraph_op.schema_manager.SchemaManager")
+    def test_init_schema_if_need(self, mock_schema_manager_class):
+        """Test init_schema_if_need delegates to SchemaManager.ensure_schema."""
+        mock_sm = MagicMock()
+        mock_sm.ensure_schema.return_value = {
+            "property_keys": 5,
+            "vertex_labels": 2,
+            "edge_labels": 1,
+            "index_labels": 2,
+        }
+        mock_schema_manager_class.return_value = mock_sm
 
-        # Use helper method to set up schema mocks
-        schema_mocks = self._setup_schema_mocks()
-
-        # Call the method
         self.commit2graph.init_schema_if_need(self.schema)
 
-        # Verify that _create_property was called for each property key
-        self.assertEqual(mock_create_property.call_count, 5)  # 5 property keys
-
-        # Verify that vertexLabel was called for each vertex label
-        self.assertEqual(schema_mocks["vertex_label"].call_count, 2)  # 2 vertex labels
-
-        # Verify that edgeLabel was called for each edge label
-        self.assertEqual(schema_mocks["edge_label"].call_count, 1)  # 1 edge label
+        # SchemaManager is built with the shared client (no second connection)
+        mock_schema_manager_class.assert_called_once()
+        _, kwargs = mock_schema_manager_class.call_args
+        self.assertIs(kwargs["client"], self.mock_client)
+        mock_sm.ensure_schema.assert_called_once_with(self.schema)
 
     def test_check_property_data_type_success(self):
         """Test _check_property_data_type method with valid data types."""
