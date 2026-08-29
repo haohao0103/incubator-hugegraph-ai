@@ -704,6 +704,24 @@ class TestSchemaManagerIdempotentSchema(unittest.TestCase):
             {"property_keys": 0, "vertex_labels": 0, "edge_labels": 0, "index_labels": 0},
         )
 
+    def test_probe_capabilities_success(self):
+        self.mock_schema.getSchema.return_value = {"vertexlabels": [{"name": "x"}]}
+        caps = self.sm.probe_capabilities()
+        self.assertTrue(caps["graph_reachable"])
+        self.assertTrue(caps["schema_readable"])
+
+    def test_probe_capabilities_empty_schema(self):
+        self.mock_schema.getSchema.return_value = {}
+        caps = self.sm.probe_capabilities()
+        self.assertTrue(caps["graph_reachable"])
+        self.assertFalse(caps["schema_readable"])
+
+    def test_probe_capabilities_connection_failure(self):
+        self.mock_schema.getSchema.side_effect = RequestException("down")
+        caps = self.sm.probe_capabilities()
+        self.assertFalse(caps["graph_reachable"])
+        self.assertFalse(caps["schema_readable"])
+
     # -- client injection ----------------------------------------------------
 
     def test_init_with_injected_client_reuses_it(self):

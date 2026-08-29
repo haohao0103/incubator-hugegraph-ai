@@ -107,7 +107,8 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
 
     mode = req.mode
     domain = req.domain
-    top_k = req.top_k or 5
+    retriever_config = dict(req.retriever_config or {})
+    top_k = int(retriever_config.get("top_k") or req.top_k or 5)
     fallback = req.response_fallback
 
     # auto: probe structured match via Text2Gremlin's match_result, then decide.
@@ -121,9 +122,10 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     if mode == "precise":
         return _apply_fallback(_format_precise(_text2gremlin(req.question), domain), fallback)
 
-    # semantic / hybrid -> RAGGraphVectorFlow
-    vector_only = mode == "semantic"
-    res = _graphrag(req.question, top_k, graph_search=(not vector_only), vector_only=vector_only)
+    # semantic / hybrid -> RAGGraphVectorFlow (retriever_config forwarded)
+    vector_only = bool(retriever_config.get("vector_only", mode == "semantic"))
+    graph_search = bool(retriever_config.get("graph_search", not vector_only))
+    res = _graphrag(req.question, top_k, graph_search=graph_search, vector_only=vector_only)
     answer = res.get("graph_vector_answer") or res.get("vector_only_answer") or ""
     route = "semantic" if vector_only else "graphrag"
     return _apply_fallback(

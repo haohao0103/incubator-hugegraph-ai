@@ -341,6 +341,25 @@ class SchemaManager:
         else:  # pragma: no cover - Enum conversion already rejects unknown cardinalities
             log.error("Unknown cardinality %s for property_key %s", cardinality, builder)
 
+    def probe_capabilities(self) -> Dict[str, bool]:
+        """Fail-fast capability probe (generalized from neo4j-graphrag-python).
+
+        Verifies at construction time that the graph is reachable and the
+        schema is readable, so callers fail early instead of discovering a
+        broken connection mid-pipeline. Returns a dict of boolean probes.
+        """
+        caps: Dict[str, bool] = {
+            "graph_reachable": False,
+            "schema_readable": False,
+        }
+        try:
+            schema = self.schema.getSchema()
+            caps["graph_reachable"] = True
+            caps["schema_readable"] = bool(schema)
+        except RequestException as exc:
+            log.warning("Capability probe failed for graph '%s': %s", self.graph_name, exc)
+        return caps
+
     def simple_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         mini_schema = {}  # type: ignore
 

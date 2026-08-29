@@ -82,6 +82,11 @@ class UnifiedQueryRequest(BaseModel):
         description="returned verbatim instead of an empty answer when the "
         "query yields no context (saves an LLM call, prevents hallucination)",
     )
+    retriever_config: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="retriever-level overrides transparently forwarded to the "
+        "query flow, e.g. {'top_k': 10}",
+    )
 
 
 class UnifiedQueryResponse(BaseModel):

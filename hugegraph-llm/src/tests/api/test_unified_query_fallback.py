@@ -116,6 +116,29 @@ class TestUnifiedQueryFallback(unittest.TestCase):
         self.assertEqual(resp.route, "graphrag")
         self.assertEqual(resp.answer, "fb-auto-hybrid")
 
+    @patch("hugegraph_llm.api.unified_query_api._graphrag")
+    def test_retriever_config_overrides_top_k(self, mock_rag):
+        mock_rag.return_value = {"graph_vector_answer": "a"}
+        req = UnifiedQueryRequest(
+            question="q", mode="hybrid", retriever_config={"top_k": 42}
+        )
+        unified_query(req)
+        args, _ = mock_rag.call_args
+        self.assertEqual(args[1], 42)
+
+    @patch("hugegraph_llm.api.unified_query_api._graphrag")
+    def test_retriever_config_overrides_vector_only_and_graph_search(self, mock_rag):
+        mock_rag.return_value = {"graph_vector_answer": "a"}
+        req = UnifiedQueryRequest(
+            question="q",
+            mode="semantic",
+            retriever_config={"vector_only": False, "graph_search": True},
+        )
+        unified_query(req)
+        _, kwargs = mock_rag.call_args
+        self.assertFalse(kwargs["vector_only"])
+        self.assertTrue(kwargs["graph_search"])
+
     def test_empty_question_raises(self):
         with self.assertRaises(HTTPException) as cm:
             unified_query(UnifiedQueryRequest(question="  "))
