@@ -53,7 +53,9 @@ def _text2gremlin(question: str) -> Dict[str, Any]:
         2,  # example_num
         huge_settings.graph_name,  # schema_input (graph name, not full schema)
         None,  # gremlin_prompt_input
-        None,  # requested_outputs
+        # Request the generated gremlin AND its execution result so that
+        # _format_precise() can return the actual data as the answer.
+        ["template_gremlin", "raw_gremlin", "template_execution_result", "raw_execution_result"],
     )
 
 

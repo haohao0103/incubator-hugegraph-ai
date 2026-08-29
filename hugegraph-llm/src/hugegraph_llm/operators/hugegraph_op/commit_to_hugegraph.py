@@ -174,16 +174,34 @@ class Commit2Graph:
 
             # TODO: we could try batch add vertices first, setback to single-mode if failed
             explicit_id = vertex.get("id")
+            # The authoritative id strategy is the one already registered on the SERVER.
+            # The input schema only drives create-time; an existing label keeps its own
+            # strategy (e.g. a label created as CUSTOMIZE_STRING elsewhere stays that way).
+            server_vl = server_vertex_map.get(input_label)
+            server_id_strategy = server_vl.get("id_strategy") if server_vl else None
+
             mapping_id = explicit_id
             if not mapping_id and primary_keys:
                 mapping_id = f"{input_label}:{'!'.join(str(input_properties[pk]) for pk in primary_keys)}"
 
-            if vertex_label.get("id_strategy") == "CUSTOMIZE_STRING" and explicit_id:
+            if server_id_strategy == "CUSTOMIZE_STRING":
+                # CUSTOMIZE_STRING mandates an explicit string id. Derive one from the
+                # primary keys when the caller did not supply an explicit id.
+                custom_id = explicit_id
+                if not custom_id and primary_keys:
+                    custom_id = f"{input_label}:{'!'.join(str(input_properties[pk]) for pk in primary_keys)}"
+                if not custom_id:
+                    log.error(
+                        "VertexLabel '%s' uses CUSTOMIZE_STRING but no id/primary key "
+                        "is available, skip it & need check it again",
+                        input_label,
+                    )
+                    continue
                 result = self._handle_graph_creation(
                     self.client.graph().addVertex,
                     input_label,
                     input_properties,
-                    id=explicit_id,
+                    id=custom_id,
                 )
             else:
                 result = self._handle_graph_creation(self.client.graph().addVertex, input_label, input_properties)
@@ -218,6 +236,16 @@ class Commit2Graph:
         for prop in properties:
             self._create_property(prop)
 
+        # Server-side primary keys are authoritative for already-existing labels
+        # (a label may have been created earlier with a different id strategy).
+        server_pk: dict = {}
+        try:
+            s = self.client.schema().getSchema()
+            for vl in s.get("vertexlabels", []):
+                server_pk[vl["name"]] = set(vl.get("primary_keys", []))
+        except Exception as exc:  # pylint: disable=broad-except
+            log.warning("Could not fetch server schema for PK check: %s", exc)
+
         for vertex in vertices:
             vertex_label = vertex["name"]
             properties = vertex["properties"]
@@ -226,6 +254,24 @@ class Commit2Graph:
             self.schema.vertexLabel(vertex_label).properties(*properties).nullableKeys(
                 *nullable_keys
             ).usePrimaryKeyId().primaryKeys(*primary_keys).ifNotExist().create()
+
+            # Secondary index on `name` is required for `.has('name', ...)` filtering
+            # (HugeGraph rejects property filters on non-indexed keys). Skip when
+            # `name` is already a primary key (auto-indexed, and HugeGraph forbids a
+            # secondary index on a PK property). Use the SERVER PK when available.
+            if "name" in properties:
+                pk = server_pk.get(vertex_label)
+                if pk is None:
+                    pk = set(primary_keys)
+                if "name" not in pk:
+                    try:
+                        self.schema.indexLabel(f"{vertex_label}ByName").onV(vertex_label).by(
+                            "name"
+                        ).secondary().ifNotExist().create()
+                    except Exception as exc:  # noqa: BLE001
+                        # Benign: index already exists, or name is (still) a PK.
+                        if "No need to build index" not in str(exc):
+                            raise
 
         for edge in edges:
             edge_label = edge["name"]

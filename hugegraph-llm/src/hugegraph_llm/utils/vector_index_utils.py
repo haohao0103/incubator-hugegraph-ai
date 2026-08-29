@@ -19,9 +19,11 @@ import json
 from pathlib import Path
 from typing import Type
 
-import docx
 import gradio as gr
-from pypdf import PdfReader
+
+# NOTE: pypdf / python-docx are optional and only needed for PDF/DOCX ingestion.
+# Import them lazily inside the reader functions so that unrelated code paths
+# (e.g. text2gremlin query) don't hard-fail when these packages are absent.
 
 from hugegraph_llm.config import huge_settings, index_settings
 from hugegraph_llm.flows.scheduler import SchedulerSingleton
@@ -32,6 +34,8 @@ from hugegraph_llm.models.embeddings.init_embedding import Embeddings
 
 def read_pdf_text(full_path: str) -> str:
     try:
+        from pypdf import PdfReader
+
         with open(full_path, "rb") as pdf_file:
             reader = PdfReader(pdf_file)
 
@@ -70,6 +74,8 @@ def read_documents(input_file, input_text):
                     texts.append(f.read())
             elif suffix == ".docx":
                 text = ""
+                import docx
+
                 doc = docx.Document(full_path)
                 for para in doc.paragraphs:
                     text += para.text

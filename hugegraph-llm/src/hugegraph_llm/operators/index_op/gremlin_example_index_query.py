@@ -36,17 +36,35 @@ class GremlinExampleIndexQuery:
         embedding: Optional[BaseEmbedding] = None,
         num_examples: int = 1,
     ):
-        self.embedding = embedding or Embeddings().get_embedding()
         self.num_examples = num_examples
-        if not vector_index.exist("gremlin_examples"):
-            log.warning("No gremlin example index found, will generate one.")
-            self.vector_index = vector_index.from_name(self.embedding.get_embedding_dim(), "gremlin_examples")
-            self._build_default_example_index()
-        else:
-            self.vector_index = vector_index.from_name(self.embedding.get_embedding_dim(), "gremlin_examples")
+        self.available = True
+        self.vector_index = None
+        self.embedding = None
+        # Zero-example mode: skip the gremlin-example index entirely (no embeddings).
+        if num_examples <= 0:
+            return
+        try:
+            self.embedding = embedding or Embeddings().get_embedding()
+            # Cheap probe BEFORE the 80-row default-index build: if the embedding
+            # endpoint is unavailable/unsupported, abort now instead of firing 80
+            # (x-tenacity-retries) embedding requests and burning the rate limit.
+            self.embedding.get_text_embedding("__probe__")
+            if not vector_index.exist("gremlin_examples"):
+                log.warning("No gremlin example index found, will generate one.")
+                self.vector_index = vector_index.from_name(self.embedding.get_embedding_dim(), "gremlin_examples")
+                self._build_default_example_index()
+            else:
+                self.vector_index = vector_index.from_name(self.embedding.get_embedding_dim(), "gremlin_examples")
+        except Exception as exc:  # embeddings not configured / network/quota error
+            log.warning(
+                "Gremlin example index unavailable (no embedding model?): %s. "
+                "Text2Gremlin will run zero-shot (no few-shot examples).",
+                exc,
+            )
+            self.available = False
 
     def _get_match_result(self, context: Dict[str, Any], query: str) -> List[Dict[str, Any]]:
-        if self.num_examples <= 0:
+        if not self.available or self.num_examples <= 0:
             return []
 
         query_embedding = context.get("query_embedding")
