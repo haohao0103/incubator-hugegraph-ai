@@ -37,6 +37,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from hugegraph_llm.operators.graph_op.kg_retriever_base import (
+    KGRetriever,
+    RetrieverResultItem,
+)
 from hugegraph_llm.operators.graph_op.query_mode_router import (
     QueryMode,
     QueryModeRouter,
@@ -148,7 +152,7 @@ class KGSearchResult:
         return [c.text for c in self.chunks]
 
 
-class KGSearchRetriever:
+class KGSearchRetriever(KGRetriever):
     """Multi-hop scored knowledge-graph retriever.
 
     The retriever is fully backend-agnostic: all graph operations are injected
@@ -209,6 +213,33 @@ class KGSearchRetriever:
         self._chunk_lookup = chunk_lookup_func
         self._external_seed_entity_ids = external_seed_entity_ids or []
         self.config = config or KGSearchConfig()
+
+    def get_search_results(self, query: str, **kwargs: Any) -> KGSearchResult:
+        """KGRetriever protocol: raw retrieval (delegates to :meth:`retrieve`).
+
+        Accepts the retriever-native ``rewrite`` kwarg from
+        :meth:`KGRetriever.search`; returns the full :class:`KGSearchResult`
+        whose chunks are exposed as items by the base class.
+        """
+        rewrite = kwargs.get("rewrite")
+        return self.retrieve(query, rewrite)
+
+    def get_result_formatter(self) -> Callable[[ScoredChunk], RetrieverResultItem]:
+        """Map one scored chunk to a RetrieverResultItem."""
+        return self._kg_chunk_formatter
+
+    @staticmethod
+    def _kg_chunk_formatter(chunk: ScoredChunk) -> RetrieverResultItem:
+        return RetrieverResultItem(
+            content=chunk.text,
+            metadata={
+                "chunk_id": chunk.chunk_id,
+                "source_entities": chunk.source_entities,
+                "source_queries": chunk.source_queries,
+                "rank_factors": chunk.rank_factors,
+            },
+            score=chunk.score,
+        )
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Operator protocol: execute KG search retrieval.

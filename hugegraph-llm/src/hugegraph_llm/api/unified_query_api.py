@@ -85,6 +85,18 @@ def _format_precise(tg: Dict[str, Any], domain: Optional[str]) -> UnifiedQueryRe
     )
 
 
+def _apply_fallback(resp: UnifiedQueryResponse, fallback: Optional[str]) -> UnifiedQueryResponse:
+    """Return ``fallback`` verbatim when the query produced no answer.
+
+    Generalized from neo4j-graphrag-python's ``response_fallback``: an empty
+    context (no answer) short-circuits to a caller-provided message, saving
+    an LLM call and avoiding hallucination.
+    """
+    if fallback and not resp.answer:
+        resp.answer = fallback
+    return resp
+
+
 def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     """Core query logic shared by the HTTP route and the Gradio tab."""
     if not req.question or not str(req.question).strip():
@@ -96,29 +108,33 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     mode = req.mode
     domain = req.domain
     top_k = req.top_k or 5
+    fallback = req.response_fallback
 
     # auto: probe structured match via Text2Gremlin's match_result, then decide.
     if mode == "auto":
         tg = _text2gremlin(req.question)
         match = tg.get("match_result") if isinstance(tg, dict) else []
         if match:
-            return _format_precise(tg, domain)
+            return _apply_fallback(_format_precise(tg, domain), fallback)
         mode = "hybrid"
 
     if mode == "precise":
-        return _format_precise(_text2gremlin(req.question), domain)
+        return _apply_fallback(_format_precise(_text2gremlin(req.question), domain), fallback)
 
     # semantic / hybrid -> RAGGraphVectorFlow
     vector_only = mode == "semantic"
     res = _graphrag(req.question, top_k, graph_search=(not vector_only), vector_only=vector_only)
     answer = res.get("graph_vector_answer") or res.get("vector_only_answer") or ""
     route = "semantic" if vector_only else "graphrag"
-    return UnifiedQueryResponse(
-        answer=answer,
-        route=route,
-        citations=[],
-        subgraph={},
-        raw=res,
+    return _apply_fallback(
+        UnifiedQueryResponse(
+            answer=answer,
+            route=route,
+            citations=[],
+            subgraph={},
+            raw=res,
+        ),
+        fallback,
     )
 
 

@@ -77,6 +77,11 @@ class UnifiedQueryRequest(BaseModel):
     mode: str = Field("auto", description="auto | precise | semantic | hybrid")
     domain: Optional[str] = Field(None, description="optional domain filter")
     top_k: int = Field(5, description="max number of returned results")
+    response_fallback: Optional[str] = Field(
+        None,
+        description="returned verbatim instead of an empty answer when the "
+        "query yields no context (saves an LLM call, prevents hallucination)",
+    )
 
 
 class UnifiedQueryResponse(BaseModel):
