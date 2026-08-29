@@ -47,9 +47,6 @@ from hugegraph_llm.operators.llm_op.description_merger import (
 )
 from hugegraph_llm.utils.log import log
 
-logger = logging.getLogger(__name__)
-
-
 # ---------------------------------------------------------------------------
 # Source IDs management (LightRAG's source_ids limit strategy)
 # ---------------------------------------------------------------------------
@@ -341,3 +338,128 @@ class IncrementalMergePipeline:
             merged_source_ids=merged_source_ids,
             changed=changed,
         )
+
+
+# ---------------------------------------------------------------------------
+# Delta merge coordinator (KgTableProvider-backed physical isolation)
+# ---------------------------------------------------------------------------
+
+
+class DeltaMergeCoordinator:
+    """Persist incremental merge outputs into physically isolated delta tables.
+
+    Generalized from the MS-GraphRAG update pipeline's child-provider
+    convention (``KgTableProvider.child("delta")``): every incremental write
+    lands in a ``delta_<table>`` vertex label first (isolated from the main
+    tables), then :meth:`commit` merges the delta rows into the main tables
+    and clears the delta, or :meth:`rollback` discards the pending delta
+    without touching the main tables. This gives incremental updates a
+    transaction-like boundary without locks: the main tables stay consistent
+    until the delta is committed.
+
+    Usage::
+
+        coord = DeltaMergeCoordinator()  # or pass a client / provider
+        coord.write_rows("entities", [{"id": "e1", "name": "New"}],
+                         schema={"name": "TEXT"})
+        coord.has_delta("entities", "e1")          # True
+        coord.commit("entities")                    # merged into entities
+        coord.rollback()                            # or discard everything
+    """
+
+    def __init__(
+        self,
+        provider: Optional[Any] = None,
+        *,
+        client: Optional[Any] = None,
+        graph_name: Optional[str] = None,
+        connection: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if provider is not None:
+            self._provider = provider
+        else:
+            from hugegraph_llm.operators.hugegraph_op.kg_table_provider import (
+                KgTableProvider,
+            )
+
+            self._provider = KgTableProvider(
+                client=client, graph_name=graph_name, connection=connection
+            )
+        self._delta = self._provider.child("delta")
+        self._schemas: Dict[str, Optional[Dict[str, str]]] = {}
+
+    @property
+    def provider(self) -> Any:
+        """The main (non-namespaced) table provider."""
+        return self._provider
+
+    @property
+    def delta_provider(self) -> Any:
+        """The namespaced child provider holding pending delta tables."""
+        return self._delta
+
+    def table(self, name: str, schema: Optional[Dict[str, str]] = None) -> Any:
+        """Register a table's schema (first use) and return its delta table."""
+        self._schemas.setdefault(name, schema)
+        return self._delta.table(name, schema=schema)
+
+    def write_rows(
+        self,
+        table_name: str,
+        rows: List[Dict[str, Any]],
+        schema: Optional[Dict[str, str]] = None,
+    ) -> int:
+        """Write rows into the delta table (physically isolated)."""
+        return self.table(table_name, schema=schema).upsert_many(rows)
+
+    def list_delta(
+        self, table_name: str, schema: Optional[Dict[str, str]] = None
+    ) -> List[Dict[str, Any]]:
+        """List pending delta rows for a table."""
+        return self.table(table_name, schema=schema).list_rows()
+
+    def has_delta(
+        self,
+        table_name: str,
+        row_id: Any,
+        schema: Optional[Dict[str, str]] = None,
+    ) -> bool:
+        """Check whether a row id exists in the pending delta."""
+        return self.table(table_name, schema=schema).has(row_id)
+
+    def commit(self, table_name: Optional[str] = None) -> int:
+        """Merge pending delta rows into the main tables, then clear the delta.
+
+        If ``table_name`` is given, only that table is committed; otherwise
+        every table registered so far is committed. Returns the number of
+        rows merged.
+        """
+        names = [table_name] if table_name else list(self._schemas.keys())
+        merged = 0
+        for name in names:
+            schema = self._schemas.get(name)
+            main_table = self._provider.table(name, schema=schema)
+            delta_table = self._delta.table(name, schema=schema)
+            for row in delta_table.list_rows():
+                main_table.upsert(row)
+                merged += 1
+            delta_table.clear()
+        return merged
+
+    def rollback(self, table_name: Optional[str] = None) -> int:
+        """Discard pending delta rows (clear the delta tables).
+
+        If ``table_name`` is given, only that table is rolled back; otherwise
+        every registered table is cleared. Returns the number of rows
+        discarded.
+        """
+        names = [table_name] if table_name else list(self._schemas.keys())
+        cleared = 0
+        for name in names:
+            schema = self._schemas.get(name)
+            cleared += self._delta.table(name, schema=schema).clear()
+        return cleared
+
+    def pending_tables(self) -> List[str]:
+        """Tables with a registered schema (pending or already committed)."""
+        return list(self._schemas.keys())
