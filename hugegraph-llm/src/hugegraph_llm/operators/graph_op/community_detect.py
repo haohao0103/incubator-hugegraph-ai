@@ -39,7 +39,7 @@ from hugegraph_llm.utils.log import log
 
 # ── Engine availability detection ────────────────────────────
 
-try:
+try:  # pragma: no cover - pyvermeer presence is environment-dependent
     from pyvermeer.client.client import PyVermeerClient
     from pyvermeer.structure.task_data import TaskCreateRequest
 
@@ -51,7 +51,7 @@ except ImportError:
 try:
     import leidenalg  # noqa: F401
     HAS_LEIDEN = True
-except ImportError:
+except ImportError:  # pragma: no cover - leidenalg presence is environment-dependent
     HAS_LEIDEN = False
 
 
@@ -64,6 +64,17 @@ ALGORITHM_WCC = "wcc"
 ALGORITHM_LABEL_PROPAGATION = "label_propagation"
 ALGORITHM_PAGERANK = "pagerank"
 ALGORITHM_CLUSTERING = "clustering_coefficient"
+ALGORITHM_DEGREE = "degree"
+
+# Algorithms verified against Vermeer (vermeer/algorithms/*.go Name()),
+# aligned with the MS-GraphRAG HugeGraph provider's whitelist.
+VERMEER_SUPPORTED_ALGORITHMS = {
+    ALGORITHM_LEIDEN,
+    ALGORITHM_LOUVAIN,
+    ALGORITHM_WCC,
+    ALGORITHM_PAGERANK,
+    ALGORITHM_DEGREE,
+}
 
 # For community detection, we prefer these algorithms in order
 COMMUNITY_ALGORITHMS = [
@@ -73,9 +84,13 @@ COMMUNITY_ALGORITHMS = [
     ALGORITHM_LABEL_PROPAGATION,
 ]
 
-# Default Vermeer master endpoint
+# Default Vermeer master endpoint. NOTE: 6688 is the Vermeer Master HTTP
+# port; 8688 is the HugeGraph PD port (MS-GraphRAG verified this).
 DEFAULT_VERMEER_IP = "127.0.0.1"
-DEFAULT_VERMEER_PORT = 8688
+DEFAULT_VERMEER_PORT = 6688
+
+# Default HugeGraph PD peers used by the Vermeer load task (load.type=hugegraph)
+DEFAULT_PD_PEERS = ["127.0.0.1:8686"]
 
 # HugeGraph-Computer OLAP REST endpoint (relative to HugeGraph server)
 COMPUTER_ALGORITHM_PATH = "/graphs/{graph_name}/jobs/{algorithm}"
@@ -99,7 +114,7 @@ class CommunityDetect:
             client=hugegraph_client,
             engine="vermeer",
             vermeer_ip="192.168.1.1",
-            vermeer_port=8688,
+            vermeer_port=6688,
         )
     """
 
@@ -112,8 +127,9 @@ class CommunityDetect:
         vermeer_ip: str = DEFAULT_VERMEER_IP,
         vermeer_port: int = DEFAULT_VERMEER_PORT,
         vermeer_token: str = "",
+        pd_peers: Optional[List[str]] = None,
         poll_interval: float = 0.5,
-        poll_timeout: float = 60.0,
+        poll_timeout: float = 120.0,
     ):
         """Initialize the community detector.
 
@@ -123,8 +139,9 @@ class CommunityDetect:
             algorithm: Algorithm name (louvain, wcc, label_propagation).
             min_community_size: Communities smaller than this are filtered out.
             vermeer_ip: Vermeer master IP.
-            vermeer_port: Vermeer master HTTP port.
+            vermeer_port: Vermeer master HTTP port (6688, NOT the PD port 8688).
             vermeer_token: Vermeer auth token.
+            pd_peers: HugeGraph PD peers used by the Vermeer load task.
             poll_interval: Seconds between task status polls.
             poll_timeout: Maximum seconds to wait for task completion.
         """
@@ -135,6 +152,7 @@ class CommunityDetect:
         self._vermeer_ip = vermeer_ip
         self._vermeer_port = vermeer_port
         self._vermeer_token = vermeer_token
+        self._pd_peers = list(pd_peers) if pd_peers else list(DEFAULT_PD_PEERS)
         self._poll_interval = poll_interval
         self._poll_timeout = poll_timeout
 
@@ -198,12 +216,25 @@ class CommunityDetect:
     # ── Vermeer engine ────────────────────────────────────────
 
     def _run_vermeer(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Run community detection via Vermeer task API.
+        """Run community detection via the Vermeer task API (two-phase).
 
-        Submits a task to Vermeer master, polls for completion,
-        and parses the result into community assignments.
+        Generalized from the MS-GraphRAG HugeGraph provider's
+        ``vermeer_backend``: phase 1 submits a ``load`` task that pulls the
+        graph from HugeGraph into Vermeer memory (``load.type=hugegraph`` +
+        PD peers), phase 2 runs the algorithm and writes results back to
+        HugeGraph (``output.type=hugegraph``). Unsupported algorithms fall
+        back to the local engine instead of failing the whole job.
         """
         from hugegraph_llm.config import huge_settings
+
+        if self._algorithm not in VERMEER_SUPPORTED_ALGORITHMS:
+            log.error(
+                "Algorithm '%s' is not supported by Vermeer (supported: %s), "
+                "falling back to networkx",
+                self._algorithm,
+                sorted(VERMEER_SUPPORTED_ALGORITHMS),
+            )
+            return self._fallback_networkx(context)
 
         graph_name = huge_settings.graph_name
         vermeer_client = PyVermeerClient(
@@ -212,42 +243,60 @@ class CommunityDetect:
             token=self._vermeer_token,
         )
 
-        # Submit algorithm task
+        # Phase 1: load the graph into Vermeer memory (once per run).
         log.info(
-            "Submitting Vermeer task: algorithm=%s, graph=%s",
+            "Submitting Vermeer load task: graph=%s pd_peers=%s",
+            graph_name,
+            self._pd_peers,
+        )
+        load_id = self._submit_vermeer_task(
+            vermeer_client,
+            "load",
+            graph_name,
+            {
+                "load.type": "hugegraph",
+                "load.hg_pd_peers": json.dumps(self._pd_peers),
+                "load.hugegraph_name": f"DEFAULT/{graph_name}/g",
+                "load.hugegraph_username": huge_settings.graph_user,
+                "load.hugegraph_password": huge_settings.graph_pwd,
+                "load.parallel": "10",
+            },
+        )
+        if load_id is None:
+            return self._fallback_networkx(context)
+        load_data = self._poll_vermeer_task(vermeer_client, load_id)
+        if load_data.get("state") != "SUCCESS":
+            log.warning(
+                "Vermeer load task %s ended with state=%s, falling back to networkx",
+                load_id,
+                load_data.get("state"),
+            )
+            return self._fallback_networkx(context)
+
+        # Phase 2: run the algorithm, write results back to HugeGraph.
+        log.info(
+            "Submitting Vermeer compute task: algorithm=%s, graph=%s",
             self._algorithm,
             graph_name,
         )
-        try:
-            response = vermeer_client.tasks.create_task(
-                create_task=TaskCreateRequest(
-                    task_type=self._algorithm,
-                    graph_name=graph_name,
-                    params={},
-                )
-            )
-            task_id = response.task.id
-            log.info("Vermeer task created: id=%d", task_id)
-        except Exception as e:
-            log.error("Failed to create Vermeer task: %s", e)
+        task_id = self._submit_vermeer_task(
+            vermeer_client,
+            self._algorithm,
+            graph_name,
+            {
+                "compute.algorithm": self._algorithm,
+                "compute.parallel": "100",
+                "compute.max_step": "1000",
+                "output.type": "hugegraph",
+                "output.need_query": "1",
+            },
+        )
+        if task_id is None:
             return self._fallback_networkx(context)
 
-        # Poll for completion
-        elapsed = 0.0
-        while elapsed < self._poll_timeout:
-            time.sleep(self._poll_interval)
-            elapsed += self._poll_interval
-
-            try:
-                task_response = vermeer_client.tasks.get_task(task_id)
-                state = task_response.task.state
-                if state in ("SUCCESS", "FAILED", "CANCELLED"):
-                    break
-            except Exception as e:
-                log.warning("Error polling Vermeer task %d: %s", task_id, e)
-
+        task_data = self._poll_vermeer_task(vermeer_client, task_id)
+        state = task_data.get("state", "")
         if state == "SUCCESS":
-            task_data = task_response.task.to_dict()
             communities = self._parse_vermeer_result(task_data)
             context["communities"] = communities
             context["community_count"] = len(communities)
@@ -259,13 +308,52 @@ class CommunityDetect:
             )
         else:
             log.warning(
-                "Vermeer task %d ended with state=%s, falling back to networkx",
+                "Vermeer task %s ended with state=%s, falling back to networkx",
                 task_id,
                 state,
             )
             return self._fallback_networkx(context)
 
         return context
+
+    def _submit_vermeer_task(
+        self, vermeer_client: Any, task_type: str, graph_name: str, params: Dict[str, Any]
+    ) -> Optional[int]:
+        """Submit a Vermeer task; returns the task id or None on failure."""
+        try:
+            response = vermeer_client.tasks.create_task(
+                create_task=TaskCreateRequest(
+                    task_type=task_type,
+                    graph_name=graph_name,
+                    params=params,
+                )
+            )
+            task_id = response.task.id
+            log.info("Vermeer %s task created: id=%d", task_type, task_id)
+            return task_id
+        except Exception as e:
+            log.error("Failed to create Vermeer %s task: %s", task_type, e)
+            return None
+
+    def _poll_vermeer_task(self, vermeer_client: Any, task_id: int) -> Dict[str, Any]:
+        """Poll a Vermeer task until it reaches a terminal state.
+
+        Returns the last task data dict (includes ``state`` and ``params``);
+        on timeout the last seen state is returned.
+        """
+        elapsed = 0.0
+        task_data: Dict[str, Any] = {}
+        while elapsed < self._poll_timeout:
+            time.sleep(self._poll_interval)
+            elapsed += self._poll_interval
+            try:
+                task_response = vermeer_client.tasks.get_task(task_id)
+                task_data = task_response.task.to_dict()
+                if task_data.get("state") in ("SUCCESS", "FAILED", "CANCELLED"):
+                    break
+            except Exception as e:
+                log.warning("Error polling Vermeer task %d: %s", task_id, e)
+        return task_data
 
     @staticmethod
     def _parse_vermeer_result(task_data: Dict) -> List[Dict]:
