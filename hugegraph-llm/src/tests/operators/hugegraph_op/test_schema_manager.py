@@ -749,6 +749,85 @@ class TestSchemaManagerIdempotentSchema(unittest.TestCase):
         self.mock_schema.getIndexLabel.side_effect = RequestException("down")
         self.assertIsNone(self.sm.get_index_info("nope"))
 
+    def test_get_schema_cached_caches_until_refresh(self):
+        schema = {"vertexlabels": [{"name": "person"}], "edgelabels": []}
+        self.mock_schema.getSchema.return_value = schema
+        self.assertEqual(self.sm.get_schema_cached(), schema)
+        self.assertEqual(self.mock_schema.getSchema.call_count, 1)
+        # cached: no second fetch
+        self.assertEqual(self.sm.get_schema_cached(), schema)
+        self.assertEqual(self.mock_schema.getSchema.call_count, 1)
+        # refresh forces a re-fetch
+        self.sm.get_schema_cached(refresh=True)
+        self.assertEqual(self.mock_schema.getSchema.call_count, 2)
+
+    def test_get_schema_cached_connection_failure_returns_none(self):
+        self.mock_schema.getSchema.side_effect = RequestException("down")
+        self.assertIsNone(self.sm.get_schema_cached())
+
+    def test_invalidate_schema_cache(self):
+        self.mock_schema.getSchema.return_value = {"vertexlabels": []}
+        self.sm.get_schema_cached()
+        self.sm.invalidate_schema_cache()
+        self.sm.get_schema_cached()
+        self.assertEqual(self.mock_schema.getSchema.call_count, 2)
+
+    def test_build_schema_description(self):
+        self.mock_schema.getSchema.return_value = {
+            "vertexlabels": [{"name": "person", "properties": ["name", "age"]}],
+            "edgelabels": [
+                {"name": "knows", "properties": ["weight"], "source_label": "person", "target_label": "person"}
+            ],
+        }
+        desc = self.sm.build_schema_description()
+        self.assertIn("person(name, age)", desc)
+        self.assertIn("knows(weight)", desc)
+        self.assertIn("person-[knows]->person", desc)
+
+    def test_build_schema_description_empty_schema(self):
+        self.mock_schema.getSchema.return_value = None
+        self.assertEqual(self.sm.build_schema_description(), "")
+
+    def test_infer_relationships_with_sample(self):
+        self.mock_schema.getSchema.return_value = {
+            "edgelabels": [
+                {"name": "knows", "source_label": "person", "target_label": "person"}
+            ],
+            "vertexlabels": [],
+        }
+        self.mock_client.gremlin().exec.return_value = {"data": [{"outV": "p1", "inV": "p2"}], "meta": {}}
+        rels = self.sm.infer_relationships()
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["edge"], "knows")
+        self.assertEqual(rels[0]["source_label"], "person")
+        self.assertEqual(rels[0]["sample"], {"outV": "p1", "inV": "p2"})
+        self.mock_client.gremlin().exec.assert_called_once_with("g.E().hasLabel('knows').limit(1)")
+
+    def test_infer_relationships_no_sample(self):
+        self.mock_schema.getSchema.return_value = {
+            "edgelabels": [{"name": "knows", "source_label": "person", "target_label": "person"}],
+            "vertexlabels": [],
+        }
+        rels = self.sm.infer_relationships(sample=False)
+        self.assertNotIn("sample", rels[0])
+        self.mock_client.gremlin().exec.assert_not_called()
+
+    def test_infer_relationships_empty_schema(self):
+        self.mock_schema.getSchema.return_value = None
+        self.assertEqual(self.sm.infer_relationships(), [])
+
+    def test_sample_edge_success_and_empty(self):
+        self.mock_client.gremlin().exec.return_value = {"data": [{"outV": "a", "inV": "b"}], "meta": {}}
+        self.assertEqual(self.sm._sample_edge("knows"), {"outV": "a", "inV": "b"})
+        self.mock_client.gremlin().exec.return_value = {"data": [], "meta": {}}
+        self.assertIsNone(self.sm._sample_edge("knows"))
+        self.mock_client.gremlin().exec.return_value = None
+        self.assertIsNone(self.sm._sample_edge("knows"))
+
+    def test_sample_edge_failure_returns_none(self):
+        self.mock_client.gremlin().exec.side_effect = RuntimeError("gremlin down")
+        self.assertIsNone(self.sm._sample_edge("knows"))
+
     def test_probe_capabilities_success(self):
         self.mock_schema.getSchema.return_value = {"vertexlabels": [{"name": "x"}]}
         caps = self.sm.probe_capabilities()

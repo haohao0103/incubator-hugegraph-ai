@@ -24,6 +24,7 @@ from requests.exceptions import RequestException
 from hugegraph_llm.config import huge_settings
 from hugegraph_llm.enums.property_cardinality import PropertyCardinality
 from hugegraph_llm.enums.property_data_type import PropertyDataType
+from hugegraph_llm.operators.hugegraph_op.retry_utils import retry_on_connection_error
 from hugegraph_llm.utils.log import log
 
 # Schema kinds (matches the HugeGraph REST schema path segments)
@@ -74,6 +75,7 @@ class SchemaManager:
                 graphspace=graphspace,
             )
         self.schema = self.client.schema()
+        self._schema_cache: Optional[Dict[str, Any]] = None
 
     @staticmethod
     def encode_vertex_id(vid: Any) -> str:
@@ -89,6 +91,7 @@ class SchemaManager:
 
     # -- idempotent schema management ----------------------------------------
 
+    @retry_on_connection_error()
     def exists(self, kind: str, name: str) -> bool:
         """Check whether a propertykey/vertexlabel/edgelabel/indexlabel exists.
 
@@ -341,6 +344,7 @@ class SchemaManager:
         else:  # pragma: no cover - Enum conversion already rejects unknown cardinalities
             log.error("Unknown cardinality %s for property_key %s", cardinality, builder)
 
+    @retry_on_connection_error()
     def list_indexes(self, base_label: Optional[str] = None) -> List[Dict[str, Any]]:
         """List index label metadata (generalized from neo4j's index introspection).
 
@@ -360,6 +364,7 @@ class SchemaManager:
                 result.append(info)
         return result
 
+    @retry_on_connection_error()
     def get_index_info(self, name: str) -> Optional[Dict[str, Any]]:
         """Fetch metadata for one index label, or None when absent/unreachable."""
         try:
@@ -380,6 +385,98 @@ class SchemaManager:
             "fields": list(idx.fields or []),
             "index_type": idx.indexType,
         }
+
+    @retry_on_connection_error()
+    def get_schema_cached(self, refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """Lazy schema fetch with caching (generalized from NebulaGraphStore).
+
+        The full schema is fetched once and reused; ``refresh=True`` forces a
+        re-fetch. Returns ``None`` on repeated connection failures.
+        """
+        if refresh or self._schema_cache is None:
+            try:
+                self._schema_cache = self.schema.getSchema()
+            except RequestException as exc:
+                log.warning("get_schema_cached failed for graph '%s': %s", self.graph_name, exc)
+                return None
+        return self._schema_cache
+
+    def invalidate_schema_cache(self) -> None:
+        """Drop the cached schema so the next call re-fetches it."""
+        self._schema_cache = None
+
+    def build_schema_description(self, refresh: bool = False) -> str:
+        """LLM-friendly schema text (generalized from NebulaGraphStore.refresh_schema).
+
+        Formats nodes, edges and relationships into a compact description
+        suitable for Text2Gremlin / prompt building::
+
+            Node properties: ...
+            Edge properties: ...
+            Relationships: ...
+        """
+        schema = self.get_schema_cached(refresh=refresh)
+        if not schema:
+            return ""
+        nodes = [
+            f"{vl['name']}({', '.join(vl.get('properties', []))})"
+            for vl in schema.get("vertexlabels", [])
+        ]
+        edges = [
+            f"{el['name']}({', '.join(el.get('properties', []))})"
+            for el in schema.get("edgelabels", [])
+        ]
+        rels = [
+            f"{el['source_label']}-[{el['name']}]->{el['target_label']}"
+            for el in schema.get("edgelabels", [])
+        ]
+        return (
+            f"Node properties: {nodes}\n"
+            f"Edge properties: {edges}\n"
+            f"Relationships: {rels}"
+        )
+
+    def infer_relationships(
+        self, sample: bool = True, refresh: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Infer source/target labels for every edge label.
+
+        Base information comes from the declared schema; when ``sample`` is
+        True, one real edge is sampled per edge label to confirm the endpoints
+        (mirrors NebulaGraphStore's sample-edge trick). Sampling failures
+        degrade to ``sample: None``.
+        """
+        schema = self.get_schema_cached(refresh=refresh)
+        relationships: List[Dict[str, Any]] = []
+        for edge in (schema or {}).get("edgelabels", []):
+            rel: Dict[str, Any] = {
+                "edge": edge["name"],
+                "source_label": edge.get("source_label"),
+                "target_label": edge.get("target_label"),
+            }
+            if sample:
+                rel["sample"] = self._sample_edge(edge["name"])
+            relationships.append(rel)
+        return relationships
+
+    def _sample_edge(self, edge_label: str) -> Optional[Dict[str, Any]]:
+        """Sample one real edge of the given label to confirm endpoints."""
+        try:
+            resp = self.client.gremlin().exec(
+                f"g.E().hasLabel('{edge_label}').limit(1)"
+            )
+            # pyhugegraph gremlin exec returns {"data": [...], "meta": {...}}
+            edges = resp.get("data") if isinstance(resp, dict) else (resp or [])
+            if not edges:
+                return None
+            first = edges[0]
+            return {
+                "outV": str(first.get("outV")),
+                "inV": str(first.get("inV")),
+            }
+        except Exception as exc:  # noqa: BLE001
+            log.warning("sample edge %r failed: %s", edge_label, exc)
+            return None
 
     def probe_capabilities(self) -> Dict[str, bool]:
         """Fail-fast capability probe (generalized from neo4j-graphrag-python).
