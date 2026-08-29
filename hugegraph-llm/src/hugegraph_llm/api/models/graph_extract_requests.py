@@ -31,6 +31,80 @@ class GraphExtractClientConfig(BaseModel):
     gs: Optional[str] = None
 
 
+def normalize_graph_schema(v: Any) -> str:
+    """Normalize a graph schema field to a JSON string or existing graph name.
+
+    Shared by ``GraphExtractRequest`` and ``FeishuIngestRequest`` so both keep
+    the same validation rules.
+    """
+
+    def validate_schema_obj(schema_obj: Any) -> None:
+        if not isinstance(schema_obj, dict):
+            raise ValueError("schema JSON must be an object.")
+        if "vertexlabels" not in schema_obj or "edgelabels" not in schema_obj:
+            raise ValueError("schema must contain 'vertexlabels' and 'edgelabels'.")
+        if not isinstance(schema_obj["vertexlabels"], list) or not isinstance(schema_obj["edgelabels"], list):
+            raise ValueError("'vertexlabels' and 'edgelabels' must be lists.")
+
+        for vlabel in schema_obj["vertexlabels"]:
+            if not isinstance(vlabel, dict):
+                raise ValueError("Each item in 'vertexlabels' must be an object.")
+            if not isinstance(vlabel.get("name"), str) or not vlabel["name"].strip():
+                raise ValueError("Each vertex label must have a non-empty string 'name'.")
+            props = vlabel.get("properties")
+            if not isinstance(props, list) or len(props) == 0:
+                raise ValueError("Each vertex label must have a non-empty 'properties' list.")
+
+        for elabel in schema_obj["edgelabels"]:
+            if not isinstance(elabel, dict):
+                raise ValueError("Each item in 'edgelabels' must be an object.")
+            for key in ("name", "source_label", "target_label"):
+                if not isinstance(elabel.get(key), str) or not elabel[key].strip():
+                    raise ValueError(f"Each edge label must have a non-empty string '{key}'.")
+            if "properties" in elabel and not isinstance(elabel["properties"], list):
+                raise ValueError("'properties' in edge labels must be a list when provided.")
+
+        if "propertykeys" in schema_obj and not isinstance(schema_obj["propertykeys"], list):
+            raise ValueError("'propertykeys' must be a list when provided.")
+
+    if isinstance(v, dict):
+        validate_schema_obj(v)
+        return json.dumps(v, ensure_ascii=False)
+    v = v.strip()
+    if not v:
+        raise ValueError("schema must not be empty.")
+    if v.startswith("{"):
+        try:
+            schema_obj = json.loads(v)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON schema: {e}") from e
+        validate_schema_obj(schema_obj)
+        return v
+    return v
+
+
+def validate_schema_client_config(schema: str, client_config: Optional["GraphExtractClientConfig"]) -> None:
+    """Validate schema / client_config consistency for graph extraction."""
+    is_named_schema = isinstance(schema, str) and not schema.strip().startswith("{")
+    if not is_named_schema:
+        if client_config is not None:
+            raise ValueError(
+                "client_config is not allowed when 'schema' is inline JSON; graph extraction "
+                "from an inline schema does not connect to HugeGraph."
+            )
+        return
+    if client_config is None:
+        raise ValueError(
+            "client_config is required when 'schema' refers to an existing graph name; "
+            "provide inline schema JSON instead to extract without a HugeGraph connection."
+        )
+    if client_config.graph != schema:
+        raise ValueError(
+            "When 'schema' is a graph name, client_config.graph must match it "
+            f"(got schema='{schema}', client_config.graph='{client_config.graph}')."
+        )
+
+
 class GraphExtractRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -59,69 +133,9 @@ class GraphExtractRequest(BaseModel):
     @field_validator("graph_schema")
     @classmethod
     def normalize_schema(cls, v):
-        def validate_schema_obj(schema_obj: Any) -> None:
-            if not isinstance(schema_obj, dict):
-                raise ValueError("schema JSON must be an object.")
-            if "vertexlabels" not in schema_obj or "edgelabels" not in schema_obj:
-                raise ValueError("schema must contain 'vertexlabels' and 'edgelabels'.")
-            if not isinstance(schema_obj["vertexlabels"], list) or not isinstance(schema_obj["edgelabels"], list):
-                raise ValueError("'vertexlabels' and 'edgelabels' must be lists.")
-
-            for vlabel in schema_obj["vertexlabels"]:
-                if not isinstance(vlabel, dict):
-                    raise ValueError("Each item in 'vertexlabels' must be an object.")
-                if not isinstance(vlabel.get("name"), str) or not vlabel["name"].strip():
-                    raise ValueError("Each vertex label must have a non-empty string 'name'.")
-                props = vlabel.get("properties")
-                if not isinstance(props, list) or len(props) == 0:
-                    raise ValueError("Each vertex label must have a non-empty 'properties' list.")
-
-            for elabel in schema_obj["edgelabels"]:
-                if not isinstance(elabel, dict):
-                    raise ValueError("Each item in 'edgelabels' must be an object.")
-                for key in ("name", "source_label", "target_label"):
-                    if not isinstance(elabel.get(key), str) or not elabel[key].strip():
-                        raise ValueError(f"Each edge label must have a non-empty string '{key}'.")
-                if "properties" in elabel and not isinstance(elabel["properties"], list):
-                    raise ValueError("'properties' in edge labels must be a list when provided.")
-
-            if "propertykeys" in schema_obj and not isinstance(schema_obj["propertykeys"], list):
-                raise ValueError("'propertykeys' must be a list when provided.")
-
-        if isinstance(v, dict):
-            validate_schema_obj(v)
-            return json.dumps(v, ensure_ascii=False)
-        v = v.strip()
-        if not v:
-            raise ValueError("schema must not be empty.")
-        if v.startswith("{"):
-            try:
-                schema_obj = json.loads(v)
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON schema: {e}") from e
-            validate_schema_obj(schema_obj)
-            return v
-        return v
+        return normalize_graph_schema(v)
 
     @model_validator(mode="after")
     def validate_schema_and_client_config(self):
-        schema = self.graph_schema
-        is_named_schema = isinstance(schema, str) and not schema.strip().startswith("{")
-        if not is_named_schema:
-            if self.client_config is not None:
-                raise ValueError(
-                    "client_config is not allowed when 'schema' is inline JSON; graph extraction "
-                    "from an inline schema does not connect to HugeGraph."
-                )
-            return self
-        if self.client_config is None:
-            raise ValueError(
-                "client_config is required when 'schema' refers to an existing graph name; "
-                "provide inline schema JSON instead to extract without a HugeGraph connection."
-            )
-        if self.client_config.graph != schema:
-            raise ValueError(
-                "When 'schema' is a graph name, client_config.graph must match it "
-                f"(got schema='{schema}', client_config.graph='{self.client_config.graph}')."
-            )
+        validate_schema_client_config(self.graph_schema, self.client_config)
         return self
