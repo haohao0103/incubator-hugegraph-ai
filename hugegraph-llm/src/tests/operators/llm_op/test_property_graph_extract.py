@@ -1122,6 +1122,53 @@ Hope this helps."""
         self.assertEqual(result["vertices"][0]["properties"]["name"], "Leonardo DiCaprio")
         self.assertEqual(result["edges"][0]["properties"]["role"], "Jack Dawson")
 
+    def test_parse_extracted_graph_collects_discarded_labels(self):
+        """Out-of-schema labels are recorded in 'discarded' for schema evolution."""
+        extractor = PropertyGraphExtract(llm=self.mock_llm)
+        schema = {
+            "vertexlabels": [{"name": "person", "primary_keys": ["name"], "properties": ["name"]}],
+            "edgelabels": [{"name": "acted_in", "properties": ["role"]}],
+        }
+        llm_output = json.dumps(
+            {
+                "vertices": [
+                    {"type": "vertex", "label": "person", "properties": {"name": "Alice"}},
+                    {"type": "vertex", "label": "skill", "properties": {"name": "Python"}},
+                ],
+                "edges": [
+                    {
+                        "type": "edge",
+                        "label": "acted_in",
+                        "outV": "person:Alice",
+                        "inV": "movie:ForrestGump",
+                        "properties": {"role": "lead"},
+                    },
+                    {
+                        "type": "edge",
+                        "label": "has_skill",
+                        "outV": "person:Alice",
+                        "inV": "skill:Python",
+                        "outVLabel": "person",
+                        "inVLabel": "skill",
+                        "properties": {"years": "5"},
+                    },
+                ],
+            }
+        )
+
+        parsed = extractor._parse_extracted_graph(schema, llm_output)
+
+        self.assertEqual(len(parsed["vertices"]), 1)
+        self.assertEqual(len(parsed["edges"]), 1)
+        self.assertEqual(len(parsed["discarded"]), 2)
+        vertex_discarded = next(d for d in parsed["discarded"] if d["type"] == "vertex")
+        self.assertEqual(vertex_discarded["label"], "skill")
+        self.assertEqual(vertex_discarded["properties"], {"name": "Python"})
+        edge_discarded = next(d for d in parsed["discarded"] if d["type"] == "edge")
+        self.assertEqual(edge_discarded["label"], "has_skill")
+        self.assertEqual(edge_discarded["outVLabel"], "person")
+        self.assertEqual(edge_discarded["inVLabel"], "skill")
+
 
 if __name__ == "__main__":
     unittest.main()

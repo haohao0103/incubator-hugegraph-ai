@@ -117,6 +117,7 @@ class PropertyGraphExtract:
 
         all_parsed_vertices = []
         all_parsed_edges = []
+        discarded_items = []
         total_ll_calls = 0
 
         for chunk in chunks:
@@ -133,6 +134,7 @@ class PropertyGraphExtract:
                 parsed = self._parse_extracted_graph(schema, proceeded_chunk)
                 all_parsed_vertices.extend(parsed["vertices"])
                 all_parsed_edges.extend(parsed["edges"])
+                discarded_items.extend(parsed.get("discarded", []))
 
         # Build schema maps
         vertex_label_map = {v["name"]: v for v in schema["vertexlabels"]}
@@ -156,20 +158,28 @@ class PropertyGraphExtract:
             elif item["type"] == "edge":
                 context["edges"].append(item)
 
+        if discarded_items:
+            context.setdefault("discarded_items", [])
+            context["discarded_items"].extend(discarded_items)
+
         context["call_count"] = context.get("call_count", 0) + total_ll_calls
         final_v = sum(1 for i in all_items if i["type"] == "vertex")
         final_e = sum(1 for i in all_items if i["type"] == "edge")
         log.info(
             "PropertyGraphExtract: %d LLM calls for %d chunks → %d vertices + %d edges "
             "(raw: %d vertices, %d edges before resolution)",
-            total_ll_calls, len(chunks), final_v, final_e,
-            len(all_parsed_vertices), len(all_parsed_edges),
+            total_ll_calls,
+            len(chunks),
+            final_v,
+            final_e,
+            len(all_parsed_vertices),
+            len(all_parsed_edges),
         )
         return context
 
     def _parse_extracted_graph(self, schema, text) -> Dict[str, List[Dict[str, Any]]]:
         """Parse LLM output into raw vertex and edge dicts without endpoint resolution."""
-        result: Dict[str, List[Dict[str, Any]]] = {"vertices": [], "edges": []}
+        result: Dict[str, List[Dict[str, Any]]] = {"vertices": [], "edges": [], "discarded": []}
 
         text = re.sub(r"```\w*\n?", "", text)
         text = re.sub(r"```", "", text)
@@ -187,8 +197,7 @@ class PropertyGraphExtract:
                 vertices = [i for i in property_graph if isinstance(i, dict) and i.get("type") == "vertex"]
                 edges = [i for i in property_graph if isinstance(i, dict) and i.get("type") == "edge"]
                 property_graph = {"vertices": vertices, "edges": edges}
-            if not (isinstance(property_graph, dict)
-                    and "vertices" in property_graph and "edges" in property_graph):
+            if not (isinstance(property_graph, dict) and "vertices" in property_graph and "edges" in property_graph):
                 log.critical("Invalid property graph format; expecting 'vertices' and 'edges'.")
                 return result
 
@@ -211,6 +220,23 @@ class PropertyGraphExtract:
                         continue
                     if item["label"] not in valid_labels:
                         log.warning("Invalid %s label '%s' ignored.", item_type, item["label"])
+                        discarded = {
+                            "type": item_type,
+                            "label": item["label"],
+                            "properties": item.get("properties", {}),
+                        }
+                        if item_type == "edge":
+                            out_label = item.get("outVLabel", "")
+                            in_label = item.get("inVLabel", "")
+                            source = item.get("source")
+                            target = item.get("target")
+                            if isinstance(source, dict):
+                                out_label = out_label or source.get("label", "")
+                            if isinstance(target, dict):
+                                in_label = in_label or target.get("label", "")
+                            discarded["outVLabel"] = out_label
+                            discarded["inVLabel"] = in_label
+                        result["discarded"].append(discarded)
                         continue
                     key = "vertices" if item_type == "vertex" else "edges"
                     result[key].append(item)
