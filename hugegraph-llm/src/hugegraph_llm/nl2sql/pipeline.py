@@ -119,6 +119,11 @@ class NL2SQLPipeline:
         """The engine backing every layer of this pipeline."""
         return self._engine
 
+    def prebuild(self) -> None:
+        """Pre-build linker indexes (BM25 + vector) at load time, so the first
+        user question does not pay the cold-start cost."""
+        self._linker.prebuild()
+
     @property
     def capabilities(self) -> EngineCapabilities:
         """What the current engine does and does not guarantee."""

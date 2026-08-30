@@ -229,6 +229,19 @@ class SchemaLinker:
         """The engine actually running the PPR."""
         return self._engine
 
+    def prebuild(self) -> None:
+        """Eagerly build BM25 + vector indexes to avoid a first-query stall.
+
+        Both indexes are lazily built on first ``link`` otherwise; for a
+        production service the pipeline calls this right after construction
+        (load time cost, controlled) instead of paying it on the first user
+        question. Failures degrade internally (vector build disables P2).
+        """
+        if self._use_bm25:
+            self._ensure_bm25()
+        if self._embedder is not None:
+            self._ensure_vector_index()
+
     # ---- public API (individually callable) ----
 
     def link(

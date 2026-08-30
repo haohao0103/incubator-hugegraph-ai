@@ -49,11 +49,40 @@ singleton (``LLMs().get_chat_llm()``), the same chat model the rest of
 import json
 import os
 import threading
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------------
+# Unified error model: every endpoint returns {"error": {"code", "message"}}
+# on failure, with a stable code the platform can program against.
+# ---------------------------------------------------------------------------
+NL2SQL_ERR_INTERNAL = "NL2SQL_INTERNAL"
+NL2SQL_ERR_BAD_REQUEST = "NL2SQL_BAD_REQUEST"
+NL2SQL_ERR_OUT_OF_KB = "NL2SQL_OUT_OF_KB"
+NL2SQL_ERR_LLM = "NL2SQL_LLM_UNAVAILABLE"
+NL2SQL_ERR_DEPENDENCY = "NL2SQL_DEPENDENCY_UNAVAILABLE"
+NL2SQL_ERR_TIMEOUT = "NL2SQL_TIMEOUT"
+_NL2SQL_ERR_STATUS = {
+    NL2SQL_ERR_INTERNAL: 500,
+    NL2SQL_ERR_BAD_REQUEST: 400,
+    NL2SQL_ERR_OUT_OF_KB: 422,
+    NL2SQL_ERR_LLM: 503,
+    NL2SQL_ERR_DEPENDENCY: 503,
+    NL2SQL_ERR_TIMEOUT: 504,
+}
+
+
+def _err(code: str, message: str) -> HTTPException:
+    """Build a standard error response with a stable error code."""
+    return HTTPException(
+        status_code=_NL2SQL_ERR_STATUS.get(code, 500),
+        detail={"error": {"code": code, "message": message}},
+    )
 
 from hugegraph_llm.models.llms.init_llm import LLMs
 from hugegraph_llm.nl2sql.engine import (
@@ -137,7 +166,9 @@ class SchemaMetadata(BaseModel):
     term_bindings: List[List[str]] = Field(default_factory=list)
 
 
-class ReloadRequest(BaseModel):
+class ValidateRequest(BaseModel):
+    """Metadata quality validation (no pipeline rebuild)."""
+
     metadata: SchemaMetadata
 
 
@@ -264,6 +295,7 @@ def get_pipeline() -> NL2SQLPipeline:
                     embedder=_make_embedder(),
                     keyword_extractor=_make_keyword_extractor(),
                 )
+                _PIPELINE.prebuild()
     return _PIPELINE
 
 
@@ -289,12 +321,24 @@ def _make_keyword_extractor() -> Optional[Callable[[str], List[str]]]:
     return extract
 
 
+_LLM_TIMEOUT_S = float(os.getenv("NL2SQL_LLM_TIMEOUT", "60"))
+_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+
+
 def _llm_callable(prompt: str) -> str:
     try:
         llm = LLMs().get_chat_llm()
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"LLM not configured: {exc}")
-    return llm.generate(prompt=prompt)
+        raise _err(NL2SQL_ERR_LLM, f"LLM not configured: {exc}") from exc
+    try:
+        future = _EXECUTOR.submit(llm.generate, prompt=prompt)
+        return future.result(timeout=_LLM_TIMEOUT_S)
+    except FutureTimeout as exc:
+        raise _err(
+            NL2SQL_ERR_TIMEOUT, f"LLM call timed out after {_LLM_TIMEOUT_S}s"
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise _err(NL2SQL_ERR_LLM, f"LLM call failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -419,22 +463,74 @@ def nl2sql_run(req: RunRequest):
     }
 
 
-@_router.post("/nl2sql/reload")
-def nl2sql_reload(req: ReloadRequest):
-    """Rebuild the cached pipeline from inline metadata (engine auto-selected)."""
-    global _PIPELINE
-    meta = req.metadata.model_dump()
-    schema = build_schema(meta)
-    with _LOCK:
-        _PIPELINE = NL2SQLPipeline(
-            schema, engine=_make_engine(schema),
-            keyword_extractor=_make_keyword_extractor(),
-        )
-    return {
-        "status": "reloaded",
-        "engine": _PIPELINE.capabilities.name,
-        "tables": len(schema.tables()),
+@_router.get("/nl2sql/healthz")
+def nl2sql_healthz():
+    """Dependency status + degradation matrix.
+
+    ``status`` is ``ok`` when nothing is degraded, ``degraded`` otherwise
+    (local engine fallback / lexical-only linking / HG unreachable). Endpoints
+    keep working in degraded mode per the matrix; a fully unavailable pipeline
+    raises ``NL2SQL_DEPENDENCY_UNAVAILABLE`` (503).
+    """
+    try:
+        pipe = get_pipeline()
+    except Exception as exc:  # noqa: BLE001
+        raise _err(NL2SQL_ERR_DEPENDENCY, f"pipeline unavailable: {exc}") from exc
+
+    deps: Dict[str, object] = {}
+    degraded: List[str] = []
+    try:
+        deps["engine"] = {"name": pipe.capabilities.name}
+        if pipe.capabilities.name == "local":
+            degraded.append("vermeer_unreachable_using_local")
+    except Exception as exc:  # noqa: BLE001
+        deps["engine"] = {"error": str(exc)}
+        degraded.append("engine_unavailable")
+
+    linker = pipe._linker
+    deps["embedder"] = {
+        "enabled": linker._embedder is not None,
+        "degraded_to_lexical": bool(linker._vector_disabled),
     }
+    if linker._embedder is not None and linker._vector_disabled:
+        degraded.append("embedder_failed_lexical_only")
+    deps["keyword_extractor"] = {"enabled": pipe._keyword_extractor is not None}
+
+    if _HG_GRAPH_ENV:
+        hg_ok = _hg_reachable(_HG_URL_ENV)
+        deps["hugegraph"] = {"reachable": hg_ok}
+        if not hg_ok:
+            degraded.append("hugegraph_unreachable")
+
+    return {
+        "status": "degraded" if degraded else "ok",
+        "degraded": degraded,
+        "dependencies": deps,
+    }
+
+
+def _hg_reachable(url: str, timeout: int = 3) -> bool:
+    """Probe a HugeGraph REST endpoint (proxy-free, gzip-tolerant)."""
+    try:
+        req = urllib.request.Request(
+            f"{url.rstrip('/')}/graphs", method="GET",
+            headers={"Accept-Encoding": "gzip"},
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.status < 400
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@_router.post("/nl2sql/validate")
+def nl2sql_validate(req: ValidateRequest):
+    """Metadata quality gate: duplicate names, missing comments, orphan
+    columns, 口径 conflicts, dangling FK/lineage endpoints. Errors block
+    ingestion; warnings are reported but tolerated."""
+    from hugegraph_llm.nl2sql.metadata_quality import summarize
+
+    return {"metadata": summarize(req.metadata.model_dump())}
 
 
 @_router.post("/nl2sql/load_hugegraph")
@@ -457,11 +553,13 @@ def nl2sql_load_hugegraph(req: HgLoadRequest):
             schema, engine=_make_engine(schema), embedder=embedder,
             keyword_extractor=_make_keyword_extractor(),
         )
+        _PIPELINE.prebuild()
     return {
         "status": "loaded",
         "source": f"hugegraph:{req.graph}",
         "engine": _PIPELINE.capabilities.name,
         "embedding": embedder is not None,
+        "prebuilt": True,
         "tables": len(schema.tables()),
         "columns": len(schema.columns()),
         "terms": len(schema.terms()),

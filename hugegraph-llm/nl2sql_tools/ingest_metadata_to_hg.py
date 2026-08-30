@@ -62,17 +62,21 @@ def _request(url: str, method: str, payload=None, timeout: int = 60):
         raise
 
 
-def _clear_label(base: str, label: str) -> None:
-    """Drop all vertices of a label via per-id DELETE (REST batch delete is
-    unsupported for label filters on HG 1.x)."""
-    try:
-        r = _request(f"{base}/vertices?label={label}&limit=10000", "GET")
-        ids = [v["id"] for v in r.get("vertices", [])]
-        for vid in ids:
-            _request(f"{base}/vertices/{vid}", "DELETE")
-        log(f"cleared {label}: {len(ids)} vertices")
-    except Exception as exc:  # noqa: BLE001
-        log(f"clear {label} failed (ignored): {exc}")
+def _clear_graph(url: str, graph: str) -> None:
+    """Wipe the whole graph's data (keeps schema labels).
+
+    HG 1.7 PRIMARY_KEY vertices only accept their internal numeric id on
+    DELETE (the REST query returns the display form '<label_id>:<name>'),
+    and per-label delete / gremlin drop are unsupported on this instance, so
+    the reliable reset is the official whole-graph clear. Only safe for a
+    graph dedicated to warehouse metadata (kg_rag).
+    """
+    from urllib.parse import quote
+
+    confirm = quote("I'm sure to delete all data")
+    clear_url = f"{url.rstrip('/')}/graphs/{graph}/clear?confirm_message={confirm}"
+    r = _request(clear_url, "DELETE")
+    log(f"cleared graph {graph} (data wiped, schema kept): {r}")
 
 
 def _fetch_ids(base: str, label: str) -> dict:
@@ -105,8 +109,7 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
     base = f"{url.rstrip('/')}/graphs/{graph}/graph"
 
     if clear:
-        for label in ("Table", "Field", "Metric", "Query"):
-            _clear_label(base, label)
+        _clear_graph(url, graph)
 
     tables = meta.get("tables", [])
     columns = meta.get("columns", [])
