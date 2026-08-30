@@ -1,0 +1,44 @@
+{
+  "metrics": [
+    {
+      "name": "order_total",
+      "definition": "订单总额",
+      "formula": "SUM(order.amount)",
+      "source_tables": ["order"],
+      "source_fields": ["order.amount"],
+      "depends_on": []
+    },
+    {
+      "name": "payment_total",
+      "definition": "支付总额",
+      "formula": "SUM(payment.amount)",
+      "source_tables": ["payment"],
+      "source_fields": ["payment.amount"],
+      "depends_on": []
+    },
+    {
+      "name": "order_count",
+      "definition": "订单数",
+      "formula": "COUNT(order.order_id)",
+      "source_tables": ["order"],
+      "source_fields": ["order.order_id"],
+      "depends_on": []
+    },
+    {
+      "name": "avg_order_value",
+      "definition": "",
+      "formula": "",
+      "source_tables": [],
+      "source_fields": [],
+      "depends_on": []
+    },
+    {
+      "name": "driver_order_cnt",
+      "definition": "",
+      "formula": "",
+      "source_tables": [],
+      "source_fields": [],
+      "depends_on": []
+    }
+  ]
+}

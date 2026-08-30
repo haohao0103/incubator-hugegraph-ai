@@ -52,6 +52,10 @@ KG_SCHEMA: Dict[str, Any] = {
         {"name": "source", "data_type": "TEXT", "cardinality": "SINGLE"},
         {"name": "definition", "data_type": "TEXT", "cardinality": "SINGLE"},
         {"name": "formula", "data_type": "TEXT", "cardinality": "SINGLE"},
+        # metric authority (P1-3): priority as INT (rankable), authoritative as
+        # TEXT (SchemaManager does not create BOOLEAN keys; value "true"/"false")
+        {"name": "priority", "data_type": "INT", "cardinality": "SINGLE"},
+        {"name": "authoritative", "data_type": "TEXT", "cardinality": "SINGLE"},
     ],
     "vertexlabels": [
         {
@@ -68,9 +72,11 @@ KG_SCHEMA: Dict[str, Any] = {
         },
         {
             "name": "Metric",
-            "properties": ["name", "definition", "formula", "domain", "source"],
+            "properties": ["name", "definition", "formula", "domain", "source",
+                            "authoritative", "priority"],
             "primary_keys": ["name"],
-            "nullable_keys": ["definition", "formula", "domain", "source"],
+            "nullable_keys": ["definition", "formula", "domain", "source",
+                              "authoritative", "priority"],
         },
     ],
     "edgelabels": [

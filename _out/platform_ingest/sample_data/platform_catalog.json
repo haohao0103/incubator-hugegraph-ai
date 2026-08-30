@@ -1,0 +1,41 @@
+{
+  "tables": [
+    {
+      "name": "order",
+      "comment": "订单表",
+      "fields": [
+        {"name": "order_id", "comment": "订单号", "type": "bigint"},
+        {"name": "city", "comment": "城市", "type": "string"},
+        {"name": "amount", "comment": "订单金额", "type": "double"},
+        {"name": "user_id", "comment": "用户ID", "type": "bigint"},
+        {"name": "driver_id", "comment": "司机ID", "type": "bigint"}
+      ]
+    },
+    {
+      "name": "payment",
+      "comment": "支付表",
+      "fields": [
+        {"name": "pay_id", "comment": "支付流水号", "type": "bigint"},
+        {"name": "order_id", "comment": "订单号", "type": "bigint"},
+        {"name": "amount", "comment": "支付金额", "type": "double"}
+      ]
+    },
+    {
+      "name": "user",
+      "comment": "用户表",
+      "fields": [
+        {"name": "user_id", "comment": "用户ID", "type": "bigint"},
+        {"name": "name", "comment": "用户名", "type": "string"}
+      ]
+    },
+    {
+      "name": "driver",
+      "comment": "司机表",
+      "fields": [
+        {"name": "driver_id", "comment": "司机ID", "type": "bigint"},
+        {"name": "name", "comment": "司机姓名", "type": "string"},
+        {"name": "city", "comment": "所在城市", "type": "string"}
+      ]
+    }
+  ]
+}
