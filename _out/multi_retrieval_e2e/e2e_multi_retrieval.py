@@ -61,6 +61,7 @@ QUESTIONS = [
     "订单数量",
     "大单有多少",       # alias "大单"->order_total: lexical misses, graph rescues
     "客单价",           # definition already contains 客单价 (doc-merged)
+    "风控引擎实时决策表在哪里",  # out-of-scope: no evidence -> refuse
 ]
 
 # alias map: 黑话/别名 -> canonical metric name (what the platform would tune)
@@ -82,21 +83,29 @@ def main() -> int:
     data = KgRuleEngine(client, GRAPH).load_graph()
     single = KgSchemaLinker()
     multi = KgMultiSchemaLinker(client=client, synonyms=SYNONYMS, config=MultiRecallConfig())
+    multi_imp = KgMultiSchemaLinker(
+        client=client, synonyms=SYNONYMS,
+        config=MultiRecallConfig(importance_weight=1.0),
+    )
 
     print(f"=== graph={GRAPH}  single(lexical) vs multi(graph+fulltext+lexical+alias) ===\n")
-    print(f"{'question':<14} | {'single metrics':<32} | {'multi metrics':<38} | gain")
-    print("-" * 100)
-    gains = 0
+    print(f"{'question':<18} | {'single':<30} | {'multi':<34} | {'multi+importance':<34} | note")
+    print("-" * 130)
+    gains = no_evidence = 0
     for q in QUESTIONS:
         s = _metric_names(single.link(q, data=data))
         m = _metric_names(multi.link(q, data=data))
+        mi = _metric_names(multi_imp.link(q, data=data))
         extra = [x for x in m if x not in s]
         if extra:
             gains += 1
-        flag = f"+{extra}" if extra else ""
-        print(f"{q:<14} | {str(s):<32} | {str(m):<38} | {flag}")
-    print(f"\nquestions where multi-recall linked MORE metrics than single: {gains}/{len(QUESTIONS)}")
-    print("PASS: multi-recall fusion pipeline runs on the live graph")
+        if not m:
+            no_evidence += 1
+        note = f"+{extra}" if extra else ("NO EVIDENCE -> refuse" if not m else "")
+        print(f"{q:<18} | {str(s):<30} | {str(m):<34} | {str(mi):<34} | {note}")
+    print(f"\nmulti-recall gains: {gains}/{len(QUESTIONS)}; "
+          f"no-evidence (refuse) cases: {no_evidence}")
+    print("PASS: multi-recall + importance re-rank + no-evidence signal on the live graph")
     return 0
 
 

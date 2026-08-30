@@ -67,6 +67,10 @@ class MultiRecallConfig:
             "vector": 1.0,  # inactive until an embedding retriever is attached
         }
     )
+    # entity-importance re-ranking (generalized from the 货拉拉 metadata-GraphRAG
+    # 表/字段权重公式): fused score *= (1 + importance_weight * importance).
+    # 0 disables the re-rank (default, keeps prior behaviour).
+    importance_weight: float = 0.0
     retriever_top_k: int = 20
 
 
@@ -150,9 +154,15 @@ class FulltextRetriever(SchemaRetriever):
     With a client it runs real ``g.V().has(label, prop, Text.contains(term))``
     queries (the SEARCH indexes are built); without one it degrades to a
     substring scan over the same fields so unit tests stay offline.
+
+    Only terms with ``len(term) >= min_term_len`` are queried: HugeGraph's
+    SEARCH tokenizer matches substrings aggressively, so 2-gram terms like
+    "表在" hit every comment containing "表" and cause out-of-scope
+    false recalls (the 货拉拉 badcase '不存在也答').
     """
 
     source = "fulltext"
+    min_term_len: int = 3
 
     _TEXT_FIELDS: Tuple[Tuple[str, str], ...] = (
         ("Table", "comment"),
@@ -165,7 +175,9 @@ class FulltextRetriever(SchemaRetriever):
         self._linker = linker or KgSchemaLinker()
 
     def retrieve(self, question, data, client=None) -> List[RetrievedVertex]:
-        terms = self._linker.extract_terms(question)
+        terms = [t for t in self._linker.extract_terms(question) if len(t) >= self.min_term_len]
+        if not terms:
+            return []
         if client is not None:
             return self._retrieve_live(client, terms)
         return self._retrieve_memory(data, terms)
@@ -244,6 +256,52 @@ def rrf_fuse(
     return [replace(best[key], score=score) for key, score in ordered]
 
 
+def compute_entity_importance(data: GraphData) -> Dict[str, Dict[str, float]]:
+    """Per-vertex importance in [0, 1] for re-ranking fused results.
+
+    Generalized from the 货拉拉 metadata-GraphRAG weighting: tables are more
+    important when referenced by metrics and rich in fields; metrics when
+    marked authoritative / high-priority; fields inherit their table's weight.
+    """
+    edges = data.get("edges", {})
+    vertices = data.get("vertices", {})
+    metric_refs: Dict[str, int] = defaultdict(int)
+    for _src, dst in edges.get("computedFrom", []):
+        metric_refs[dst] += 1
+    table_fields: Dict[str, int] = defaultdict(int)
+    for src, _dst in edges.get("hasColumn", []):
+        table_fields[src] += 1
+
+    table_imp: Dict[str, float] = {}
+    for t in vertices.get("Table", []):
+        name = t.get("name")
+        if not name:
+            continue
+        ref = min(metric_refs.get(name, 0), 3) / 3.0
+        fields = min(table_fields.get(name, 0), 10) / 10.0
+        auth = 1.0 if str(t.get("authoritative") or "").lower() == "true" else 0.0
+        table_imp[name] = 0.6 * ref + 0.3 * fields + 0.1 * auth
+
+    metric_imp: Dict[str, float] = {}
+    for m in vertices.get("Metric", []):
+        name = m.get("name")
+        if not name:
+            continue
+        auth = 1.0 if str(m.get("authoritative") or "").lower() == "true" else 0.0
+        try:
+            prio = min(max(int(m.get("priority") or 0), 0), 100) / 100.0
+        except (TypeError, ValueError):  # pragma: no cover - dirty data guard
+            prio = 0.0
+        metric_imp[name] = 0.7 * auth + 0.3 * prio
+
+    field_imp: Dict[str, float] = {}
+    for f in vertices.get("Field", []):
+        name, owner = f.get("name"), f.get("table")
+        if name and owner:
+            field_imp[name] = table_imp.get(owner, 0.0)
+    return {"Table": table_imp, "Metric": metric_imp, "Field": field_imp}
+
+
 class KgMultiSchemaLinker:
     """Multi-recall schema linker: fuse paths -> SchemaContext (compatible).
 
@@ -285,6 +343,13 @@ class KgMultiSchemaLinker:
         # NOTE: RRF scores are 1/(k+rank)-scaled (~0.016), so no absolute
         # min_score filter here; each path filters its own results and the
         # assembly below truncates to the budgets.
+        if self._config.importance_weight > 0:
+            importance = compute_entity_importance(data)
+            for rv in fused:
+                rv.score *= 1.0 + self._config.importance_weight * importance.get(
+                    rv.label, {}
+                ).get(rv.name, 0.0)
+            fused.sort(key=lambda rv: -rv.score)
 
         # assemble the SchemaContext from the fused candidates, reusing the
         # single-pass linker for relations/evidence construction

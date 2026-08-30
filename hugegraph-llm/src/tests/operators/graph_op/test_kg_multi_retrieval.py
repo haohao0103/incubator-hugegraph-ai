@@ -10,6 +10,7 @@ from hugegraph_llm.operators.graph_op.kg_multi_retrieval import (
     MultiRecallConfig,
     RetrievedVertex,
     SchemaRetriever,
+    compute_entity_importance,
     rrf_fuse,
 )
 from hugegraph_llm.operators.graph_op.kg_rule_engine import GraphData
@@ -116,6 +117,13 @@ class TestFulltextRetriever(unittest.TestCase):
             any(h.label == "Metric" and h.name == "avg_order_value" for h in hits)
         )
 
+    def test_short_terms_skipped(self):
+        # '表在' is a 2-gram; SEARCH matches substrings aggressively, so
+        # sub-3-char terms are skipped entirely (no false recall)
+        r = FulltextRetriever()
+        hits = r.retrieve("表在", self.data)
+        self.assertEqual(hits, [])
+
     def test_memory_miss_when_absent(self):
         r = FulltextRetriever()
         hits = r.retrieve("客单价是多少", self.data)  # '客单' not in definitions
@@ -153,7 +161,7 @@ class TestFulltextRetriever(unittest.TestCase):
                 raise RuntimeError("index down")
 
         r = FulltextRetriever()
-        hits = r.retrieve("订单", self.data, client=_Broken())
+        hits = r.retrieve("订单表在哪里", self.data, client=_Broken())
         self.assertEqual(hits, [])
 
 
@@ -205,6 +213,44 @@ class _FakeVectorRetriever(SchemaRetriever):
         return []
 
 
+class TestEntityImportance(unittest.TestCase):
+    def test_table_importance_by_metric_refs_and_fields(self):
+        imp = compute_entity_importance(_sample_graph())
+        # order is referenced by 2 metrics and owns 2 fields; payment by 1
+        self.assertGreater(imp["Table"]["order"], imp["Table"]["payment"])
+
+    def test_metric_importance_authoritative_priority(self):
+        data = _sample_graph()
+        data["vertices"]["Metric"][0]["authoritative"] = "true"
+        data["vertices"]["Metric"][0]["priority"] = "80"
+        imp = compute_entity_importance(data)
+        self.assertGreater(imp["Metric"]["order_total"], 0.5)
+
+    def test_field_inherits_table_importance(self):
+        data = _sample_graph()
+        data["vertices"]["Field"][0]["table"] = "order"
+        imp = compute_entity_importance(data)
+        self.assertEqual(imp["Field"]["order.amount"], imp["Table"]["order"])
+
+    def test_importance_skips_nameless(self):
+        data = _sample_graph()
+        data["vertices"]["Table"].append({"comment": "无名表"})
+        data["vertices"]["Metric"].append({"definition": "无名指标"})
+        imp = compute_entity_importance(data)  # must not crash
+        self.assertNotIn(None, imp["Table"])
+        self.assertNotIn(None, imp["Metric"])
+
+    def test_importance_rerank_boosts_referenced_table(self):
+        a = [RetrievedVertex("Table", "order", 0.02, "lexical")]
+        b = [RetrievedVertex("Table", "payment", 0.02, "lexical")]
+        fused = rrf_fuse([a, b], k=60)
+        imp = {"Table": {"order": 1.0, "payment": 0.0}}
+        for rv in fused:
+            rv.score *= 1.0 + 1.0 * imp.get(rv.label, {}).get(rv.name, 0.0)
+        fused.sort(key=lambda rv: -rv.score)
+        self.assertEqual(fused[0].name, "order")
+
+
 class TestKgMultiSchemaLinker(unittest.TestCase):
     def setUp(self):
         self.data = _sample_graph()
@@ -245,6 +291,29 @@ class TestKgMultiSchemaLinker(unittest.TestCase):
         multi.attach_vector_retriever(_FakeVectorRetriever())  # returns [] here
         ctx = multi.link("订单", self.data)
         self.assertIn("order_total", [m.get("name") for m in ctx.metrics])
+
+    def test_importance_weight_reranks_tables(self):
+        data = _sample_graph()
+        # heavily reference 'order' via extra metrics so importance dominates
+        for i in range(3):
+            data["vertices"]["Metric"].append(
+                {"name": f"m_extra_{i}", "definition": "口径", "formula": "COUNT(1)",
+                 "source_tables": ["order"]}
+            )
+            data["edges"]["computedFrom"].append((f"m_extra_{i}", "order"))
+        multi = KgMultiSchemaLinker(config=MultiRecallConfig(importance_weight=1.0))
+        ctx = multi.link("order payment", data)
+        names = [t.get("name") for t in ctx.tables]
+        self.assertIn("order", names)
+        # 'order' outranks 'payment' after importance re-ranking
+        self.assertEqual(names[0], "order")
+
+    def test_no_evidence_empty_context(self):
+        multi = KgMultiSchemaLinker(config=MultiRecallConfig())
+        ctx = multi.link("风控引擎实时决策表在哪里", self.data)
+        self.assertEqual(ctx.tables, [])
+        self.assertEqual(ctx.metrics, [])
+        self.assertEqual(ctx.fields, [])
 
     def test_evidence_and_relations_present(self):
         multi = KgMultiSchemaLinker(config=MultiRecallConfig())
