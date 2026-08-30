@@ -51,6 +51,8 @@ produces, so it drops into ``NL2SQLPipeline`` unchanged.
 
 import gzip
 import json
+import os
+import time
 import urllib.request
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -79,10 +81,11 @@ def _hg_get(url: str, timeout: int = 30) -> dict:
 
 
 def _collect(endpoint: str, kind: str, label: str, limit: int, timeout: int) -> List[dict]:
-    """Page through ``/graph/{vertices|edges}`` for one label.
+    """Page through ``/graph/{vertices|edges}`` for one label, with retries.
 
     Uses the ``page`` token when the server returns one; a guard caps runaway
     pagination. A single large ``limit`` is enough for typical schemas.
+    Transient HTTP failures retry up to ``_HG_RETRIES`` times with backoff.
     """
     out: List[dict] = []
     page: Optional[str] = None
@@ -91,7 +94,7 @@ def _collect(endpoint: str, kind: str, label: str, limit: int, timeout: int) -> 
         url = f"{endpoint}/{kind}?label={label}&limit={limit}"
         if page:
             url += f"&page={page}"
-        data = _hg_get(url, timeout)
+        data = _hg_get_with_retry(url, timeout)
         out.extend(data.get(kind, []))
         page = data.get("page")
         if not page:
@@ -101,6 +104,22 @@ def _collect(endpoint: str, kind: str, label: str, limit: int, timeout: int) -> 
             log.warning("hg schema paging guard hit for label=%s", label)
             break
     return out
+
+
+_HG_RETRIES = int(os.getenv("NL2SQL_HG_RETRIES", "3"))
+_HG_RETRY_BACKOFF = [0.5, 1.0, 2.0]
+
+
+def _hg_get_with_retry(url: str, timeout: int) -> dict:
+    last: Optional[Exception] = None
+    for attempt in range(_HG_RETRIES):
+        try:
+            return _hg_get(url, timeout)
+        except Exception as exc:  # noqa: BLE001 -- transient network failure
+            last = exc
+            if attempt < _HG_RETRIES - 1:
+                time.sleep(_HG_RETRY_BACKOFF[attempt % len(_HG_RETRY_BACKOFF)])
+    raise last  # type: ignore[misc]
 
 
 @dataclass

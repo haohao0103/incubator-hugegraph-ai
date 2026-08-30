@@ -38,6 +38,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from hugegraph_llm.api.admin_api import admin_http_api
 from hugegraph_llm.api.graph_extract_api import graph_extract_http_api
+from hugegraph_llm.api.nl2sql_api import nl2sql_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.config import admin_settings, huge_settings, prompt
 from hugegraph_llm.demo.rag_demo.admin_ops_block import create_admin_ops_block, log_stream
@@ -236,6 +237,7 @@ def create_app():
     )
     admin_http_api(api_auth, log_stream)
     graph_extract_http_api(api_auth)
+    nl2sql_http_api(api_auth, app=app)
 
     app.include_router(api_auth)
     # Mount Gradio inside FastAPI

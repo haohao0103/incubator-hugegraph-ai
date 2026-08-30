@@ -1,0 +1,38 @@
+name: nl2sql-ci
+
+# Production-readiness CI gate for the NL2SQL semantic layer:
+# unit suite (nl2sql) + API contract tests. Runs on push/PR.
+#
+# NOTE: adapt the dependency install to the actual packaging of hugegraph-llm
+# (torch/sentence-transformers are heavy; the unit+API tests do not need them
+# — only numpy/sqlglot/pydantic/fastapi/networkx). Keep this job lean.
+
+on:
+  push:
+    paths:
+      - "hugegraph-llm/src/hugegraph_llm/nl2sql/**"
+      - "hugegraph-llm/src/hugegraph_llm/api/nl2sql_api.py"
+      - "hugegraph-llm/src/tests/api/test_nl2sql_api.py"
+  pull_request:
+    paths:
+      - "hugegraph-llm/src/hugegraph_llm/nl2sql/**"
+      - "hugegraph-llm/src/hugegraph_llm/api/nl2sql_api.py"
+      - "hugegraph-llm/src/tests/api/test_nl2sql_api.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "numpy<2" networkx sqlglot pydantic fastapi pytest httpx jieba
+      - name: Unit + API contract tests
+        run: |
+          PYTHONPATH=hugegraph-llm/src python -m pytest \
+            hugegraph-llm/src/hugegraph_llm/nl2sql/tests \
+            hugegraph-llm/src/tests/api/test_nl2sql_api.py -q

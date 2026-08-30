@@ -40,8 +40,8 @@ def _make_client(monkeypatch):
     pipe = NL2SQLPipeline(schema)
     monkeypatch.setattr(nl2sql_api, "get_pipeline", lambda: pipe)
     router = APIRouter()
-    nl2sql_http_api(router)
     app = FastAPI()
+    nl2sql_http_api(router, app=app)
     app.include_router(router)
     return TestClient(app)
 
@@ -54,6 +54,25 @@ def test_healthz_ok(monkeypatch):
     assert body["status"] in ("ok", "degraded")
     assert "dependencies" in body and "engine" in body["dependencies"]
     assert body["dependencies"]["engine"]["name"] == "local"
+
+
+def test_request_id_echoed(monkeypatch):
+    c = _make_client(monkeypatch)
+    r = c.post("/nl2sql/link", json={"question": "支付总额是多少"},
+               headers={"X-Request-Id": "test-rid-123"})
+    assert r.status_code == 200
+    assert r.headers.get("X-Request-Id") == "test-rid-123"
+
+
+def test_metrics_prometheus_text(monkeypatch):
+    c = _make_client(monkeypatch)
+    c.post("/nl2sql/link", json={"question": "支付总额是多少"})
+    r = c.get("/nl2sql/metrics")
+    assert r.status_code == 200
+    assert "text/plain" in r.headers["content-type"]
+    body = r.text
+    assert 'nl2sql_requests_total{endpoint="/nl2sql/link"}' in body
+    assert "nl2sql_latency_ms_sum" in body
 
 
 def test_link_returns_items(monkeypatch):

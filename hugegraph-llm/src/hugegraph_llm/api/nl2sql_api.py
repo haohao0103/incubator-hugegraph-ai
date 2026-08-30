@@ -49,13 +49,30 @@ singleton (``LLMs().get_chat_llm()``), the same chat model the rest of
 import json
 import os
 import threading
+import time
 import urllib.request
+import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------------
+# Observability: request-id + audit log + in-process prometheus-style metrics.
+# ---------------------------------------------------------------------------
+_METRICS: Dict[str, Dict[str, float]] = {}
+
+
+def _metric(endpoint: str, key: str, delta: float = 1.0) -> None:
+    m = _METRICS.setdefault(endpoint, {"calls": 0.0, "errors": 0.0,
+                                       "latency_ms": 0.0, "out_of_kb": 0.0})
+    m[key] = m.get(key, 0.0) + delta
+
+
+def _mark_out_of_kb(endpoint: str) -> None:
+    _metric(endpoint, "out_of_kb")
 
 # ---------------------------------------------------------------------------
 # Unified error model: every endpoint returns {"error": {"code", "message"}}
@@ -111,6 +128,9 @@ _VERMEER_MASTER = os.getenv("VERMEER_MASTER", "http://127.0.0.1:6688")
 # NL2SQL_HG_URL defaulting to http://127.0.0.1:8081).
 _HG_GRAPH_ENV = os.getenv("NL2SQL_HG_GRAPH")
 _HG_URL_ENV = os.getenv("NL2SQL_HG_URL", "http://127.0.0.1:8081")
+# Central knobs (env-configurable; API per-request values override these).
+_DEFAULT_TOP_K = int(os.getenv("NL2SQL_DEFAULT_TOP_K", "10"))
+_MIN_SCORE_DEFAULT = os.getenv("NL2SQL_MIN_SCORE")  # e.g. "0.02"; None = off
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -193,45 +213,10 @@ class HgLoadRequest(BaseModel):
 
 
 def build_schema(meta: dict) -> SchemaGraph:
-    """Populate a SchemaGraphBuilder from a metadata dict (file or request)."""
-    b = SchemaGraphBuilder()
-    for t in meta.get("tables", []):
-        b.add_table(
-            Table(
-                name=t["name"],
-                database=t.get("database", ""),
-                comment=t.get("comment", ""),
-                is_fact=bool(t.get("is_fact", False)),
-            )
-        )
-    for c in meta.get("columns", []):
-        b.add_column(
-            Column(
-                name=c["name"],
-                table=c["table"],
-                data_type=c.get("data_type", ""),
-                comment=c.get("comment", ""),
-            )
-        )
-    for fk in meta.get("foreign_keys", []):
-        if len(fk) == 2:
-            b.add_foreign_key(fk[0], fk[1])
-    for lg in meta.get("lineage", []):
-        if len(lg) == 2:
-            b.add_lineage(lg[0], lg[1])
-    if meta.get("query_logs"):
-        b.add_query_logs(meta["query_logs"])
-    for tm in meta.get("terms", []):
-        b.add_term(Term(name=tm["name"], comment=tm.get("comment", "")))
-    for tb in meta.get("term_bindings", []):
-        if len(tb) == 2:
-            b.bind_term(tb[0], tb[1])
-    return b.build()
+    """Build a SchemaGraph from a SchemaMetadata dict (shared impl)."""
+    from hugegraph_llm.nl2sql.api_utils import build_schema_from_meta
 
-
-# ---------------------------------------------------------------------------
-# Engine + pipeline (lazily built, cached)
-# ---------------------------------------------------------------------------
+    return build_schema_from_meta(meta)
 
 
 def _make_engine(schema: SchemaGraph):
@@ -394,12 +379,15 @@ def nl2sql_link(req: LinkRequest):
     (or that matches nothing at all) is flagged ``out_of_kb`` so the caller
     can refuse to answer instead of hallucinating a table.
     """
-    items = get_pipeline().link(req.question, top_k=req.top_k)
+    min_score = req.min_score if req.min_score is not None else (
+        float(_MIN_SCORE_DEFAULT) if _MIN_SCORE_DEFAULT else None)
+    items = get_pipeline().link(req.question, top_k=req.top_k or _DEFAULT_TOP_K)
     best = max((i.score for i in items), default=0.0)
-    out_of_kb = bool(not items or (req.min_score is not None and best < req.min_score))
+    out_of_kb = bool(not items or (min_score is not None and best < min_score))
     resp = {"question": req.question,
             "items": [_item_to_dict(i) for i in items]}
     if out_of_kb:
+        _mark_out_of_kb("/nl2sql/link")
         resp["out_of_kb"] = True
         resp["message"] = "问题超出当前知识库范围，建议人工确认后再查询"
     return resp
@@ -430,18 +418,23 @@ def nl2sql_schema_context(req: SchemaContextRequest):
     ``min_score`` set, out-of-knowledge-base questions are flagged explicitly.
     """
     pipe = get_pipeline()
+    min_score = req.min_score if req.min_score is not None else (
+        float(_MIN_SCORE_DEFAULT) if _MIN_SCORE_DEFAULT else None)
     ctx = pipe.schema_context(
-        req.question, top_k=req.top_k, include_joins=req.include_joins,
-        include_global=req.include_global,
+        req.question, top_k=req.top_k or _DEFAULT_TOP_K,
+        include_joins=req.include_joins, include_global=req.include_global,
     )
     resp = {"question": req.question, "schema_context": ctx}
     if not ctx:
+        _mark_out_of_kb("/nl2sql/schema_context")
         resp["out_of_kb"] = True
         resp["message"] = "问题超出当前知识库范围，建议人工确认后再查询"
-    elif req.min_score is not None:
-        best = max((i.score for i in pipe.link(req.question, top_k=req.top_k)),
+    elif min_score is not None:
+        best = max((i.score for i in pipe.link(req.question,
+                                               top_k=req.top_k or _DEFAULT_TOP_K)),
                    default=0.0)
-        if best < req.min_score:
+        if best < min_score:
+            _mark_out_of_kb("/nl2sql/schema_context")
             resp["out_of_kb"] = True
             resp["message"] = "问题超出当前知识库范围，建议人工确认后再查询"
     return resp
@@ -560,6 +553,7 @@ def nl2sql_load_hugegraph(req: HgLoadRequest):
         "engine": _PIPELINE.capabilities.name,
         "embedding": embedder is not None,
         "prebuilt": True,
+        "loaded_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
         "tables": len(schema.tables()),
         "columns": len(schema.columns()),
         "terms": len(schema.terms()),
@@ -567,6 +561,45 @@ def nl2sql_load_hugegraph(req: HgLoadRequest):
     }
 
 
-def nl2sql_http_api(router: APIRouter) -> None:
-    """Register all NL2SQL routes onto the shared ``api_auth`` router."""
+def nl2sql_http_api(router: APIRouter, app: Optional["FastAPI"] = None) -> None:
+    """Register all NL2SQL routes onto the shared ``api_auth`` router.
+
+    Pass ``app`` to also install the observability middleware (request-id
+    propagation, audit log, per-endpoint metrics). Without ``app`` the routes
+    still work; observability is simply off.
+    """
     router.include_router(_router)
+
+    if app is not None:
+        @app.middleware("http")
+        async def _nl2sql_observability(request: Request, call_next):
+            rid = request.headers.get("X-Request-Id") or uuid.uuid4().hex[:12]
+            t0 = time.time()
+            resp = await call_next(request)
+            ms = (time.time() - t0) * 1000
+            path = request.url.path
+            _metric(path, "calls")
+            _metric(path, "latency_ms", ms)
+            if resp.status_code >= 400:
+                _metric(path, "errors")
+            resp.headers["X-Request-Id"] = rid
+            log.info("[nl2sql][%s] %s %s %.1fms -> %s",
+                     rid, request.method, path, ms, resp.status_code)
+            return resp
+
+
+@_router.get("/nl2sql/metrics")
+def nl2sql_metrics():
+    """In-process prometheus-style counters (calls / errors / latency / oob)."""
+    lines = [
+        "# HELP nl2sql_requests_total Total NL2SQL requests per endpoint.",
+        "# TYPE nl2sql_requests_total counter",
+    ]
+    for ep in sorted(_METRICS):
+        m = _METRICS[ep]
+        lines.append(f'nl2sql_requests_total{{endpoint="{ep}"}} {m["calls"]:.0f}')
+        lines.append(f'nl2sql_errors_total{{endpoint="{ep}"}} {m["errors"]:.0f}')
+        lines.append(f'nl2sql_out_of_kb_total{{endpoint="{ep}"}} {m["out_of_kb"]:.0f}')
+        lines.append(
+            f'nl2sql_latency_ms_sum{{endpoint="{ep}"}} {m["latency_ms"]:.1f}')
+    return Response(content="\n".join(lines) + "\n", media_type="text/plain")
