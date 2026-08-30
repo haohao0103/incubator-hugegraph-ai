@@ -309,6 +309,11 @@ class TestEnsureSchema(unittest.TestCase):
         index_names = {i["name"] for i in called_schema["indexes"]}
         self.assertIn("QueryByDomain", index_names)
         self.assertIn("QueryByQuestion", index_names)
+        self.assertIn("QueryByCreatedAt", index_names)
+        self.assertIn("QueryBySql", index_names)
+        # created_at must be LONG so the RANGE index works (RANGE rejects TEXT)
+        pk = next(p for p in called_schema["propertykeys"] if p["name"] == "created_at")
+        self.assertEqual(pk["data_type"], "LONG")
         # the Query vertex label is declared AUTOMATIC-id (property filters
         # on it are rejected unless secondary indexes exist)
         vl = next(v for v in called_schema["vertexlabels"] if v["name"] == "Query")

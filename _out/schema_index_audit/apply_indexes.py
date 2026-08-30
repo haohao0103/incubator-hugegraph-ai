@@ -144,20 +144,17 @@ def main() -> int:
     ok = store.ensure_schema()
     print(f"  store.ensure_schema() -> {ok}")
 
-    mgr = SchemaManager(GRAPH, client=client)
-    indexes = mgr.list_indexes(base_label="Query")
-    print("  Query indexes now present:")
-    for idx in indexes:
-        print(f"    {idx['name']}  type={idx['index_type']} fields={idx['fields']}")
-    new_names = {i["name"] for i in indexes}
-    missing = [n for n in INDEX_NAMES if n not in new_names]
-    if missing:
-        print(f"  !! missing: {missing}")
-        return 1
+    print("\n--- apply metadata label indexes (KG_SCHEMA) ---")
+    from hugegraph_llm.api.unified_convert import KG_SCHEMA
 
-    print("\n--- rebuild existing data ---")
-    for name in INDEX_NAMES:
-        print(f"  {_rebuild(client, name)}")
+    mgr = SchemaManager(GRAPH, client=client)
+    summary = mgr.ensure_schema({"indexes": KG_SCHEMA.get("indexes", [])})
+    print(f"  ensure_schema(indexes) -> created {summary['index_labels']} new index(es)")
+
+    print("\n--- rebuild all index labels (existing data backfill) ---")
+    for idx in mgr.list_indexes():
+        if idx["base_value"] in ("Table", "Field", "Metric", "Query"):
+            print(f"  {idx['name']}: {_rebuild(client, idx['name'])}")
 
     print("\n--- AFTER (same single-has queries, profiled) ---")
     for key, val in (("domain", "demo_golden"), ("question", "各城市订单总额")):

@@ -79,6 +79,27 @@ KG_SCHEMA: Dict[str, Any] = {
         {"name": "computedFromField", "source_label": "Metric", "target_label": "Field", "properties": []},
         {"name": "dependsOn", "source_label": "Metric", "target_label": "Metric", "properties": []},
     ],
+    # Every non-PK property gets the index type that matches how it will be
+    # queried: short enum-ish values -> SECONDARY (exact filter), long text ->
+    # SEARCH (textContains), numbers -> RANGE. `name` needs none: it is the
+    # PRIMARY KEY (auto-indexed). HugeGraph supports 5 index types:
+    # SECONDARY / RANGE / SEARCH / SHARD / UNIQUE.
+    "indexes": [
+        {"name": "TableByComment", "base_label": "Table", "field": "comment", "index_type": "SEARCH"},
+        {"name": "TableByDomain", "base_label": "Table", "field": "domain", "index_type": "SECONDARY"},
+        {"name": "TableBySource", "base_label": "Table", "field": "source", "index_type": "SECONDARY"},
+        {"name": "FieldByComment", "base_label": "Field", "field": "comment", "index_type": "SEARCH"},
+        {"name": "FieldByType", "base_label": "Field", "field": "type", "index_type": "SECONDARY"},
+        {"name": "FieldByTable", "base_label": "Field", "field": "table", "index_type": "SECONDARY"},
+        {"name": "FieldByDomain", "base_label": "Field", "field": "domain", "index_type": "SECONDARY"},
+        {"name": "FieldBySource", "base_label": "Field", "field": "source", "index_type": "SECONDARY"},
+        {"name": "MetricByDefinition", "base_label": "Metric", "field": "definition", "index_type": "SEARCH"},
+        {"name": "MetricByFormula", "base_label": "Metric", "field": "formula", "index_type": "SEARCH"},
+        {"name": "MetricByDomain", "base_label": "Metric", "field": "domain", "index_type": "SECONDARY"},
+        {"name": "MetricBySource", "base_label": "Metric", "field": "source", "index_type": "SECONDARY"},
+        {"name": "MetricByAuthoritative", "base_label": "Metric", "field": "authoritative", "index_type": "SECONDARY"},
+        {"name": "MetricByPriority", "base_label": "Metric", "field": "priority", "index_type": "SECONDARY"},
+    ],
 }
 
 # Serialized form consumed by ImportGraphDataFlow (SchemaNode checks

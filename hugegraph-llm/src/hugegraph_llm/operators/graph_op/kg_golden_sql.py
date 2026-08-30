@@ -101,12 +101,20 @@ class KgGoldenSqlStore:
 
     # Index labels the store relies on for indexed property lookups. The
     # ``Query`` label uses AUTOMATIC ids, so HugeGraph rejects single
-    # ``has('Query', key, value)`` filters unless a secondary index exists.
+    # ``has('Query', key, value)`` filters unless an index exists. Every
+    # non-PK property gets the matching index type: SECONDARY for exact
+    # filters, SEARCH for textContains, RANGE for the created_at timestamp.
     _INDEXES = [
         {"name": "QueryByDomain", "base_label": "Query", "field": "domain",
          "index_type": "SECONDARY"},
         {"name": "QueryByQuestion", "base_label": "Query", "field": "question",
          "index_type": "SECONDARY"},
+        {"name": "QueryBySql", "base_label": "Query", "field": "sql",
+         "index_type": "SEARCH"},
+        {"name": "QueryBySchemaRefs", "base_label": "Query", "field": "schema_refs",
+         "index_type": "SEARCH"},
+        {"name": "QueryByCreatedAt", "base_label": "Query", "field": "created_at",
+         "index_type": "RANGE"},
     ]
 
     def __init__(self, client: Any, graph_name: Optional[str] = None) -> None:
@@ -134,7 +142,9 @@ class KgGoldenSqlStore:
                         {"name": "sql", "data_type": "TEXT"},
                         {"name": "schema_refs", "data_type": "TEXT"},
                         {"name": "domain", "data_type": "TEXT"},
-                        {"name": "created_at", "data_type": "TEXT"},
+                        # LONG so the RANGE index (old-golden cleanup by time)
+                        # works; HugeGraph refuses RANGE on TEXT.
+                        {"name": "created_at", "data_type": "LONG"},
                     ],
                     "vertexlabels": [
                         {
@@ -175,17 +185,18 @@ class KgGoldenSqlStore:
         tables, cols, refs = _schema_refs_of(sql)
         ref_str = _REF_SEP.join(sorted(refs))
         try:
+            # created_at is a LONG (RANGE-indexed); pass it as a bare integer
             resp = self._client.gremlin().exec(
                 "g.addV('%s').property('question', %s)"
                 ".property('sql', %s).property('schema_refs', %s)"
-                ".property('domain', %s).property('created_at', %s)"
+                ".property('domain', %s).property('created_at', %d)"
                 % (
                     _QUERY_LABEL,
                     _quote(question),
                     _quote(sql),
                     _quote(ref_str),
                     _quote(domain or ""),
-                    _quote(str(int(time.time()))),
+                    int(time.time()),
                 )
             )
         except Exception as exc:  # pragma: no cover - network/permission guard
