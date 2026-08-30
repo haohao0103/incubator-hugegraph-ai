@@ -36,6 +36,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, status
 
 from hugegraph_llm.api.models.unified_requests import (
+    QueryStage,
+    QueryStageBuilder,
     UnifiedQueryRequest,
     UnifiedQueryResponse,
 )
@@ -74,14 +76,35 @@ def _graphrag(question: str, top_k: int, graph_search: bool, vector_only: bool) 
     )
 
 
-def _format_precise(tg: Dict[str, Any], domain: Optional[str]) -> UnifiedQueryResponse:
+def _format_precise(
+    tg: Dict[str, Any], domain: Optional[str], question: Optional[str] = None
+) -> UnifiedQueryResponse:
     answer = tg.get("raw_execution_result") or tg.get("template_execution_result") or ""
+    stages: List[QueryStage] = [
+        QueryStageBuilder.make(
+            "text2gremlin",
+            output={
+                "template_gremlin": tg.get("template_gremlin", ""),
+                "raw_gremlin": tg.get("raw_gremlin", ""),
+                "match_result": tg.get("match_result", []),
+            },
+            input={"question": question, "domain": domain},
+        ),
+        QueryStageBuilder.make(
+            "graph_execution",
+            output={
+                "template_execution_result": tg.get("template_execution_result", []),
+                "raw_execution_result": tg.get("raw_execution_result", []),
+            },
+        ),
+    ]
     return UnifiedQueryResponse(
         answer=answer,
         route="precise",
         citations=[],
         subgraph={"match_result": tg.get("match_result", [])},
         raw=tg,
+        stages=stages,
     )
 
 
@@ -116,11 +139,16 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
         tg = _text2gremlin(req.question)
         match = tg.get("match_result") if isinstance(tg, dict) else []
         if match:
-            return _apply_fallback(_format_precise(tg, domain), fallback)
+            return _apply_fallback(
+                _format_precise(tg, domain, req.question), fallback
+            )
         mode = "hybrid"
 
     if mode == "precise":
-        return _apply_fallback(_format_precise(_text2gremlin(req.question), domain), fallback)
+        return _apply_fallback(
+            _format_precise(_text2gremlin(req.question), domain, req.question),
+            fallback,
+        )
 
     # semantic / hybrid -> RAGGraphVectorFlow (retriever_config forwarded)
     vector_only = bool(retriever_config.get("vector_only", mode == "semantic"))
@@ -128,6 +156,29 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     res = _graphrag(req.question, top_k, graph_search=graph_search, vector_only=vector_only)
     answer = res.get("graph_vector_answer") or res.get("vector_only_answer") or ""
     route = "semantic" if vector_only else "graphrag"
+    stages: List[QueryStage] = []
+    if graph_search:
+        stages.append(
+            QueryStageBuilder.make(
+                "graph_execution",
+                output={
+                    "graph_only_answer": res.get("graph_only_answer", ""),
+                    "query_intent": res.get("query_intent", ""),
+                },
+                input={"question": req.question, "graph_search": True},
+            )
+        )
+    stages.append(
+        QueryStageBuilder.make(
+            "vector_recall",
+            output={
+                "vector_only_answer": res.get("vector_only_answer", ""),
+                "retrieval_level": res.get("retrieval_level", ""),
+                "top_k": top_k,
+            },
+            input={"question": req.question, "top_k": top_k},
+        )
+    )
     return _apply_fallback(
         UnifiedQueryResponse(
             answer=answer,
@@ -135,6 +186,7 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
             citations=[],
             subgraph={},
             raw=res,
+            stages=stages,
         ),
         fallback,
     )

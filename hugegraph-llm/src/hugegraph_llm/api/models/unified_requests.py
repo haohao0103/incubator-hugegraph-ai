@@ -89,9 +89,44 @@ class UnifiedQueryRequest(BaseModel):
     )
 
 
+class QueryStage(BaseModel):
+    """One observable step of a query pipeline (unified stages contract).
+
+    ``stage`` names follow the pipeline: ``text2gremlin``,
+    ``graph_execution``, ``vector_recall``, ``reasoning`` (optional,
+    Semantica-style deterministic inference), ``sql_generation`` (stage-2
+    NL2SQL). Stages are appended in execution order; optional stages are
+    simply absent when not executed.
+    """
+
+    stage: str
+    input: Optional[Dict[str, Any]] = Field(default=None, description="stage input (question/schema/...)")
+    output: Dict[str, Any] = Field(default_factory=dict, description="stage output (gremlin/data/chunks/...)")
+
+
 class UnifiedQueryResponse(BaseModel):
+    """Unified query response.
+
+    ``stages`` is the observability contract for upstream platforms / agents:
+    the execution pipeline is returned stage by stage (each stage carries its
+    ``input`` and ``output``), so a caller can audit, debug or re-assemble
+    the answer itself - e.g. take the generated Gremlin / the queried graph
+    data / the recalled vector chunks to build its own SQL (NL2SQL stage-1
+    integration), or verify the reasoning chain. ``raw`` keeps the full
+    backend payload for backward compatibility.
+    """
+
     answer: str = ""
     route: str = ""
     citations: List[Any] = Field(default_factory=list)
     subgraph: Dict[str, Any] = Field(default_factory=dict)
     raw: Dict[str, Any] = Field(default_factory=dict)
+    stages: List[QueryStage] = Field(default_factory=list)
+
+
+class QueryStageBuilder:
+    """Small helper for building QueryStage rows consistently."""
+
+    @staticmethod
+    def make(stage: str, output: Dict[str, Any], input: Optional[Dict[str, Any]] = None) -> QueryStage:
+        return QueryStage(stage=stage, input=input, output=output)

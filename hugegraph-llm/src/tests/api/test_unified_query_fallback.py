@@ -88,6 +88,63 @@ class TestUnifiedQueryFallback(unittest.TestCase):
         self.assertEqual(resp.answer, "fb-sem")
         self.assertEqual(resp.route, "semantic")
 
+    @patch("hugegraph_llm.api.unified_query_api._text2gremlin")
+    def test_precise_stages_contract(self, mock_t2g):
+        mock_t2g.return_value = {
+            "raw_execution_result": "real answer",
+            "template_gremlin": "g.V().hasLabel('Table')",
+            "raw_gremlin": "raw-gremlin",
+            "match_result": [{"id": "Table:order"}],
+            "template_execution_result": ["row1"],
+        }
+        resp = unified_query(UnifiedQueryRequest(question="how many orders?", mode="precise"))
+        stages = resp.stages
+        self.assertEqual([st.stage for st in stages], ["text2gremlin", "graph_execution"])
+        # text2gremlin stage carries question input + generated gremlin output
+        self.assertEqual(stages[0].input["question"], "how many orders?")
+        self.assertEqual(stages[0].output["raw_gremlin"], "raw-gremlin")
+        self.assertEqual(stages[0].output["match_result"], [{"id": "Table:order"}])
+        # graph_execution carries the queried data
+        self.assertEqual(stages[1].output["raw_execution_result"], "real answer")
+        # raw stays for backward compat
+        self.assertEqual(resp.raw["template_gremlin"], "g.V().hasLabel('Table')")
+
+    @patch("hugegraph_llm.api.unified_query_api._graphrag")
+    def test_hybrid_stages_contract(self, mock_rag):
+        mock_rag.return_value = {
+            "graph_vector_answer": "real rag",
+            "graph_only_answer": "graph-part",
+            "vector_only_answer": "vec-part",
+            "query_intent": "count",
+            "retrieval_level": "dual",
+        }
+        resp = unified_query(UnifiedQueryRequest(question="q", mode="hybrid"))
+        stages = resp.stages
+        # hybrid = graph_execution + vector_recall
+        self.assertEqual([st.stage for st in stages], ["graph_execution", "vector_recall"])
+        self.assertEqual(stages[0].output["graph_only_answer"], "graph-part")
+        self.assertEqual(stages[1].output["top_k"], 5)
+        self.assertEqual(stages[1].output["retrieval_level"], "dual")
+
+    @patch("hugegraph_llm.api.unified_query_api._graphrag")
+    def test_semantic_stages_contract_vector_only(self, mock_rag):
+        mock_rag.return_value = {"vector_only_answer": "vec", "retrieval_level": "single"}
+        resp = unified_query(UnifiedQueryRequest(question="q", mode="semantic"))
+        # semantic = vector_recall only (no graph_execution)
+        self.assertEqual([st.stage for st in resp.stages], ["vector_recall"])
+        self.assertEqual(resp.stages[0].output["vector_only_answer"], "vec")
+
+    def test_query_stage_builder_and_model(self):
+        from hugegraph_llm.api.models.unified_requests import QueryStageBuilder
+
+        stage = QueryStageBuilder.make("reasoning", output={"rules": ["r1"]}, input={"q": "x"})
+        self.assertEqual(stage.stage, "reasoning")
+        self.assertEqual(stage.input, {"q": "x"})
+        self.assertEqual(stage.output, {"rules": ["r1"]})
+        # model round-trip
+        d = stage.model_dump()
+        self.assertEqual(d["stage"], "reasoning")
+
     @patch("hugegraph_llm.api.unified_query_api._graphrag")
     def test_hybrid_real_answer_kept(self, mock_rag):
         mock_rag.return_value = {"graph_vector_answer": "real rag", "vector_only_answer": ""}
