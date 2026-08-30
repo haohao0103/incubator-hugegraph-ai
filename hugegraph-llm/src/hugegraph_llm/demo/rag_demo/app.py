@@ -39,7 +39,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from hugegraph_llm.api.admin_api import admin_http_api
 from hugegraph_llm.api.feishu_ingest_api import feishu_ingest_http_api
 from hugegraph_llm.api.graph_extract_api import graph_extract_http_api
-from hugegraph_llm.api.nl2sql_api import nl2sql_http_api
+from hugegraph_llm.api.nl2sql_api import nl2sql_health, nl2sql_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.api.unified_ingest_api import unified_ingest_http_api
 from hugegraph_llm.api.unified_query_api import unified_query_http_api
@@ -250,6 +250,42 @@ def create_app():
     nl2sql_http_api(api_auth)
 
     app.include_router(api_auth)
+
+    # ---- observability: audit middleware + healthz + metrics ---------------
+    from fastapi.responses import Response
+
+    from hugegraph_llm.nl2sql.observability import METRICS, audit
+
+    @app.middleware("http")
+    async def nl2sql_audit_middleware(request, call_next):
+        """Audit + metrics only for NL2SQL traffic (keeps Gradio noise out)."""
+        import time as _time
+
+        if not request.url.path.startswith("/nl2sql"):
+            return await call_next(request)
+        start = _time.monotonic()
+        resp = await call_next(request)
+        dur = _time.monotonic() - start
+        route = request.url.path
+        METRICS.inc(route)
+        METRICS.observe(route, dur)
+        audit(
+            request.method, route, resp.status_code, dur,
+            request.client.host if request.client else "-",
+        )
+        return resp
+
+    @app.get("/healthz")
+    def healthz():
+        return nl2sql_health()
+
+    @app.get("/metrics")
+    def metrics():
+        return Response(
+            content=METRICS.render(),
+            media_type="text/plain; version=0.0.4",
+        )
+
     # Mount Gradio inside FastAPI
     # TODO: support multi-user login when need
     app = gr.mount_gradio_app(

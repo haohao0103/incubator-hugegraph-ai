@@ -233,3 +233,4 @@ hugegraph-llm/benchmark_data/*
 # Benchmark intermediate artifacts (LightRAG workspace, etc.)
 **/poc_results/benchmark_cmp/lightrag_workspace/
 **/poc_results/benchmark_cmp/*.log
+_out/nl2sql_demo/schema_cache.json

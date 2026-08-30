@@ -51,8 +51,10 @@ produces, so it drops into ``NL2SQLPipeline`` unchanged.
 
 import gzip
 import json
+import time
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from hugegraph_llm.utils.log import log
@@ -140,6 +142,8 @@ def build_schema_from_hugegraph(
     infer_foreign_keys: bool = True,
     timeout: int = 30,
     limit: int = 500,
+    cache_path: Optional[str] = None,
+    cache_ttl_s: int = 0,
 ) -> SchemaGraph:
     """Build a :class:`SchemaGraph` from a live HugeGraph KG.
 
@@ -150,24 +154,89 @@ def build_schema_from_hugegraph(
         shared ``*_id`` column names across tables.
     :param timeout: per-request HTTP timeout (seconds).
     :param limit: page size when paginating vertices/edges.
+    :param cache_path: optional file to cache the raw HugeGraph pull; a fresh
+        cache (within ``cache_ttl_s``) skips the live pull entirely, so a
+        restart rebuilds the schema in milliseconds instead of re-reading the
+        whole graph. ``None`` disables caching.
+    :param cache_ttl_s: cache freshness window in seconds (0 = never expire
+        once written; use ``NL2SQL_SCHEMA_TTL_S`` in production).
     """
     m = mapping or HugeGraphSchemaMapping()
     base = f"{url.rstrip('/')}/graphs/{graph}/graph"
 
-    table_vs = _collect(base, "vertices", m.table_label, limit, timeout)
-    field_vs = _collect(base, "vertices", m.field_label, limit, timeout)
-    metric_vs = _collect(base, "vertices", m.metric_label, limit, timeout)
-    query_vs = _collect(base, "vertices", m.query_label, limit, timeout)
-    cf_edges = _collect(base, "edges", m.computed_from_field_edge, limit, timeout)
-    lg_edges = _collect(base, "edges", m.lineage_edge, limit, timeout)
-    syn_edges = _collect(base, "edges", m.synonym_edge, limit, timeout)
+    pull = _read_schema_cache(cache_path, cache_ttl_s, url, graph)
+    if pull is None:
+        pull = {
+            "url": url,
+            "graph": graph,
+            "table_vs": _collect(base, "vertices", m.table_label, limit, timeout),
+            "field_vs": _collect(base, "vertices", m.field_label, limit, timeout),
+            "metric_vs": _collect(base, "vertices", m.metric_label, limit, timeout),
+            "query_vs": _collect(base, "vertices", m.query_label, limit, timeout),
+            "cf_edges": _collect(base, "edges", m.computed_from_field_edge, limit, timeout),
+            "lg_edges": _collect(base, "edges", m.lineage_edge, limit, timeout),
+            "syn_edges": _collect(base, "edges", m.synonym_edge, limit, timeout),
+        }
+        _write_schema_cache(cache_path, pull)
+        log.info(
+            "hg schema pull %s/%s: %s tables, %s fields, %s metrics, %s queries, "
+            "%s term-edges, %s lineage, %s synonym",
+            url, graph, len(pull["table_vs"]), len(pull["field_vs"]),
+            len(pull["metric_vs"]), len(pull["query_vs"]),
+            len(pull["cf_edges"]), len(pull["lg_edges"]), len(pull["syn_edges"]),
+        )
+    else:
+        log.info(
+            "hg schema: cache hit %s (ttl=%ss), skipped live pull for %s/%s",
+            cache_path, cache_ttl_s, url, graph,
+        )
+    return _build_from_pull(pull, m, infer_foreign_keys)
 
-    log.info(
-        "hg schema pull %s/%s: %s tables, %s fields, %s metrics, %s queries, "
-        "%s term-edges, %s lineage, %s synonym",
-        url, graph, len(table_vs), len(field_vs), len(metric_vs), len(query_vs),
-        len(cf_edges), len(lg_edges), len(syn_edges),
-    )
+
+def _read_schema_cache(
+    cache_path: Optional[str], ttl_s: int, url: str, graph: str
+) -> Optional[dict]:
+    """Return a cached pull if present, fresh and matching url/graph."""
+    if not cache_path or ttl_s <= 0:
+        return None
+    p = Path(cache_path)
+    if not p.exists():
+        return None
+    try:
+        if time.time() - p.stat().st_mtime > ttl_s:
+            return None
+        pull = json.loads(p.read_text(encoding="utf-8"))
+        if pull.get("url") != url or pull.get("graph") != graph:
+            return None
+        return pull
+    except Exception as exc:  # noqa: BLE001 - cache must never break the build
+        log.warning("hg schema: cache read failed (%s); live pull instead", exc)
+        return None
+
+
+def _write_schema_cache(cache_path: Optional[str], pull: dict) -> None:
+    """Persist a raw pull so restarts rebuild fast. Best-effort only."""
+    if not cache_path:
+        return
+    try:
+        p = Path(cache_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(pull, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 - non-fatal
+        log.warning("hg schema: cache write failed: %s", exc)
+
+
+def _build_from_pull(
+    pull: dict, m: HugeGraphSchemaMapping, infer_foreign_keys: bool
+) -> SchemaGraph:
+    """Deterministically replay a raw HugeGraph pull into a SchemaGraph."""
+    table_vs = pull["table_vs"]
+    field_vs = pull["field_vs"]
+    metric_vs = pull["metric_vs"]
+    query_vs = pull["query_vs"]
+    cf_edges = pull["cf_edges"]
+    lg_edges = pull["lg_edges"]
+    syn_edges = pull["syn_edges"]
 
     b = SchemaGraphBuilder()
 

@@ -49,6 +49,8 @@ singleton (``LLMs().get_chat_llm()``), the same chat model the rest of
 import json
 import os
 import threading
+import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
@@ -63,6 +65,11 @@ from hugegraph_llm.nl2sql.engine import (
 )
 from hugegraph_llm.nl2sql.hugegraph_schema_source import build_schema_from_hugegraph
 from hugegraph_llm.nl2sql.linking.schema_linker import LinkedItem
+from hugegraph_llm.nl2sql.llm_gateway import (
+    LLMGateway,
+    LLMGatewayError,
+    LLMGatewayOpenError,
+)
 from hugegraph_llm.nl2sql.pipeline import NL2SQLPipeline
 from hugegraph_llm.nl2sql.schema_graph.builder import SchemaGraphBuilder
 from hugegraph_llm.nl2sql.schema_graph.model import Column, SchemaGraph, Table, Term
@@ -82,6 +89,35 @@ _VERMEER_MASTER = os.getenv("VERMEER_MASTER", "http://127.0.0.1:6688")
 # NL2SQL_HG_URL defaulting to http://127.0.0.1:8081).
 _HG_GRAPH_ENV = os.getenv("NL2SQL_HG_GRAPH")
 _HG_URL_ENV = os.getenv("NL2SQL_HG_URL", "http://127.0.0.1:8081")
+
+# --- production hardening knobs (all optional, all env-gated) ---------------
+# LLM gateway: retry / timeout / circuit breaker around the chat endpoint.
+_LLM_MAX_RETRIES = int(os.getenv("NL2SQL_LLM_MAX_RETRIES", "3"))
+_LLM_TIMEOUT_S = float(os.getenv("NL2SQL_LLM_TIMEOUT_S", "30"))
+_LLM_CIRCUIT_THRESHOLD = int(os.getenv("NL2SQL_LLM_CIRCUIT_THRESHOLD", "5"))
+_LLM_CIRCUIT_RESET_S = float(os.getenv("NL2SQL_LLM_CIRCUIT_RESET_S", "60"))
+
+# Schema cache: rebuild from a local snapshot instead of re-pulling HugeGraph.
+# NL2SQL_SCHEMA_CACHE=<path> enables disk caching; NL2SQL_SCHEMA_TTL_S bounds
+# its freshness, and the pipeline is lazily re-pulled once past it.
+_SCHEMA_CACHE = os.getenv("NL2SQL_SCHEMA_CACHE") or None
+_SCHEMA_TTL_S = int(os.getenv("NL2SQL_SCHEMA_TTL_S", "3600"))
+
+# Result cache: LRU with TTL for link / schema_context (high-frequency Qs).
+_RESULT_CACHE_SIZE = int(os.getenv("NL2SQL_RESULT_CACHE_SIZE", "256"))
+_RESULT_CACHE_TTL_S = float(os.getenv("NL2SQL_RESULT_CACHE_TTL_S", "60"))
+
+# Supported SQL dialects for /nl2sql/run output (sqlglot write dialects).
+_DIALECTS = {"hive", "trino", "spark", "mysql", "duckdb", "clickhouse"}
+
+# --- LLM gateway (module-level, shared by run + keyword extraction) ---------
+_LLM_GATEWAY = LLMGateway(
+    llm_factory=LLMs().get_chat_llm,
+    max_retries=_LLM_MAX_RETRIES,
+    timeout_s=_LLM_TIMEOUT_S,
+    circuit_fail_threshold=_LLM_CIRCUIT_THRESHOLD,
+    circuit_reset_s=_LLM_CIRCUIT_RESET_S,
+)
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -123,6 +159,11 @@ class RunRequest(BaseModel):
     question: str
     top_k: Optional[int] = None
     include_joins: bool = True
+    dialect: Optional[str] = Field(
+        default=None,
+        description="Transpile the generated SQL to a target dialect via sqlglot: "
+                    "hive/trino/spark/mysql/duckdb/clickhouse (default: leave as generated)",
+    )
 
 
 class SchemaMetadata(BaseModel):
@@ -235,35 +276,48 @@ def _make_embedder() -> Optional[Callable[[str], List[float]]]:
 
 
 _PIPELINE: Optional[NL2SQLPipeline] = None
+_PIPELINE_TS: float = 0.0
 _LOCK = threading.Lock()
 
 
+def _build_pipeline() -> NL2SQLPipeline:
+    """Construct the pipeline from the default schema source (file or HG)."""
+    if _HG_GRAPH_ENV:
+        log.info("nl2sql api: default schema from HugeGraph %s/%s",
+                 _HG_URL_ENV, _HG_GRAPH_ENV)
+        schema = build_schema_from_hugegraph(
+            url=_HG_URL_ENV, graph=_HG_GRAPH_ENV,
+            cache_path=_SCHEMA_CACHE, cache_ttl_s=_SCHEMA_TTL_S,
+        )
+    else:
+        meta = json.loads(_DEFAULT_SCHEMA_PATH.read_text(encoding="utf-8"))
+        schema = build_schema(meta)
+    return NL2SQLPipeline(
+        schema,
+        engine=_make_engine(schema),
+        embedder=_make_embedder(),
+        keyword_extractor=_make_keyword_extractor(),
+    )
+
+
 def get_pipeline() -> NL2SQLPipeline:
-    """Return the cached pipeline, building it from the default schema on first use.
+    """Return the cached pipeline, rebuilding when the schema TTL has passed.
 
     The default schema source is the bundled file unless ``NL2SQL_HG_GRAPH`` is
     set, in which case it is pulled live from the named HugeGraph KG (the
-    production path).
+    production path). Rebuilds are lazy (checked on call) and lock-guarded.
     """
-    global _PIPELINE
-    if _PIPELINE is None:
+    global _PIPELINE, _PIPELINE_TS
+    now = time.monotonic()
+    if _PIPELINE is None or now - _PIPELINE_TS > _SCHEMA_TTL_S:
         with _LOCK:
-            if _PIPELINE is None:
-                if _HG_GRAPH_ENV:
-                    log.info("nl2sql api: default schema from HugeGraph %s/%s",
-                             _HG_URL_ENV, _HG_GRAPH_ENV)
-                    schema = build_schema_from_hugegraph(
-                        url=_HG_URL_ENV, graph=_HG_GRAPH_ENV
-                    )
-                else:
-                    meta = json.loads(_DEFAULT_SCHEMA_PATH.read_text(encoding="utf-8"))
-                    schema = build_schema(meta)
-                _PIPELINE = NL2SQLPipeline(
-                    schema,
-                    engine=_make_engine(schema),
-                    embedder=_make_embedder(),
-                    keyword_extractor=_make_keyword_extractor(),
-                )
+            now = time.monotonic()
+            if _PIPELINE is None or now - _PIPELINE_TS > _SCHEMA_TTL_S:
+                try:
+                    _PIPELINE = _build_pipeline()
+                    _PIPELINE_TS = time.monotonic()
+                except Exception as exc:  # noqa: BLE001 - keep serving stale
+                    log.warning("nl2sql api: schema rebuild failed, serving stale: %s", exc)
     return _PIPELINE
 
 
@@ -282,7 +336,11 @@ def _make_keyword_extractor() -> Optional[Callable[[str], List[str]]]:
             "（表名、字段名、业务术语、口径词均可）。只输出关键词，用逗号分隔，"
             "不要任何解释或标点修饰。\n问题：" + str(question)
         )
-        raw = _llm_callable(prompt)
+        try:
+            raw = _llm_callable(prompt)
+        except LLMGatewayOpenError:
+            log.warning("nl2sql api: keyword LLM circuit open, lexical-only linking")
+            return []
         kws = [k.strip() for k in raw.replace("，", ",").split(",") if k.strip()]
         return kws[:8]  # cap keyword count
 
@@ -290,11 +348,66 @@ def _make_keyword_extractor() -> Optional[Callable[[str], List[str]]]:
 
 
 def _llm_callable(prompt: str) -> str:
-    try:
-        llm = LLMs().get_chat_llm()
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"LLM not configured: {exc}")
-    return llm.generate(prompt=prompt)
+    """Chat call through the gateway (retry / timeout / circuit breaker)."""
+    return _LLM_GATEWAY(prompt)
+
+
+# ---------------------------------------------------------------------------
+# Result cache (LRU + TTL) and health reporting
+# ---------------------------------------------------------------------------
+
+
+class _ResultCache:
+    """Thread-safe LRU with TTL for endpoint results (high-frequency questions)."""
+
+    def __init__(self, maxsize: int, ttl_s: float) -> None:
+        self._data: "OrderedDict[tuple, tuple]" = OrderedDict()
+        self._lock = threading.Lock()
+        self._maxsize = maxsize
+        self._ttl = ttl_s
+
+    def get(self, key: tuple) -> Optional[dict]:
+        with self._lock:
+            item = self._data.get(key)
+            if item is None:
+                return None
+            ts, val = item
+            if time.monotonic() - ts > self._ttl:
+                del self._data[key]
+                return None
+            self._data.move_to_end(key)
+            return val
+
+    def put(self, key: tuple, val: dict) -> None:
+        with self._lock:
+            self._data[key] = (time.monotonic(), val)
+            self._data.move_to_end(key)
+            while len(self._data) > self._maxsize:
+                self._data.popitem(last=False)
+
+    def stats(self) -> dict:
+        with self._lock:
+            return {"size": len(self._data), "maxsize": self._maxsize,
+                    "ttl_s": self._ttl}
+
+
+_RESULT_CACHE = _ResultCache(_RESULT_CACHE_SIZE, _RESULT_CACHE_TTL_S)
+
+
+def nl2sql_health() -> dict:
+    """Dependency + liveness state for the app's /healthz endpoint."""
+    pipe = get_pipeline()
+    return {
+        "status": "ok",
+        "schema_source": _HG_GRAPH_ENV or "bundled-file",
+        "schema_cache": _SCHEMA_CACHE,
+        "schema_ttl_s": _SCHEMA_TTL_S,
+        "schema_age_s": round(time.monotonic() - _PIPELINE_TS, 1) if _PIPELINE else None,
+        "engine": pipe.capabilities.name if pipe else None,
+        "tables": len(pipe._schema.tables()) if pipe else None,
+        "llm_gateway": _LLM_GATEWAY.state(),
+        "result_cache": _RESULT_CACHE.stats(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +463,10 @@ def nl2sql_link(req: LinkRequest):
     (or that matches nothing at all) is flagged ``out_of_kb`` so the caller
     can refuse to answer instead of hallucinating a table.
     """
+    cache_key = ("link", req.question, req.top_k, req.min_score)
+    cached = _RESULT_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     items = get_pipeline().link(req.question, top_k=req.top_k)
     best = max((i.score for i in items), default=0.0)
     out_of_kb = bool(not items or (req.min_score is not None and best < req.min_score))
@@ -358,6 +475,7 @@ def nl2sql_link(req: LinkRequest):
     if out_of_kb:
         resp["out_of_kb"] = True
         resp["message"] = "问题超出当前知识库范围，建议人工确认后再查询"
+    _RESULT_CACHE.put(cache_key, resp)
     return resp
 
 
@@ -386,6 +504,11 @@ def nl2sql_schema_context(req: SchemaContextRequest):
     ``min_score`` set, out-of-knowledge-base questions are flagged explicitly.
     """
     pipe = get_pipeline()
+    cache_key = ("schema_context", req.question, req.top_k, req.include_joins,
+                 req.include_global, req.min_score)
+    cached = _RESULT_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     ctx = pipe.schema_context(
         req.question, top_k=req.top_k, include_joins=req.include_joins,
         include_global=req.include_global,
@@ -400,20 +523,44 @@ def nl2sql_schema_context(req: SchemaContextRequest):
         if best < req.min_score:
             resp["out_of_kb"] = True
             resp["message"] = "问题超出当前知识库范围，建议人工确认后再查询"
+    _RESULT_CACHE.put(cache_key, resp)
     return resp
 
 
 @_router.post("/nl2sql/run")
 def nl2sql_run(req: RunRequest):
-    """Full pipeline: question -> narrowed context -> SQL via the configured LLM."""
+    """Full pipeline: question -> narrowed context -> SQL via the configured LLM.
+
+    The LLM call goes through the gateway: transient failures are retried with
+    backoff, and if the circuit breaker is open the endpoint degrades to a 503
+    with the lexical schema context (so the platform can still build a prompt).
+    """
+    if req.dialect and req.dialect not in _DIALECTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported dialect {req.dialect!r}; choose from {sorted(_DIALECTS)}",
+        )
     base = get_pipeline()
     pipe = NL2SQLPipeline(
         base._schema, llm=_llm_callable, engine=base._engine
     )
-    result = pipe.run(req.question, top_k=req.top_k, include_joins=req.include_joins)
+    try:
+        result = pipe.run(req.question, top_k=req.top_k, include_joins=req.include_joins)
+    except LLMGatewayOpenError as exc:
+        raise HTTPException(status_code=503, detail=f"LLM temporarily unavailable: {exc}")
+    except LLMGatewayError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM gateway error: {exc}")
+    sql = result.sql
+    if sql and req.dialect:
+        try:
+            import sqlglot
+
+            sql = sqlglot.transpile(sql, write=req.dialect)[0]
+        except Exception as exc:  # noqa: BLE001 - non-fatal, keep original SQL
+            log.warning("nl2sql api: dialect transpile %s failed: %s", req.dialect, exc)
     return {
         "question": result.question,
-        "sql": result.sql,
+        "sql": sql,
         "schema_context": result.schema_context,
         "tables": result.tables,
     }
@@ -422,7 +569,7 @@ def nl2sql_run(req: RunRequest):
 @_router.post("/nl2sql/reload")
 def nl2sql_reload(req: ReloadRequest):
     """Rebuild the cached pipeline from inline metadata (engine auto-selected)."""
-    global _PIPELINE
+    global _PIPELINE, _PIPELINE_TS
     meta = req.metadata.model_dump()
     schema = build_schema(meta)
     with _LOCK:
@@ -430,6 +577,7 @@ def nl2sql_reload(req: ReloadRequest):
             schema, engine=_make_engine(schema),
             keyword_extractor=_make_keyword_extractor(),
         )
+        _PIPELINE_TS = time.monotonic()
     return {
         "status": "reloaded",
         "engine": _PIPELINE.capabilities.name,
@@ -447,9 +595,10 @@ def nl2sql_load_hugegraph(req: HgLoadRequest):
     (/link, /join_path, /communities, /schema_context, /run) then operate on
     the KG-derived schema.
     """
-    global _PIPELINE
+    global _PIPELINE, _PIPELINE_TS
     schema = build_schema_from_hugegraph(
-        url=req.url, graph=req.graph, infer_foreign_keys=req.infer_foreign_keys
+        url=req.url, graph=req.graph, infer_foreign_keys=req.infer_foreign_keys,
+        cache_path=_SCHEMA_CACHE, cache_ttl_s=_SCHEMA_TTL_S,
     )
     embedder = _make_embedder() if req.use_embedding else None
     with _LOCK:
@@ -457,6 +606,7 @@ def nl2sql_load_hugegraph(req: HgLoadRequest):
             schema, engine=_make_engine(schema), embedder=embedder,
             keyword_extractor=_make_keyword_extractor(),
         )
+        _PIPELINE_TS = time.monotonic()
     return {
         "status": "loaded",
         "source": f"hugegraph:{req.graph}",

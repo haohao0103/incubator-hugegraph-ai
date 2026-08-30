@@ -1,0 +1,23 @@
+# NL2SQL demo + semantic-layer API service (local orchestration).
+#
+#   docker compose -f docker-compose.nl2sql.yml up --build
+#
+# Requires a reachable HugeGraph (the production schema source). On macOS the
+# host's HG on 8081 is reached via host.docker.internal; adjust NL2SQL_HG_URL
+# for your environment. Without a graph, the service falls back to the bundled
+# example schema file.
+services:
+  nl2sql:
+    build:
+      context: .
+      dockerfile: Dockerfile.nl2sql
+    image: hugegraph-ai-nl2sql:latest
+    ports:
+      - "8001:8001"
+    environment:
+      NL2SQL_HG_GRAPH: ${NL2SQL_HG_GRAPH:-kg_rag}
+      NL2SQL_HG_URL: ${NL2SQL_HG_URL:-http://host.docker.internal:8081}
+      NL2SQL_SCHEMA_TTL_S: "3600"
+      NL2SQL_LLM_MAX_RETRIES: "3"
+      NL2SQL_LLM_TIMEOUT_S: "30"
+    restart: unless-stopped

@@ -55,6 +55,7 @@ dependencies = [
     "nltk",
     "gradio",
     "jieba",
+    "sqlglot",
     "python-docx",
     "pypdf",
     "langchain-text-splitters",

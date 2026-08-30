@@ -77,6 +77,12 @@ jobs:
       run: |
         uv run pytest hugegraph-llm/src/tests -m "not integration and not hugegraph and not smoke and not external" --cov=hugegraph_llm --cov-fail-under=34 --cov-report=term --cov-report=xml:llm-unit-contract.xml -v --tb=short --durations=20
 
+    - name: Run NL2SQL semantic-layer tests
+      env:
+        SKIP_EXTERNAL_SERVICES: true
+      run: |
+        uv run pytest hugegraph-llm/src/hugegraph_llm/nl2sql/tests -q --tb=short --durations=10
+
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v7
       with:

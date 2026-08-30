@@ -1,0 +1,38 @@
+# NL2SQL semantic-layer + demo service container.
+#
+# Build context: repository root. The service is the same FastAPI app that
+# runs locally (Gradio demo + /nl2sql/* API + /healthz + /metrics), so the
+# same image serves both the interactive demo and the platform-facing API.
+#
+#   docker build -t hugegraph-ai-nl2sql -f Dockerfile.nl2sql .
+#   docker run --rm -p 8001:8001 \
+#     -e NL2SQL_HG_GRAPH=kg_rag \
+#     -e NL2SQL_HG_URL=http://host.docker.internal:8081 \
+#     hugegraph-ai-nl2sql
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /opt/hugegraph-ai
+
+# 1) dependency layer first (cached until pyproject.toml changes)
+COPY hugegraph-llm/pyproject.toml hugegraph-llm/README.md ./hugegraph-llm/
+RUN pip install --no-cache-dir -e "./hugegraph-llm[llm]" \
+    && pip install --no-cache-dir "sqlglot"
+
+# 2) application code
+COPY hugegraph-llm/src ./hugegraph-llm/src
+
+WORKDIR /opt/hugegraph-ai/hugegraph-llm/src
+
+EXPOSE 8001
+
+# healthcheck probes the app's own /healthz (exits non-zero until ready)
+HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=4).status==200 else 1)"
+
+CMD ["python", "-m", "uvicorn", \
+     "hugegraph_llm.demo.rag_demo.app:create_app", \
+     "--host", "0.0.0.0", "--port", "8001"]
