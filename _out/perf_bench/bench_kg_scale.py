@@ -91,43 +91,47 @@ def median_ms(fn, reps: int = REPS) -> float:
 
 
 def main() -> int:
-    print("scale | vertices | build(ms) | link(ms) | validate(ms) | vote(ms)")
-    print("------|----------|----------|----------|--------------|---------")
-    baseline = {}
+    print("scale | vertices | link(ms) | build(ms) | validate(ms) | vote-shared(ms) | vote-standalone(ms)")
+    print("------|----------|----------|----------|--------------|----------------|-------------------")
+    baseline = None
     for scale in SCALES:
         data = synthetic_graph(scale)
         n_vertices = sum(len(v) for v in data["vertices"].values())
 
+        link_ms = median_ms(lambda: KgSchemaLinker().link("order amount", data=data))
         build_ms = median_ms(lambda: KgSqlValidator(data))
         validator = KgSqlValidator(data)
-        link_ms = median_ms(lambda: KgSchemaLinker().link("order amount", data=data))
         sql = "SELECT SUM(order_00000.col0) FROM order_00000"
         validate_ms = median_ms(lambda: validator.validate(sql))
 
-        def _vote():
-            voter = KgSqlVoter(
-                question="order amount", graph_data=data,
-                golden_records=[],
-            )
-            voter.vote([
-                "SELECT SUM(order_00000.col0) FROM order_00000",
-                "SELECT order_00000.col1 FROM order_00000",
-                "SELECT SUM(order_00000.col9) FROM order_00000",
-            ])
-        vote_ms = median_ms(_vote)
+        def _vote(shared: bool):
+            def run():
+                voter = KgSqlVoter(
+                    question="order amount", graph_data=data,
+                    golden_records=[],
+                    validator=validator if shared else None,
+                )
+                voter.vote([
+                    "SELECT SUM(order_00000.col0) FROM order_00000",
+                    "SELECT order_00000.col1 FROM order_00000",
+                    "SELECT SUM(order_00000.col9) FROM order_00000",
+                ])
+            return run
+        vote_shared_ms = median_ms(_vote(True))
+        vote_standalone_ms = median_ms(_vote(False))
 
         growth = ""
-        if baseline:
-            growth = f"  ({vote_ms / baseline:+.1f}x vs 500)"
-        baseline = baseline or vote_ms
-        print(f"{scale:>5} | {n_vertices:>8} | {build_ms:>8.1f} | {link_ms:>8.1f} "
-              f"| {validate_ms:>10.2f} | {vote_ms:>7.1f}{growth}")
+        if baseline is not None:
+            growth = f"  (vote-shared {vote_shared_ms / baseline:+.1f}x vs 500)"
+        baseline = vote_shared_ms if baseline is None else baseline
+        print(f"{scale:>5} | {n_vertices:>8} | {link_ms:>8.1f} | {build_ms:>8.1f} "
+              f"| {validate_ms:>10.2f} | {vote_shared_ms:>14.1f} | {vote_standalone_ms:>17.1f}{growth}")
 
     print("\nnotes:")
-    print("  - build = KgSqlValidator index build (one-off per graph snapshot;")
-    print("    cached by KgRuleEngine.load_graph TTL for repeated requests)")
-    print("  - vote includes its own validator build (KgSqlVoter constructs one)")
-    print("  - link = KgSchemaLinker.link (question -> subgraph)")
+    print("  - link uses heap top-k truncation (max_tables/max_metrics/max_fields budgets)")
+    print("  - build = KgSqlValidator index build (one-off per graph snapshot)")
+    print("  - vote-shared reuses that validator (pipeline pattern);")
+    print("    vote-standalone is the old per-voter rebuild")
     return 0
 
 

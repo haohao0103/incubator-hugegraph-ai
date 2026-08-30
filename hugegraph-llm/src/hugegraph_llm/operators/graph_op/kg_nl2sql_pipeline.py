@@ -40,6 +40,7 @@ from hugegraph_llm.operators.graph_op.kg_rule_engine import (
     GraphData,
 )
 from hugegraph_llm.operators.graph_op.kg_schema_linker import KgSchemaLinker
+from hugegraph_llm.operators.graph_op.kg_sql_validator import KgSqlValidator
 from hugegraph_llm.operators.graph_op.kg_sql_voter import KgSqlVoter
 from hugegraph_llm.operators.graph_op.kg_jargon_map import KgJargonMap
 from hugegraph_llm.operators.graph_op.kg_metric_authority import KgMetricAuthority
@@ -106,10 +107,14 @@ class KgNL2SQLPipeline:
             except Exception:  # pragma: no cover - store IO guard
                 golden_records = []
 
+        # one graph snapshot + one validator per request, shared with the
+        # voter (index build is the dominant cost on large metadata graphs)
+        self._graph_snapshot = self._graph_data()
+        self._validator = KgSqlValidator(self._graph_snapshot, graph_name)
         self._voter = KgSqlVoter(
             question=self._question,
-            graph_data=None if client else graph_data,
-            client=client,
+            graph_data=self._graph_snapshot,
+            validator=self._validator,
             golden_records=golden_records,
         )
         self._authority = KgMetricAuthority(

@@ -211,6 +211,45 @@ class TestLink(unittest.TestCase):
         ctx = linker.link("订单表", self.data)  # comment-only match scores 1.0
         self.assertEqual(ctx.tables, [])
 
+    def test_rank_top_k_is_top_scoring(self):
+        rows = [
+            {"name": "order"}, {"name": "order_dw"}, {"name": "order_pay"},
+            {"name": "order_cnt"}, {"name": "order_log"}, {"name": "order_tmp"},
+            {"name": "t1"}, {"name": "t2"},
+        ]
+        full = self.linker._rank(rows, "Table", ["order"])
+        top = self.linker._rank(rows, "Table", ["order"], top_k=3)
+        self.assertEqual(len(top), 3)
+        top_names = {v["name"] for _, v in top}
+        top_scores = {s for s, _ in top}
+        others = {s for s, v in full if v["name"] not in top_names}
+        # heap top-k invariant: every winner scores >= every non-winner
+        if others:
+            self.assertLessEqual(max(others), min(top_scores))
+        # exact name match (3.0) must always be a winner
+        self.assertIn("order", top_names)
+
+    def test_rank_top_k_none_returns_full_list(self):
+        rows = [{"name": "order"}, {"name": "order_dw"}]
+        full = self.linker._rank(rows, "Table", ["order"])
+        self.assertEqual(len(full), 2)  # backward-compatible full ranking
+
+    def test_link_respects_max_tables_with_many_matches(self):
+        data = {
+            "vertices": {
+                "Table": [{"name": f"order_{i}"} for i in range(20)] + [{"name": "order"}],
+                "Field": [],
+                "Metric": [],
+            },
+            "edges": {
+                "hasColumn": [], "computedFrom": [], "computedFromField": [], "dependsOn": [],
+            },
+        }
+        linker = KgSchemaLinker(config=SchemaLinkConfig(max_tables=3))
+        ctx = linker.link("order", data)
+        self.assertEqual(len(ctx.tables), 3)
+        self.assertIn("order", {t["name"] for t in ctx.tables})
+
 
 class TestEvidenceEdgeCases(unittest.TestCase):
     """Metrics/tables/fields with missing props produce no empty evidence."""

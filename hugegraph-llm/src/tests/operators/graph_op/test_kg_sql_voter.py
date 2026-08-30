@@ -151,6 +151,38 @@ class TestVoteRanking(unittest.TestCase):
         self.assertEqual(ranked[1].sql, a)
 
 
+class TestVoteBudget(unittest.TestCase):
+    def test_vote_truncates_to_max_candidates(self):
+        v = KgSqlVoter(
+            question="订单金额 order amount", graph_data=_sample_graph(),
+            max_candidates=5,
+        )
+        ranked = v.vote([f"SELECT {i} FROM order" for i in range(12)])
+        self.assertEqual(len(ranked), 5)
+
+    def test_vote_max_candidates_floor_one(self):
+        v = KgSqlVoter(
+            question="x", graph_data=_sample_graph(), max_candidates=0
+        )
+        self.assertEqual(v._max_candidates, 1)
+
+    def test_default_max_candidates_ten(self):
+        v = KgSqlVoter(question="x", graph_data=_sample_graph())
+        self.assertEqual(v._max_candidates, 10)
+
+    def test_shared_validator_reused(self):
+        from hugegraph_llm.operators.graph_op.kg_sql_validator import KgSqlValidator
+
+        validator = KgSqlValidator(_sample_graph())
+        v = KgSqlVoter(
+            question="订单金额", graph_data=_sample_graph(), validator=validator
+        )
+        self.assertIs(v._validator, validator)  # no second index build
+        ranked = v.vote(["SELECT SUM(order.amount) FROM order"])
+        self.assertEqual(len(ranked), 1)
+        self.assertTrue(ranked[0].valid)
+
+
 class TestScoringComponents(unittest.TestCase):
     def setUp(self):
         self.voter = _voter()

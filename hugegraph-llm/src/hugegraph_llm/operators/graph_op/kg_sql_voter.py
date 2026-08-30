@@ -92,6 +92,8 @@ class KgSqlVoter:
         client: Optional[Any] = None,
         graph_name: Optional[str] = None,
         golden_records: Optional[List[GoldenRecord]] = None,
+        validator: Optional[KgSqlValidator] = None,
+        max_candidates: int = 10,
     ) -> None:
         if graph_data is not None:
             self._graph_data: GraphData = graph_data
@@ -103,8 +105,15 @@ class KgSqlVoter:
             )
         self._graph_name = graph_name
         self._question = question
-        self._validator = KgSqlValidator(self._graph_data, graph_name)
+        # Share a caller-provided validator (built once per graph snapshot)
+        # instead of re-indexing the whole graph for every voter construction
+        # -- the index build is the dominant cost on large metadata graphs.
+        self._validator = (
+            validator if validator is not None
+            else KgSqlValidator(self._graph_data, graph_name)
+        )
         self._golden_records = list(golden_records or [])
+        self._max_candidates = max(1, int(max_candidates))
         self._linked_names: Set[str] = (
             self._compute_linked_names() if question else set()
         )
@@ -112,7 +121,13 @@ class KgSqlVoter:
     # -- public API ----------------------------------------------------------
 
     def vote(self, candidates: List[str]) -> List[SqlVote]:
-        """Return all candidates ranked best->worst (stable on ties)."""
+        """Return all candidates ranked best->worst (stable on ties).
+
+        The candidate list is truncated to ``max_candidates`` (default 10),
+        keeping the head of the list -- candidates arrive priority-ordered
+        (LLM beam / injection order), so the tail is the least promising.
+        """
+        candidates = list(candidates or [])[: self._max_candidates]
         if not candidates:
             return []
         scored: List[Tuple[float, int, SqlVote]] = []

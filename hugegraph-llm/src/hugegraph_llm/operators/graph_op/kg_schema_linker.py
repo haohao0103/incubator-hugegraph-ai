@@ -25,6 +25,7 @@ Typical use::
 
 from __future__ import annotations
 
+import heapq
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
@@ -203,9 +204,19 @@ class KgSchemaLinker:
         if not terms:
             return SchemaContext()
 
-        scored_tables = self._rank(vertices.get("Table", []), "Table", terms)
-        scored_metrics = self._rank(vertices.get("Metric", []), "Metric", terms)
-        scored_fields = self._rank(vertices.get("Field", []), "Field", terms)
+        scored_tables = self._rank(
+            vertices.get("Table", []), "Table", terms,
+            top_k=self._config.max_tables,
+        )
+        scored_metrics = self._rank(
+            vertices.get("Metric", []), "Metric", terms,
+            top_k=self._config.max_metrics,
+        )
+        table_names = {v.get("name") for _, v in scored_tables[: self._config.max_tables]}
+        scored_fields = self._rank(
+            vertices.get("Field", []), "Field", terms,
+            top_k=self._config.max_fields_per_table * max(1, len(table_names)),
+        )
 
         tables = [v for _, v in scored_tables[: self._config.max_tables]]
         metrics = [v for _, v in scored_metrics[: self._config.max_metrics]]
@@ -221,14 +232,29 @@ class KgSchemaLinker:
         )
 
     def _rank(
-        self, rows: Sequence[Dict[str, Any]], label: str, terms: Sequence[str]
+        self,
+        rows: Sequence[Dict[str, Any]],
+        label: str,
+        terms: Sequence[str],
+        top_k: Optional[int] = None,
     ) -> List[Tuple[float, Dict[str, Any]]]:
+        """Score every vertex, keep those above ``min_score``.
+
+        With ``top_k`` set, only the top-k by score survive (via a heap), so
+        the cost is O(V log k) instead of O(V log V) -- the schema-linking
+        bottleneck on large metadata graphs. Without it the full ranked list
+        is returned (backward compatible).
+        """
         scored = [
             (self.score_vertex(label, v, terms), v)
             for v in rows
             if v.get("name")
         ]
         scored = [(s, v) for s, v in scored if s >= self._config.min_score]
+        if top_k is not None and len(scored) > top_k:
+            # exact top-k set; ties at the boundary may pick either winner
+            # (equal score, so interchangeable), then stable-sort the winners
+            scored = heapq.nlargest(top_k, scored, key=lambda item: item[0])
         scored.sort(key=lambda item: (-item[0], str(item[1].get("name"))))
         return scored
 
