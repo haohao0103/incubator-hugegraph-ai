@@ -292,7 +292,10 @@ class TestUnifiedQueryHttpApi(unittest.TestCase):
 def _sample_graph() -> Dict[str, Any]:
     return {
         "vertices": {
-            "Table": [{"name": "order"}, {"name": "payment"}],
+            "Table": [
+                {"name": "order", "comment": "订单表"},
+                {"name": "payment", "comment": "支付表"},
+            ],
             "Field": [
                 {"name": "order.amount"},
                 {"name": "order.city"},
@@ -391,6 +394,88 @@ class TestUnifiedQueryNl2Sql(unittest.TestCase):
         )
         gen = next(s for s in resp.stages if s.stage == "sql_generation")
         self.assertEqual(gen.output["source"], "llm")
+
+
+class TestUnifiedQuerySchemaMode(unittest.TestCase):
+    """mode='schema': schema retrieval + no-evidence refusal."""
+
+    @patch.object(KgRuleEngine, "load_graph", return_value=_sample_graph())
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_schema_no_evidence_refuses(self, mock_client, _load):
+        mock_client.return_value = object()
+        req = UnifiedQueryRequest(question="风控引擎实时决策表在哪里", mode="schema")
+        resp = unified_query(req)
+        self.assertTrue(resp.no_evidence)
+        self.assertEqual(resp.route, "schema")
+        self.assertEqual(resp.answer, "未找到相关元数据，可能需加工")
+        self.assertTrue(resp.subgraph.get("no_evidence"))
+
+    @patch.object(KgRuleEngine, "load_graph", return_value=_sample_graph())
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_schema_no_evidence_custom_fallback_wins(self, mock_client, _load):
+        mock_client.return_value = object()
+        req = UnifiedQueryRequest(
+            question="风控引擎实时决策表在哪里",
+            mode="schema",
+            response_fallback="自定义拒答：未找到，需加工",
+        )
+        resp = unified_query(req)
+        self.assertTrue(resp.no_evidence)
+        self.assertEqual(resp.answer, "自定义拒答：未找到，需加工")
+
+    @patch.object(KgRuleEngine, "load_graph", return_value=_sample_graph())
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_schema_linked_returns_evidence(self, mock_client, _load):
+        mock_client.return_value = object()
+        req = UnifiedQueryRequest(question="订单总额", mode="schema")
+        resp = unified_query(req)
+        self.assertFalse(resp.no_evidence)
+        self.assertEqual(resp.route, "schema")
+        self.assertIn("order_total", resp.subgraph.get("metrics", []))
+        stage_names = [s.stage for s in resp.stages]
+        self.assertIn("query_understanding", stage_names)
+        self.assertIn("schema_retrieval", stage_names)
+        # intent trace flows through raw
+        self.assertIn("expanded_terms", resp.raw["intent"])
+
+    @patch.object(KgRuleEngine, "load_graph", return_value=_sample_graph())
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_schema_importance_weight_and_table_hit(self, mock_client, _load):
+        mock_client.return_value = object()
+        req = UnifiedQueryRequest(
+            question="订单表",
+            mode="schema",
+            retriever_config={"importance_weight": 0.5},
+        )
+        resp = unified_query(req)
+        self.assertFalse(resp.no_evidence)
+        self.assertIn("order", resp.subgraph.get("tables", []))
+        self.assertIn("订单表", resp.answer)
+
+    @patch.object(
+        KgRuleEngine,
+        "load_graph",
+        return_value={
+            "vertices": {
+                "Table": [],
+                "Field": [],
+                "Metric": [{"name": "m1"}],  # no formula/definition
+            },
+            "edges": {
+                "hasColumn": [], "computedFrom": [], "computedFromField": [],
+                "dependsOn": [],
+            },
+        },
+    )
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_schema_empty_fields_and_evidence_branches(self, mock_client, _load):
+        mock_client.return_value = object()
+        req = UnifiedQueryRequest(question="m1", mode="schema")
+        resp = unified_query(req)
+        self.assertFalse(resp.no_evidence)
+        self.assertIn("m1", resp.subgraph.get("metrics", []))
+        self.assertEqual(resp.subgraph.get("fields"), [])
+        self.assertEqual(resp.raw.get("evidence"), [])
 
 
 if __name__ == "__main__":

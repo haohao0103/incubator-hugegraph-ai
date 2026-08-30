@@ -148,6 +148,103 @@ def _run_nl2sql(req: UnifiedQueryRequest, fallback: Optional[str]) -> UnifiedQue
     return _apply_fallback(resp, fallback)
 
 
+# default refusal copy when schema retrieval finds no evidence (the 货拉拉
+# badcase '不存在也答' guard): the platform should not generate SQL from nothing
+DEFAULT_NO_EVIDENCE_MSG = "未找到相关元数据，可能需加工"
+
+
+def _run_schema_retrieval(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
+    """Schema retrieval mode: question -> relevant tables/fields/metrics.
+
+    Uses the multi-recall linker (graph structure + fulltext + lexical,
+    optionally query-understanding for dual keywords + synonym expansion).
+    When nothing is linked, returns ``no_evidence=True`` with the refusal
+    copy instead of a fabricated answer.
+    """
+    from hugegraph_llm.operators.graph_op.kg_multi_retrieval import (
+        KgMultiSchemaLinker,
+        MultiRecallConfig,
+    )
+    from hugegraph_llm.operators.graph_op.kg_query_understanding import QueryUnderstanding
+    from hugegraph_llm.operators.graph_op.kg_rule_engine import KgRuleEngine
+    from hugegraph_llm.utils.hugegraph_utils import get_hg_client
+
+    client = get_hg_client()
+    config = MultiRecallConfig()
+    retriever_config = dict(req.retriever_config or {})
+    if "importance_weight" in retriever_config:
+        config.importance_weight = float(retriever_config["importance_weight"])
+
+    linker = KgMultiSchemaLinker(
+        client=client,
+        config=config,
+        # query understanding: LLM keyword extraction when reachable, heuristic
+        # fallback otherwise; synonym expansion via the default term graph
+        query_understanding=QueryUnderstanding(),
+    )
+    data = KgRuleEngine(client, huge_settings.graph_name).load_graph()
+    ctx = linker.link(req.question, data=data)
+
+    if ctx.empty:
+        message = req.response_fallback or DEFAULT_NO_EVIDENCE_MSG
+        return UnifiedQueryResponse(
+            answer=message,
+            route="schema",
+            citations=[],
+            subgraph={"no_evidence": True},
+            raw={"no_evidence": True, "intent": ctx.query_intent},
+            stages=[
+                QueryStageBuilder.make(
+                    "schema_retrieval",
+                    output={"no_evidence": True, "message": message},
+                    input={"question": req.question, "domain": req.domain},
+                )
+            ],
+            no_evidence=True,
+        )
+
+    linked = {
+        "tables": [t.get("name") for t in ctx.tables],
+        "fields": [f.get("name") for f in ctx.fields],
+        "metrics": [m.get("name") for m in ctx.metrics],
+    }
+    lines = ["相关元数据:"]
+    if ctx.tables:
+        lines.append("表: " + ", ".join(t.get("name", "") for t in ctx.tables))
+    if ctx.metrics:
+        lines.append(
+            "指标: " + ", ".join(
+                f"{m.get('name')}({m.get('definition') or m.get('formula') or ''})"
+                for m in ctx.metrics
+            )
+        )
+    if ctx.fields:
+        lines.append("字段: " + ", ".join(f.get("name", "") for f in ctx.fields))
+    if ctx.evidence:
+        lines.append("口径证据: " + "; ".join(ctx.evidence[:5]))
+
+    return UnifiedQueryResponse(
+        answer="\n".join(lines),
+        route="schema",
+        citations=[],
+        subgraph=linked,
+        raw={"linked": linked, "evidence": ctx.evidence[:12], "intent": ctx.query_intent},
+        stages=[
+            QueryStageBuilder.make(
+                "query_understanding",
+                output=ctx.query_intent,
+                input={"question": req.question},
+            ),
+            QueryStageBuilder.make(
+                "schema_retrieval",
+                output=linked,
+                input={"question": req.question, "domain": req.domain},
+            ),
+        ],
+        no_evidence=False,
+    )
+
+
 def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     """Core query logic shared by the HTTP route and the Gradio tab."""
     if not req.question or not str(req.question).strip():
@@ -180,6 +277,9 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
 
     if mode == "nl2sql":
         return _run_nl2sql(req, fallback)
+
+    if mode == "schema":
+        return _run_schema_retrieval(req)
 
     # semantic / hybrid -> RAGGraphVectorFlow (retriever_config forwarded)
     vector_only = bool(retriever_config.get("vector_only", mode == "semantic"))

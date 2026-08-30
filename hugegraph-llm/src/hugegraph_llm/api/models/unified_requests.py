@@ -71,10 +71,16 @@ class UnifiedQueryRequest(BaseModel):
       * ``precise`` -> Text2Gremlin (exact Gremlin + execution)
       * ``semantic``-> vector-only RAG
       * ``hybrid``  -> graph + vector RAG (default fallback for auto)
+      * ``nl2sql``  -> KG-aware NL2SQL pipeline (schema linking + validation)
+      * ``schema``  -> schema retrieval only (question -> relevant
+                       tables/fields/metrics + evidence); sets ``no_evidence``
+                       and refuses when nothing is linked
     """
 
     question: str
-    mode: str = Field("auto", description="auto | precise | semantic | hybrid | nl2sql")
+    mode: str = Field(
+        "auto", description="auto | precise | semantic | hybrid | nl2sql | schema"
+    )
     domain: Optional[str] = Field(None, description="optional domain filter")
     top_k: int = Field(5, description="max number of returned results")
     response_fallback: Optional[str] = Field(
@@ -122,6 +128,9 @@ class UnifiedQueryResponse(BaseModel):
     subgraph: Dict[str, Any] = Field(default_factory=dict)
     raw: Dict[str, Any] = Field(default_factory=dict)
     stages: List[QueryStage] = Field(default_factory=list)
+    # True when the retrieval found no evidence for the question (schema
+    # mode); the caller should treat the answer as a refusal, not a hit.
+    no_evidence: bool = False
 
 
 class QueryStageBuilder:

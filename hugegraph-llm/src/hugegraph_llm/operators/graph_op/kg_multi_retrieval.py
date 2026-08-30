@@ -62,7 +62,10 @@ class MultiRecallConfig:
     weights: Dict[str, float] = field(
         default_factory=lambda: {
             "graph": 1.0,
-            "fulltext": 1.0,
+            "fulltext": 0.5,  # recall backstop: HugeGraph SEARCH is
+                              # character-level for Chinese, so it over-recalls
+                              # vertices sharing a single char; low weight keeps
+                              # it from dominating the fusion ranking
             "lexical": 1.0,
             "vector": 1.0,  # inactive until an embedding retriever is attached
         }
@@ -72,6 +75,10 @@ class MultiRecallConfig:
     # 0 disables the re-rank (default, keeps prior behaviour).
     importance_weight: float = 0.0
     retriever_top_k: int = 20
+    # fusion strategy: "score" (weighted score sum; the default — each path's
+    # score is on the same scale: name exact 3.0/2.0, substring 1.0, fulltext
+    # boolean 1.0) or "rrf" (reciprocal-rank; kept for compatibility)
+    fusion: str = "score"
 
 
 class SchemaRetriever(ABC):
@@ -85,7 +92,14 @@ class SchemaRetriever(ABC):
         question: str,
         data: GraphData,
         client: Optional[Any] = None,
+        terms: Optional[Sequence[str]] = None,
     ) -> List[RetrievedVertex]:
+        """Retrieve candidates.
+
+        ``terms`` optionally overrides the internally extracted terms (the
+        query-understanding stage passes expanded terms this way); None falls
+        back to the retriever's own extraction.
+        """
         ...
 
 
@@ -110,8 +124,9 @@ class GraphStructureRetriever(SchemaRetriever):
                 out.append(canon)
         return out
 
-    def retrieve(self, question, data, client=None) -> List[RetrievedVertex]:
-        terms = self._alias_terms(question, self._linker.extract_terms(question))
+    def retrieve(self, question, data, client=None, terms=None) -> List[RetrievedVertex]:
+        base_terms = list(terms) if terms is not None else self._linker.extract_terms(question)
+        terms = self._alias_terms(question, base_terms)
         hits: List[RetrievedVertex] = []
         # 1) name-level entity links (score by match strength)
         for label in NODE_LABELS:
@@ -155,14 +170,24 @@ class FulltextRetriever(SchemaRetriever):
     queries (the SEARCH indexes are built); without one it degrades to a
     substring scan over the same fields so unit tests stay offline.
 
-    Only terms with ``len(term) >= min_term_len`` are queried: HugeGraph's
-    SEARCH tokenizer matches substrings aggressively, so 2-gram terms like
-    "表在" hit every comment containing "表" and cause out-of-scope
-    false recalls (the 货拉拉 badcase '不存在也答').
+    Term guards (learned on the live server):
+    - ``len(term) >= min_term_len``: HugeGraph SEARCH matches substrings
+      aggressively, so 2-gram terms like "表在" hit every comment containing
+      "表" (the 货拉拉 badcase '不存在也答').
+    - ``len(term) <= max_term_len`` (CJK only): HugeGraph's SEARCH tokenizer
+      is character-level for Chinese, so a long sentence fragment like
+      "完全无关的随机词汇" matches any definition sharing a single character
+      ("完"/"的"). Whole-sentence terms must not be sent to Text.contains.
     """
 
     source = "fulltext"
     min_term_len: int = 3
+    # CJK sentence fragments longer than this are NOT sent to Text.contains:
+    # HugeGraph's SEARCH tokenizer is character-level for Chinese, so a long
+    # fragment like "完全无关的随机词汇" (9 chars) matches any definition
+    # sharing a single character. Heuristic bound: noun phrases up to 8 chars
+    # ("平均每单成交金额") still match sensibly; longer sentences are noise.
+    max_term_len: int = 8
 
     _TEXT_FIELDS: Tuple[Tuple[str, str], ...] = (
         ("Table", "comment"),
@@ -174,13 +199,25 @@ class FulltextRetriever(SchemaRetriever):
     def __init__(self, linker: Optional[KgSchemaLinker] = None) -> None:
         self._linker = linker or KgSchemaLinker()
 
-    def retrieve(self, question, data, client=None) -> List[RetrievedVertex]:
-        terms = [t for t in self._linker.extract_terms(question) if len(t) >= self.min_term_len]
+    def retrieve(self, question, data, client=None, terms=None) -> List[RetrievedVertex]:
+        raw = list(terms) if terms is not None else self._linker.extract_terms(question)
+        terms = [
+            t for t in raw
+            if len(t) >= self.min_term_len and self._term_ok(t)
+        ]
         if not terms:
             return []
         if client is not None:
             return self._retrieve_live(client, terms)
         return self._retrieve_memory(data, terms)
+
+    @staticmethod
+    def _term_ok(term: str) -> bool:
+        """Reject long CJK sentence fragments (character-level SEARCH noise)."""
+        has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in term)
+        if not has_cjk:
+            return True  # latin tokens are word-indexed, safe at any length
+        return len(term) <= FulltextRetriever.max_term_len
 
     def _retrieve_live(self, client: Any, terms: Sequence[str]) -> List[RetrievedVertex]:
         out: List[RetrievedVertex] = []
@@ -222,14 +259,21 @@ class LexicalRetriever(SchemaRetriever):
         self._linker = linker or KgSchemaLinker()
         self._top_k = top_k
 
-    def retrieve(self, question, data, client=None) -> List[RetrievedVertex]:
-        terms = self._linker.extract_terms(question)
-        out: List[RetrievedVertex] = []
+    def retrieve(self, question, data, client=None, terms=None) -> List[RetrievedVertex]:
+        terms = list(terms) if terms is not None else self._linker.extract_terms(question)
+        scored: List[Tuple[float, str, str]] = []
         for label in NODE_LABELS:
-            scored = self._linker._rank(data.get("vertices", {}).get(label, []), label, terms)
-            for score, v in scored[: self._top_k]:
-                out.append(RetrievedVertex(label, v.get("name"), score, self.source))
-        return out
+            for score, v in self._linker._rank(data.get("vertices", {}).get(label, []), label, terms):
+                name = v.get("name")
+                if name:  # pragma: no branch - _rank already filters nameless
+                    scored.append((score, label, name))
+        # global score ordering across labels (a Metric scoring 1.2 must rank
+        # above a Table scoring 1.0, not after all tables/fields)
+        scored.sort(key=lambda item: (-item[0], item[1], item[2]))
+        return [
+            RetrievedVertex(label, name, score, self.source)
+            for score, label, name in scored[: self._top_k]
+        ]
 
 
 def rrf_fuse(
@@ -250,6 +294,32 @@ def rrf_fuse(
         for rank, rv in enumerate(path):
             key = (rv.label, rv.name)
             acc[key] += w / (k + rank + 1)
+            if key not in best or rv.score > best[key].score:
+                best[key] = rv
+    ordered = sorted(acc.items(), key=lambda kv: -kv[1])
+    return [replace(best[key], score=score) for key, score in ordered]
+
+
+def score_fuse(
+    lists: Sequence[Sequence[RetrievedVertex]],
+    weights: Optional[Dict[str, float]] = None,
+) -> List[RetrievedVertex]:
+    """Weighted score-sum fusion across recall paths.
+
+    Unlike RRF (which flattens rank differences to ~1/(k+rank) so tiny noise
+    decides ties), score fusion sums each path's semantic score — all paths
+    share the same scale (name exact 3.0 / substring 2.0 / 1.0, fulltext
+    boolean 1.0), so a metric scoring 1.2 in lexical + 1.0 in fulltext
+    (2.2) beats a table scoring 1.0 + 1.0 (2.0) deterministically.
+    """
+    weights = weights or {}
+    acc: Dict[Tuple[str, str], float] = defaultdict(float)
+    best: Dict[Tuple[str, str], RetrievedVertex] = {}
+    for path in lists:
+        w = float(weights.get(path[0].source, 1.0)) if path else 1.0
+        for rv in path:
+            key = (rv.label, rv.name)
+            acc[key] += w * rv.score
             if key not in best or rv.score > best[key].score:
                 best[key] = rv
     ordered = sorted(acc.items(), key=lambda kv: -kv[1])
@@ -317,6 +387,7 @@ class KgMultiSchemaLinker:
         synonyms: Optional[Dict[str, List[str]]] = None,
         config: Optional[MultiRecallConfig] = None,
         retrievers: Optional[List[SchemaRetriever]] = None,
+        query_understanding: Optional[Any] = None,
     ) -> None:
         self._client = client
         self._config = config or MultiRecallConfig()
@@ -329,6 +400,9 @@ class KgMultiSchemaLinker:
             LexicalRetriever(base, top_k=self._config.retriever_top_k),
         ]
         self._vector_retriever: Optional[SchemaRetriever] = None
+        # optional query-understanding stage: dual-level keywords + synonym
+        # expansion feeding the expanded terms into every recall path
+        self._understanding = query_understanding
 
     def attach_vector_retriever(self, retriever: SchemaRetriever) -> None:
         """Slot for the embedding path; call once an embedding endpoint exists."""
@@ -336,10 +410,21 @@ class KgMultiSchemaLinker:
 
     def link(self, question: str, data: Optional[GraphData] = None) -> SchemaContext:
         data = data if data is not None else self._base.load_graph()
-        paths = [r.retrieve(question, data, client=self._client) for r in self._retrievers]
+        terms: Optional[List[str]] = None
+        intent: Dict[str, Any] = {}
+        if self._understanding is not None:
+            qi = self._understanding.understand(question)
+            terms = qi.expanded_terms
+            intent = qi.to_dict()
+        paths = [r.retrieve(question, data, client=self._client, terms=terms)
+                 for r in self._retrievers]
         if self._vector_retriever is not None:
-            paths.append(self._vector_retriever.retrieve(question, data, client=self._client))
-        fused = rrf_fuse(paths, k=self._config.fusion_k, weights=self._config.weights)
+            paths.append(self._vector_retriever.retrieve(question, data, client=self._client,
+                                                         terms=terms))
+        if self._config.fusion == "rrf":
+            fused = rrf_fuse(paths, k=self._config.fusion_k, weights=self._config.weights)
+        else:
+            fused = score_fuse(paths, weights=self._config.weights)
         # NOTE: RRF scores are 1/(k+rank)-scaled (~0.016), so no absolute
         # min_score filter here; each path filters its own results and the
         # assembly below truncates to the budgets.
@@ -370,6 +455,20 @@ class KgMultiSchemaLinker:
             by_name["Field"][rv.name] for rv in fused
             if rv.label == "Field" and rv.name in by_name["Field"]
         ]
+        # fields that recall hit imply their owner table: a question asking
+        # for "订单金额和支付金额" must surface order/payment tables too
+        # (the platform needs the table name to build SQL)
+        field_owner = {}
+        for src, dst in data.get("edges", {}).get("hasColumn", []):
+            field_owner[dst] = src
+        table_names = {t.get("name") for t in tables}
+        for f in hit_fields:
+            owner = f.get("table") or field_owner.get(f.get("name"))
+            if owner and owner in by_name["Table"] and owner not in table_names:
+                if len(tables) >= self._config.max_tables:
+                    break
+                tables.append(by_name["Table"][owner])
+                table_names.add(owner)
         base_ctx = self._base.link(question, data=data)
         fields = list(hit_fields)
         # fields the single-pass linker already resolved for the hit tables
@@ -389,4 +488,6 @@ class KgMultiSchemaLinker:
             relations=self._base._collect_relations(tables, metrics, data.get("edges", {})),
             evidence=self._base._build_evidence(tables, metrics, fields)[: self._config.max_evidence],
             matched_terms=base_ctx.matched_terms,
+            query_intent=intent,
+            ranking=[(rv.label, rv.name) for rv in fused],
         )

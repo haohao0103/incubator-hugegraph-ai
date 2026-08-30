@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "graph": "kg_platform",
+    "note": "平台接入评估集 v1。指标对齐货拉拉元数据 GraphRAG 实践：准确率 78% / 知识召回率 91% / TopK 90% / MRR 0.73。含 5 类 badcase：同义词、多实体、无关干扰、知识缺失、越界拒答。",
+    "expected_refusal_note": "expect_refusal=true 的问题应返回 no_evidence（越界拒答），不计入命中率。"
+  },
+  "synonyms": {
+    "大单": "order_total",
+    "实付": "payment_total",
+    "车费": "payment_total"
+  },
+  "questions": [
+    {
+      "question": "订单总额是多少",
+      "expected": {"metrics": ["order_total"]},
+      "note": "常规：指标直接命中"
+    },
+    {
+      "question": "各城市订单金额",
+      "expected": {"metrics": ["order_total"], "fields": ["order.city"]},
+      "note": "多实体：指标+维度字段"
+    },
+    {
+      "question": "平均每单成交金额",
+      "expected": {"metrics": ["avg_order_value"]},
+      "note": "指标定义中文名命中"
+    },
+    {
+      "question": "客单价是多少",
+      "expected": {"metrics": ["avg_order_value"]},
+      "note": "badcase 同义词：客单价 vs 平均每单成交金额（definition 含客单价）"
+    },
+    {
+      "question": "司机订单数",
+      "expected": {"metrics": ["driver_order_cnt"]},
+      "note": "常规：指标名命中"
+    },
+    {
+      "question": "订单数量",
+      "expected": {"metrics": ["order_count"]},
+      "note": "常规：数量类指标"
+    },
+    {
+      "question": "大单有多少",
+      "expected": {"metrics": ["order_total"]},
+      "note": "badcase 同义词：大单 -> order_total（别名路救回）"
+    },
+    {
+      "question": "支付总额",
+      "expected": {"metrics": ["payment_total"]},
+      "note": "常规：支付类指标"
+    },
+    {
+      "question": "实付金额是多少",
+      "expected": {"metrics": ["payment_total"]},
+      "note": "badcase 同义词：实付 -> payment_total"
+    },
+    {
+      "question": "订单金额在哪个表",
+      "expected": {"tables": ["order"], "fields": ["order.amount"]},
+      "note": "badcase 找数：字段归属表"
+    },
+    {
+      "question": "订单金额和支付金额",
+      "expected": {"tables": ["order", "payment"], "fields": ["order.amount", "payment.amount"]},
+      "note": "badcase 多实体：跨表多字段"
+    },
+    {
+      "question": "每个城市的订单总额",
+      "expected": {"metrics": ["order_total"], "fields": ["order.city"]},
+      "note": "常规：指标+维度"
+    },
+    {
+      "question": "司机ID对应哪个字段",
+      "expected": {"fields": ["order.driver_id", "driver.driver_id"]},
+      "note": "badcase 多实体：司机ID多表存在"
+    },
+    {
+      "question": "司机姓名怎么取",
+      "expected": {"fields": ["driver.name"]},
+      "note": "常规：字段归属"
+    },
+    {
+      "question": "风控引擎实时决策表在哪里",
+      "expected": {},
+      "expect_refusal": true,
+      "note": "badcase 越界拒答：知识库外问题应 no_evidence"
+    },
+    {
+      "question": "实时订单表可以用吗",
+      "expected": {"tables": ["order"]},
+      "note": "badcase 知识缺失变体：无'实时订单表'实体，但'订单表'order 合理命中（尾词剥离后'实时订单表'匹配 order.comment）"
+    },
+    {
+      "question": "完全无关的随机词汇xyz",
+      "expected": {},
+      "expect_refusal": true,
+      "note": "基线：无证据拒答"
+    }
+  ]
+}

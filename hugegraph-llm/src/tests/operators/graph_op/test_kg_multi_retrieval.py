@@ -207,7 +207,7 @@ class TestRrfFuse(unittest.TestCase):
 class _FakeVectorRetriever(SchemaRetriever):
     source = "vector"
 
-    def retrieve(self, question, data, client=None):
+    def retrieve(self, question, data, client=None, terms=None):
         if "客单价" in question:
             return [RetrievedVertex("Metric", "avg_order_value", 0.9, self.source)]
         return []
@@ -291,6 +291,114 @@ class TestKgMultiSchemaLinker(unittest.TestCase):
         multi.attach_vector_retriever(_FakeVectorRetriever())  # returns [] here
         ctx = multi.link("订单", self.data)
         self.assertIn("order_total", [m.get("name") for m in ctx.metrics])
+
+    def test_terms_override_injected_into_retrievers(self):
+        # the query-understanding stage passes expanded terms as ``terms``;
+        # every retriever must honour the override instead of re-extracting
+        g = GraphStructureRetriever()
+        ft = FulltextRetriever()
+        lx = LexicalRetriever()
+        # each path matches on a different field, but the terms override
+        # must drive the recall (not the unrelated question text)
+        cases = (
+            (g, ["order_total"]),       # name-level entity link
+            (ft, ["订单总额"]),          # SEARCH on Metric.definition
+            (lx, ["order_total"]),      # lexical ranking over name/comment
+        )
+        for retriever, terms in cases:
+            hits = retriever.retrieve("完全无关的句子", self.data, terms=terms)
+            names = {h.name for h in hits}
+            self.assertTrue(names, f"{retriever.source}: terms override produced no hits")
+        # without the override, the same question extracts nothing relevant
+        self.assertEqual(g.retrieve("完全无关的句子", self.data), [])
+
+    def test_query_understanding_integrated(self):
+        from hugegraph_llm.operators.graph_op.kg_query_understanding import (
+            QueryUnderstanding,
+            QueryUnderstandingConfig,
+        )
+        from hugegraph_llm.operators.graph_op.kg_term_graph import KgTermGraph
+
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(),
+            query_understanding=QueryUnderstanding(
+                term_graph=KgTermGraph.from_jargon_map({"大单": "order_total"}),
+                config=QueryUnderstandingConfig(short_query_threshold=5),
+            ),
+        )
+        ctx = multi.link("大单是多少", data=self.data)
+        # synonym expansion via the understanding stage -> canonical term
+        # injected into every recall path
+        self.assertIn("order_total", [m.get("name") for m in ctx.metrics])
+        # the intent trace is attached to the context
+        self.assertIn("expanded_terms", ctx.query_intent)
+        self.assertIn("order_total", ctx.query_intent["expanded_terms"])
+        self.assertEqual(ctx.query_intent["extraction_method"], "heuristic")
+
+    def test_field_owner_table_budget_break(self):
+        # 6 tables each with a hit field -> owner-table promotion stops at the
+        # max_tables budget (the break branch)
+        from hugegraph_llm.operators.graph_op.kg_query_understanding import (
+            QueryUnderstanding,
+            QueryUnderstandingConfig,
+        )
+
+        tables = [{"name": f"t{i}", "comment": f"表{i}"} for i in range(6)]
+        fields = [{"name": f"t{i}.f", "comment": f"字段{i}"} for i in range(6)]
+        data = {
+            "vertices": {"Table": tables, "Field": fields, "Metric": []},
+            "edges": {
+                "hasColumn": [(f"t{i}", f"t{i}.f") for i in range(6)],
+                "computedFrom": [], "computedFromField": [], "dependsOn": [],
+            },
+        }
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(max_tables=5),
+            query_understanding=QueryUnderstanding(
+                config=QueryUnderstandingConfig(short_query_threshold=100),
+            ),
+        )
+        ctx = multi.link("t0.f t1.f t2.f t3.f t4.f t5.f", data=data)
+        # owner tables promoted for the recalled fields, capped at the budget
+        self.assertLessEqual(len(ctx.tables), 5)
+
+    def test_context_empty_property(self):
+        multi = KgMultiSchemaLinker(config=MultiRecallConfig())
+        ctx = multi.link("完全不相关的词汇xyz", self.data)
+        self.assertTrue(ctx.empty)
+
+    def test_lexical_skips_vertices_without_name(self):
+        # a vertex without a name must be skipped by the lexical path (and by
+        # the fused assembly) without crashing
+        data = {
+            "vertices": {
+                "Table": [{"name": "order", "comment": "订单表"},
+                          {"comment": "无名字表"}],
+                "Field": [], "Metric": [],
+            },
+            "edges": {
+                "hasColumn": [], "computedFrom": [], "computedFromField": [],
+                "dependsOn": [],
+            },
+        }
+        multi = KgMultiSchemaLinker(
+            retrievers=[LexicalRetriever()], config=MultiRecallConfig()
+        )
+        ctx = multi.link("订单", data)
+        self.assertIn("order", [t.get("name") for t in ctx.tables])
+
+    def test_rrf_fusion_mode_kept(self):
+        # MultiRecallConfig.fusion="rrf" falls back to reciprocal-rank fusion
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(fusion="rrf"), retrievers=[LexicalRetriever()]
+        )
+        ctx = multi.link("订单总额", self.data)
+        self.assertIn("order_total", [m.get("name") for m in ctx.metrics])
+
+    def test_context_not_empty_when_linked(self):
+        multi = KgMultiSchemaLinker(config=MultiRecallConfig())
+        ctx = multi.link("订单总额", self.data)
+        self.assertFalse(ctx.empty)
 
     def test_importance_weight_reranks_tables(self):
         data = _sample_graph()

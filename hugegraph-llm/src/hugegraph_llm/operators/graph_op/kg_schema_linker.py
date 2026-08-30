@@ -72,6 +72,18 @@ class SchemaContext:
     relations: List[Tuple[str, str, str]] = field(default_factory=list)
     evidence: List[str] = field(default_factory=list)
     matched_terms: List[str] = field(default_factory=list)
+    # query-understanding trace (dual-level keywords + synonym expansion),
+    # empty when the single-pass linker (no understanding stage) produced it
+    query_intent: Dict[str, Any] = field(default_factory=dict)
+    # fused relevance ranking (label, name) by fusion score, highest first —
+    # the presentation order a caller should surface (multi-recall linker
+    # only; empty for the single-pass linker)
+    ranking: List[Tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def empty(self) -> bool:
+        """True when nothing was linked (used for no-evidence refusal)."""
+        return not (self.tables or self.fields or self.metrics)
 
     def to_prompt_context(self, include_evidence: bool = True) -> str:
         """Render the context as prompt text (schema + metrics + evidence)."""
