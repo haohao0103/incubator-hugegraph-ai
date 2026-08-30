@@ -39,6 +39,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from hugegraph_llm.api.admin_api import admin_http_api
 from hugegraph_llm.api.feishu_ingest_api import feishu_ingest_http_api
 from hugegraph_llm.api.graph_extract_api import graph_extract_http_api
+from hugegraph_llm.api.nl2sql_api import nl2sql_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.api.unified_ingest_api import unified_ingest_http_api
 from hugegraph_llm.api.unified_query_api import unified_query_http_api
@@ -246,6 +247,7 @@ def create_app():
     feishu_ingest_http_api(api_auth)
     unified_ingest_http_api(api_auth)
     unified_query_http_api(api_auth)
+    nl2sql_http_api(api_auth)
 
     app.include_router(api_auth)
     # Mount Gradio inside FastAPI
