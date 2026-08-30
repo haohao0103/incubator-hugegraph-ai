@@ -1,0 +1,45 @@
+{
+  "tables": [
+    {"name": "orders", "database": "dw", "is_fact": true, "comment": "订单事实表"},
+    {"name": "users", "database": "dw", "comment": "用户维度表"},
+    {"name": "products", "database": "dw", "comment": "商品维度表"},
+    {"name": "cities", "database": "dw", "comment": "城市维度表"}
+  ],
+  "columns": [
+    {"name": "order_id", "table": "dw.orders", "data_type": "bigint", "comment": "订单号", "is_primary_key": true},
+    {"name": "user_id", "table": "dw.orders", "data_type": "bigint", "comment": "用户ID"},
+    {"name": "product_id", "table": "dw.orders", "data_type": "bigint", "comment": "商品ID"},
+    {"name": "city_id", "table": "dw.orders", "data_type": "bigint", "comment": "城市ID"},
+    {"name": "amount", "table": "dw.orders", "data_type": "decimal", "comment": "订单金额"},
+    {"name": "id", "table": "dw.users", "data_type": "bigint", "comment": "用户ID", "is_primary_key": true},
+    {"name": "city_id", "table": "dw.users", "data_type": "bigint", "comment": "所在城市"},
+    {"name": "name", "table": "dw.users", "data_type": "string", "comment": "用户名"},
+    {"name": "id", "table": "dw.products", "data_type": "bigint", "comment": "商品ID", "is_primary_key": true},
+    {"name": "category", "table": "dw.products", "data_type": "string", "comment": "商品类目"},
+    {"name": "id", "table": "dw.cities", "data_type": "bigint", "comment": "城市ID", "is_primary_key": true},
+    {"name": "name", "table": "dw.cities", "data_type": "string", "comment": "城市名"}
+  ],
+  "foreign_keys": [
+    ["dw.orders.user_id", "dw.users.id"],
+    ["dw.orders.product_id", "dw.products.id"],
+    ["dw.orders.city_id", "dw.cities.id"],
+    ["dw.users.city_id", "dw.cities.id"]
+  ],
+  "lineage": [
+    ["dw.users", "dw.orders"],
+    ["dw.products", "dw.orders"],
+    ["dw.cities", "dw.orders"]
+  ],
+  "query_logs": [
+    ["dw.orders", "dw.users"],
+    ["dw.orders", "dw.products"],
+    ["dw.orders", "dw.cities"],
+    ["dw.orders", "dw.users", "dw.cities"]
+  ],
+  "terms": [
+    {"name": "营收", "comment": "revenue = sum(amount)"}
+  ],
+  "term_bindings": [
+    ["营收", "dw.orders.amount"]
+  ]
+}
