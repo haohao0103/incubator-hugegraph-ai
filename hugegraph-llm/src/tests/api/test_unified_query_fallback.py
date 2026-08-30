@@ -16,12 +16,14 @@
 # under the License.
 
 import unittest
+from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from hugegraph_llm.api.models.unified_requests import UnifiedQueryRequest
+from hugegraph_llm.operators.graph_op.kg_rule_engine import KgRuleEngine
 from hugegraph_llm.api.unified_query_api import (
     _apply_fallback,
     _graphrag,
@@ -285,6 +287,110 @@ class TestUnifiedQueryHttpApi(unittest.TestCase):
         with self.assertRaises(HTTPException) as cm:
             handler(UnifiedQueryRequest(question="q"))
         self.assertEqual(cm.exception.status_code, 500)
+
+
+def _sample_graph() -> Dict[str, Any]:
+    return {
+        "vertices": {
+            "Table": [{"name": "order"}, {"name": "payment"}],
+            "Field": [
+                {"name": "order.amount"},
+                {"name": "order.city"},
+                {"name": "payment.amount"},
+            ],
+            "Metric": [
+                {"name": "order_total", "formula": "SUM(order.amount)",
+                 "definition": "订单总额"},
+            ],
+        },
+        "edges": {
+            "hasColumn": [
+                ("order", "order.amount"),
+                ("order", "order.city"),
+                ("payment", "payment.amount"),
+            ],
+            "computedFrom": [("order_total", "order")],
+            "computedFromField": [("order_total", "order.amount")],
+            "dependsOn": [],
+        },
+    }
+
+
+def _fake_llms():
+    class _FakeLLM:
+        def generate(self, prompt):
+            return "```sql\nSELECT SUM(order.amount) FROM order\n```"
+
+    class _FakeLLMs:
+        def get_text2gql_llm(self):
+            return _FakeLLM()
+
+    return _FakeLLMs
+
+
+class TestUnifiedQueryNl2Sql(unittest.TestCase):
+    """Wiring of ``mode='nl2sql'`` through unified_query (P0 + P1 pipeline)."""
+
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    @patch("hugegraph_llm.operators.graph_op.kg_nl2sql_pipeline.KgNL2SQLPipeline")
+    def test_nl2sql_routes_with_domain_and_client(self, mock_pipe_cls, mock_client):
+        from hugegraph_llm.api.models.unified_requests import UnifiedQueryResponse
+
+        mock_client.return_value = object()
+        mock_instance = MagicMock()
+        mock_instance.run.return_value = UnifiedQueryResponse(
+            answer="SELECT SUM(order.amount) FROM order", route="nl2sql"
+        )
+        mock_pipe_cls.return_value = mock_instance
+
+        req = UnifiedQueryRequest(question="订单总额", mode="nl2sql", domain="finance")
+        resp = unified_query(req)
+
+        self.assertEqual(resp.answer, "SELECT SUM(order.amount) FROM order")
+        self.assertEqual(resp.route, "nl2sql")
+        mock_pipe_cls.assert_called_once()
+        _, kwargs = mock_pipe_cls.call_args
+        self.assertEqual(kwargs["question"], "订单总额")
+        self.assertEqual(kwargs["domain"], "finance")
+        self.assertIs(kwargs["client"], mock_client.return_value)
+        mock_instance.run.assert_called_once_with()
+
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    @patch("hugegraph_llm.operators.graph_op.kg_nl2sql_pipeline.KgNL2SQLPipeline")
+    def test_nl2sql_empty_answer_uses_fallback(self, mock_pipe_cls, mock_client):
+        from hugegraph_llm.api.models.unified_requests import UnifiedQueryResponse
+
+        mock_client.return_value = object()
+        mock_instance = MagicMock()
+        mock_instance.run.return_value = UnifiedQueryResponse(
+            answer="", route="nl2sql"
+        )
+        mock_pipe_cls.return_value = mock_instance
+
+        req = UnifiedQueryRequest(
+            question="q", mode="nl2sql", response_fallback="no sql available"
+        )
+        resp = unified_query(req)
+        self.assertEqual(resp.answer, "no sql available")
+
+    @patch("hugegraph_llm.models.llms.init_llm.LLMs", _fake_llms())
+    @patch.object(KgRuleEngine, "load_graph", return_value=_sample_graph())
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_nl2sql_real_pipeline_through_api(self, mock_client, _r):
+        # real pipeline (no KgNL2SQLPipeline patch) but offline: mocked graph
+        # server + mocked glm-5.3 generation
+        mock_client.return_value = object()
+        req = UnifiedQueryRequest(question="订单总额", mode="nl2sql")
+        resp = unified_query(req)
+        self.assertEqual(resp.route, "nl2sql")
+        self.assertEqual(resp.answer, "SELECT SUM(order.amount) FROM order")
+        stage_names = [s.stage for s in resp.stages]
+        self.assertEqual(
+            stage_names[:5],
+            ["linking", "sql_generation", "sql_validation", "sql_voting", "lineage"],
+        )
+        gen = next(s for s in resp.stages if s.stage == "sql_generation")
+        self.assertEqual(gen.output["source"], "llm")
 
 
 if __name__ == "__main__":

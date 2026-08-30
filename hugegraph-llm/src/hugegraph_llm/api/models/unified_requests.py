@@ -74,7 +74,7 @@ class UnifiedQueryRequest(BaseModel):
     """
 
     question: str
-    mode: str = Field("auto", description="auto | precise | semantic | hybrid")
+    mode: str = Field("auto", description="auto | precise | semantic | hybrid | nl2sql")
     domain: Optional[str] = Field(None, description="optional domain filter")
     top_k: int = Field(5, description="max number of returned results")
     response_fallback: Optional[str] = Field(

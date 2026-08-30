@@ -31,6 +31,7 @@ Reference: Neo4j GraphRAG schema constraints, MS GraphRAG entity types.
 import copy
 import json
 import re
+from decimal import Decimal
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -512,7 +513,8 @@ class SchemaValidator:
         :return: Updated SchemaDefinition (new instance).
         """
         new_schema = copy.deepcopy(self._schema)
-        new_schema.version = str(float(new_schema.version) + 0.1)
+        # exact decimal increment avoids float drift (1.1 + 0.1 == 1.2000000000000002)
+        new_schema.version = str(Decimal(new_schema.version) + Decimal("0.1"))
 
         # Add entity labels
         for el_def in changes.get("add_entity_labels", []):

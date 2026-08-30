@@ -24,6 +24,10 @@ One query box for the user. ``mode``:
   * ``precise`` -> Text2GremlinFlow (exact Gremlin + execution result).
   * ``semantic``-> vector-only RAG.
   * ``hybrid``  -> RAGGraphVectorFlow (graph traversal + vector recall).
+  * ``nl2sql``  -> KG-aware NL2SQL pipeline (P0 schema-linking + validation,
+                   P1 jargon/authority/lineage/voting). Generates candidate SQL
+                   from the metadata KG, deterministically validates and votes,
+                   then optionally calls the LLM for generation.
 
 All query flows read the KG graph name from ``huge_settings.graph_name``; no
 full schema JSON is needed (the flows fetch it from the graph server).
@@ -120,6 +124,30 @@ def _apply_fallback(resp: UnifiedQueryResponse, fallback: Optional[str]) -> Unif
     return resp
 
 
+def _run_nl2sql(req: UnifiedQueryRequest, fallback: Optional[str]) -> UnifiedQueryResponse:
+    """Route the question through the KG-aware NL2SQL pipeline (P0 + P1).
+
+    Loads the metadata KG from the configured graph server and composes the
+    schema-linking, deterministic SQL validation/voting, and the metric
+    authority / lineage / golden-SQL audits. Candidate generation falls back to
+    the project's LLM role (glm-5.3) when reachable, but every other step is
+    LLM-free and the pipeline degrades gracefully (empty answer -> fallback).
+    """
+    from hugegraph_llm.operators.graph_op.kg_nl2sql_pipeline import KgNL2SQLPipeline
+    from hugegraph_llm.utils.hugegraph_utils import get_hg_client
+
+    client = get_hg_client()
+    pipe = KgNL2SQLPipeline(
+        question=req.question,
+        client=client,
+        domain=req.domain,
+    )
+    resp = pipe.run()
+    # live generation may yield no valid SQL (LLM down / flaky endpoint);
+    # surface the caller's fallback instead of an empty answer.
+    return _apply_fallback(resp, fallback)
+
+
 def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     """Core query logic shared by the HTTP route and the Gradio tab."""
     if not req.question or not str(req.question).strip():
@@ -149,6 +177,9 @@ def unified_query(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
             _format_precise(_text2gremlin(req.question), domain, req.question),
             fallback,
         )
+
+    if mode == "nl2sql":
+        return _run_nl2sql(req, fallback)
 
     # semantic / hybrid -> RAGGraphVectorFlow (retriever_config forwarded)
     vector_only = bool(retriever_config.get("vector_only", mode == "semantic"))
