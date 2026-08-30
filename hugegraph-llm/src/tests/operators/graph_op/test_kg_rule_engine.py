@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from hugegraph_llm.operators.graph_op.kg_rule_engine import (
     EDGE_ENDPOINTS,
@@ -354,6 +354,71 @@ class TestKgRuleEngine(unittest.TestCase):
         engine = KgRuleEngine(client)
         report = engine.run()
         self.assertEqual(report.violations, [])
+
+    # -- graph_data TTL cache ------------------------------------------------
+
+    def _fetch_count(self, client) -> int:
+        return client.gremlin.return_value.exec.call_count
+
+    def _cached_engine(self):
+        client = self._mock_client(
+            {
+                "Table": [{"id": "1:order", "label": "Table", "name": "order"}],
+                "Field": [],
+                "Metric": [],
+            },
+            {
+                "hasColumn": [],
+                "computedFrom": [],
+                "computedFromField": [],
+                "dependsOn": [],
+            },
+        )
+        return client, KgRuleEngine(client, graph_name="kg_rag")
+
+    def test_load_graph_cached_within_ttl(self):
+        client, engine = self._cached_engine()
+        d1 = engine.load_graph()
+        d2 = engine.load_graph()
+        self.assertIs(d1, d2)  # same cached snapshot
+        # 3 vertex labels + 4 edge labels = 7 gremlin calls for ONE fetch
+        self.assertEqual(self._fetch_count(client), 7)
+
+    def test_load_graph_force_refresh_bypasses_cache(self):
+        client, engine = self._cached_engine()
+        engine.load_graph()
+        engine.load_graph(force_refresh=True)
+        self.assertEqual(self._fetch_count(client), 14)
+
+    def test_load_graph_cache_expires(self):
+        client, engine = self._cached_engine()
+        with patch(
+            "hugegraph_llm.operators.graph_op.kg_rule_engine._GRAPH_CACHE_TTL", -1
+        ):
+            engine.load_graph()
+            engine.load_graph()
+        self.assertEqual(self._fetch_count(client), 14)
+
+    def test_load_graph_cache_keyed_by_graph_name(self):
+        client, engine = self._cached_engine()
+        engine.load_graph()
+        other = KgRuleEngine(client, graph_name="other_graph")
+        other.load_graph()
+        self.assertEqual(self._fetch_count(client), 14)
+
+    def test_invalidate_graph_cache(self):
+        client, engine = self._cached_engine()
+        engine.load_graph()
+        KgRuleEngine.invalidate_graph_cache("kg_rag")
+        engine.load_graph()
+        self.assertEqual(self._fetch_count(client), 14)
+
+    def test_invalidate_graph_cache_all(self):
+        client, engine = self._cached_engine()
+        engine.load_graph()
+        KgRuleEngine.invalidate_graph_cache()
+        engine.load_graph()
+        self.assertEqual(self._fetch_count(client), 14)
 
     def test_run_with_injected_data(self):
         engine = KgRuleEngine(MagicMock())

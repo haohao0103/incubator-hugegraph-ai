@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from hugegraph_llm.config import huge_settings
 from hugegraph_llm.operators.graph_op.kg_schema_linker import KgSchemaLinker
 from hugegraph_llm.operators.graph_op.kg_sql_validator import parse_sql
 
@@ -98,9 +99,59 @@ def score_golden(terms: Set[str], rec: GoldenRecord, linked_names: Optional[Set[
 class KgGoldenSqlStore:
     """Store and retrieve verified (question, SQL) pairs in HugeGraph."""
 
+    # Index labels the store relies on for indexed property lookups. The
+    # ``Query`` label uses AUTOMATIC ids, so HugeGraph rejects single
+    # ``has('Query', key, value)`` filters unless a secondary index exists.
+    _INDEXES = [
+        {"name": "QueryByDomain", "base_label": "Query", "field": "domain",
+         "index_type": "SECONDARY"},
+        {"name": "QueryByQuestion", "base_label": "Query", "field": "question",
+         "index_type": "SECONDARY"},
+    ]
+
     def __init__(self, client: Any, graph_name: Optional[str] = None) -> None:
         self._client = client
         self._graph_name = graph_name
+        self._schema_ready = False
+
+    def ensure_schema(self) -> bool:
+        """Idempotently guarantee the Query vertex label + its lookup indexes.
+
+        Self-contained so the golden loop works on any graph regardless of how
+        it was seeded. Failures degrade gracefully (the label usually already
+        exists); the flag caches the success for the store's lifetime.
+        """
+        if self._schema_ready:
+            return True
+        try:
+            from hugegraph_llm.operators.hugegraph_op.schema_manager import SchemaManager
+
+            mgr = SchemaManager(self._graph_name or huge_settings.graph_name, client=self._client)
+            mgr.ensure_schema(
+                {
+                    "propertykeys": [
+                        {"name": "question", "data_type": "TEXT"},
+                        {"name": "sql", "data_type": "TEXT"},
+                        {"name": "schema_refs", "data_type": "TEXT"},
+                        {"name": "domain", "data_type": "TEXT"},
+                        {"name": "created_at", "data_type": "TEXT"},
+                    ],
+                    "vertexlabels": [
+                        {
+                            "name": "Query",
+                            "properties": ["question", "sql", "schema_refs", "domain", "created_at"],
+                            "id_strategy": "AUTOMATIC",
+                            "nullable_keys": ["schema_refs", "domain", "created_at"],
+                        }
+                    ],
+                    "indexes": list(self._INDEXES),
+                }
+            )
+            self._schema_ready = True
+            return True
+        except Exception as exc:  # pragma: no cover - network/schema guard
+            logger.warning("KgGoldenSqlStore.ensure_schema failed: %s", exc)
+            return False
 
     # ------------------------------------------------------------------
     # Write
@@ -120,6 +171,7 @@ class KgGoldenSqlStore:
         exist in the graph). Returns the new vertex id, or ``None`` if the
         write failed.
         """
+        self.ensure_schema()  # no-op once ready; failures degrade gracefully
         tables, cols, refs = _schema_refs_of(sql)
         ref_str = _REF_SEP.join(sorted(refs))
         try:

@@ -1,6 +1,7 @@
 """Tests for KgGoldenSqlStore (NL2SQL golden-SQL feedback loop, P0-4)."""
 
 import unittest
+from unittest.mock import MagicMock, patch
 
 from hugegraph_llm.operators.graph_op.kg_golden_sql import (
     KgGoldenSqlStore,
@@ -278,6 +279,56 @@ class TestLinkedNames(unittest.TestCase):
 
         store = KgGoldenSqlStore(_Broken())
         self.assertEqual(store._linked_names("x"), set())
+
+
+class TestEnsureSchema(unittest.TestCase):
+    """KgGoldenSqlStore.ensure_schema guarantees the Query label + indexes."""
+
+    def test_success_then_cached(self):
+        store = KgGoldenSqlStore(_FakeClient(), "kg_rag")
+        fake_mgr = MagicMock()
+        with patch(
+            "hugegraph_llm.operators.hugegraph_op.schema_manager.SchemaManager",
+            return_value=fake_mgr,
+        ):
+            self.assertTrue(store.ensure_schema())
+            self.assertTrue(store.ensure_schema())
+        # second call served by the cached flag, not a second schema round-trip
+        self.assertEqual(fake_mgr.ensure_schema.call_count, 1)
+
+    def test_add_passes_query_indexed_schema(self):
+        store = KgGoldenSqlStore(_FakeClient(tables=["order"], fields=["order.amount"]), "kg_rag")
+        fake_mgr = MagicMock()
+        with patch(
+            "hugegraph_llm.operators.hugegraph_op.schema_manager.SchemaManager",
+            return_value=fake_mgr,
+        ):
+            vid = store.add("订单总额", "SELECT SUM(order.amount) FROM order")
+        self.assertIsNotNone(vid)
+        called_schema = fake_mgr.ensure_schema.call_args[0][0]
+        index_names = {i["name"] for i in called_schema["indexes"]}
+        self.assertIn("QueryByDomain", index_names)
+        self.assertIn("QueryByQuestion", index_names)
+        # the Query vertex label is declared AUTOMATIC-id (property filters
+        # on it are rejected unless secondary indexes exist)
+        vl = next(v for v in called_schema["vertexlabels"] if v["name"] == "Query")
+        self.assertEqual(vl["id_strategy"], "AUTOMATIC")
+
+    def test_failure_guarded_and_add_still_proceeds(self):
+        class _Boom:
+            def __init__(self, *a, **k):
+                raise RuntimeError("schema api down")
+
+        store = KgGoldenSqlStore(
+            _FakeClient(tables=["order"], fields=["order.amount"]), "kg_rag"
+        )
+        with patch(
+            "hugegraph_llm.operators.hugegraph_op.schema_manager.SchemaManager", _Boom
+        ):
+            self.assertFalse(store.ensure_schema())
+            # the write still works when schema self-healing is unavailable
+            vid = store.add("订单总额", "SELECT SUM(order.amount) FROM order")
+        self.assertIsNotNone(vid)
 
 
 if __name__ == "__main__":

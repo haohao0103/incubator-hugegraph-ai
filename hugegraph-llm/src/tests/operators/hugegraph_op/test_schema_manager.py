@@ -704,6 +704,76 @@ class TestSchemaManagerIdempotentSchema(unittest.TestCase):
             {"property_keys": 0, "vertex_labels": 0, "edge_labels": 0, "index_labels": 0},
         )
 
+    def _sample_schema_with_indexes(self):
+        schema = self._sample_schema()
+        schema["indexes"] = [
+            {"name": "QueryByDomain", "base_label": "Query", "field": "domain",
+             "index_type": "SECONDARY"},
+            {"name": "QueryByQuestion", "base_label": "Query", "field": "question",
+             "index_type": "SECONDARY"},
+        ]
+        return schema
+
+    def test_ensure_schema_explicit_indexes_created(self):
+        self._absent()
+        for method in ("propertyKey", "vertexLabel", "edgeLabel", "indexLabel"):
+            self._builder(getattr(self.mock_schema, method))
+        summary = self.sm.ensure_schema(self._sample_schema_with_indexes())
+        # 2 auto name indexes (person/movie) + 2 explicit Query indexes
+        self.assertEqual(summary["index_labels"], 4)
+        self.mock_schema.indexLabel.assert_any_call("QueryByDomain")
+        self.mock_schema.indexLabel.assert_any_call("QueryByQuestion")
+
+    def test_ensure_schema_explicit_index_already_exists_skipped(self):
+        self._absent()
+
+        def _get_index(name):
+            if name in ("QueryByDomain", "QueryByQuestion"):
+                return object()
+            return None
+
+        self.mock_schema.getIndexLabel.side_effect = _get_index
+        for method in ("propertyKey", "vertexLabel", "edgeLabel", "indexLabel"):
+            self._builder(getattr(self.mock_schema, method))
+        summary = self.sm.ensure_schema(self._sample_schema_with_indexes())
+        # only the person/movie name indexes are new
+        self.assertEqual(summary["index_labels"], 2)
+        built = [c.args[0] for c in self.mock_schema.indexLabel.call_args_list]
+        self.assertNotIn("QueryByDomain", built)
+        self.assertNotIn("QueryByQuestion", built)
+
+    def test_ensure_schema_explicit_index_benign_exception_tolerated(self):
+        # name is a PK on server -> auto name indexes skipped; the explicit
+        # Query indexes are the only ones reaching create()
+        self._absent()
+        self.mock_schema.getSchema.return_value = {
+            "vertexlabels": [
+                {"name": "person", "primary_keys": ["id", "name"]},
+                {"name": "movie", "primary_keys": ["title", "name"]},
+            ]
+        }
+        for method in ("propertyKey", "vertexLabel", "edgeLabel"):
+            self._builder(getattr(self.mock_schema, method))
+        index_builder = self._builder(self.mock_schema.indexLabel)
+        index_builder.create.side_effect = RuntimeError("No need to build index")
+        summary = self.sm.ensure_schema(self._sample_schema_with_indexes())
+        self.assertEqual(summary["index_labels"], 0)
+
+    def test_ensure_schema_explicit_index_other_exception_reraises(self):
+        self._absent()
+        self.mock_schema.getSchema.return_value = {
+            "vertexlabels": [
+                {"name": "person", "primary_keys": ["id", "name"]},
+                {"name": "movie", "primary_keys": ["title", "name"]},
+            ]
+        }
+        for method in ("propertyKey", "vertexLabel", "edgeLabel"):
+            self._builder(getattr(self.mock_schema, method))
+        index_builder = self._builder(self.mock_schema.indexLabel)
+        index_builder.create.side_effect = RuntimeError("real failure")
+        with self.assertRaises(RuntimeError):
+            self.sm.ensure_schema(self._sample_schema_with_indexes())
+
     @staticmethod
     def _idx(name, base_value, fields):
         idx = MagicMock()

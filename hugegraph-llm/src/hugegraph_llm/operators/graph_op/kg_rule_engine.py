@@ -24,10 +24,15 @@ HugeGraph client.
 from __future__ import annotations
 
 import logging
+import os
 import re
+import threading
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+
+from hugegraph_llm.config import huge_settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +64,18 @@ EDGE_ENDPOINTS: Dict[str, Tuple[str, str]] = {
 
 NODE_LABELS = ("Table", "Field", "Metric")
 EDGE_LABELS = tuple(EDGE_ENDPOINTS.keys())
+
+# ---------------------------------------------------------------------------
+# graph_data cache
+# ---------------------------------------------------------------------------
+# Every KgSqlVoter / KgMetricAuthority / KgLineageApi construction calls
+# load_graph() -> a full label scan (measured ~1.8s on the dev slice). A short
+# TTL cache keeps a single NL2SQL request from re-dumping the same graph
+# several times. Keyed by graph name; stale-safe because the writes that change
+# these labels (ingest, seed) are infrequent and the TTL is short.
+_GRAPH_CACHE: Dict[str, Tuple[float, "GraphData"]] = {}
+_GRAPH_CACHE_LOCK = threading.Lock()
+_GRAPH_CACHE_TTL = float(os.environ.get("KG_GRAPH_CACHE_TTL", "5"))
 
 
 @dataclass
@@ -468,15 +485,40 @@ class KgRuleEngine:
         self._client = client
         self._graph_name = graph_name
 
-    def load_graph(self) -> GraphData:
-        """Pull Table/Field/Metric vertices + KG edges from the live graph."""
+    def load_graph(self, force_refresh: bool = False) -> GraphData:
+        """Pull Table/Field/Metric vertices + KG edges from the live graph.
+
+        Results are cached per graph name for ``_GRAPH_CACHE_TTL`` seconds
+        (see module constants) so repeated constructions in one request reuse
+        the same snapshot; pass ``force_refresh=True`` to bypass the cache.
+        """
+        key = self._graph_name or huge_settings.graph_name
+        now = time.time()
+        with _GRAPH_CACHE_LOCK:
+            hit = _GRAPH_CACHE.get(key)
+            if not force_refresh and hit is not None and now - hit[0] < _GRAPH_CACHE_TTL:
+                return hit[1]
+
         vertices: Dict[str, List[Dict[str, Any]]] = {}
         for label in NODE_LABELS:
             vertices[label] = self._fetch_vertices(label)
         edges: Dict[str, List[Tuple[str, str]]] = {}
         for label in EDGE_LABELS:
             edges[label] = self._fetch_edges(label)
-        return {"vertices": vertices, "edges": edges}
+        data: GraphData = {"vertices": vertices, "edges": edges}
+
+        with _GRAPH_CACHE_LOCK:
+            _GRAPH_CACHE[key] = (time.time(), data)
+        return data
+
+    @classmethod
+    def invalidate_graph_cache(cls, graph_name: Optional[str] = None) -> None:
+        """Drop the cached snapshot for one graph (all graphs when omitted)."""
+        with _GRAPH_CACHE_LOCK:
+            if graph_name is None:
+                _GRAPH_CACHE.clear()
+            else:
+                _GRAPH_CACHE.pop(graph_name, None)
 
     def _fetch_vertices(self, label: str) -> List[Dict[str, Any]]:
         resp = self._client.gremlin().exec(

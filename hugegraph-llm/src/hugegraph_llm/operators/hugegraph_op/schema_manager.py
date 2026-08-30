@@ -302,6 +302,25 @@ class SchemaManager:
             ):
                 summary["edge_labels"] += 1
 
+        # Explicit indexes (beyond the auto `{label}ByName` above), e.g. for
+        # labels whose id strategy is not PRIMARY_KEY(name) -- such as
+        # ``Query`` (AUTOMATIC ids) -- where property filters like
+        # ``has('Query','domain',...)`` are rejected unless an index exists.
+        for idx in schema.get("indexes", []):
+            try:
+                if self.create_index_label(
+                    idx["name"],
+                    idx["base_label"],
+                    idx["field"],
+                    idx.get("index_type", "SECONDARY"),
+                    idx.get("on", "vertex"),
+                ):
+                    summary["index_labels"] += 1
+            except Exception as exc:  # noqa: BLE001
+                # Benign: index already exists, or the property is a PK.
+                if "No need to build index" not in str(exc):
+                    raise
+
         return summary
 
     # -- internal property builders ------------------------------------------

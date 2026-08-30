@@ -35,6 +35,16 @@ from tests.fixtures.hugegraph_service import hugegraph_service  # noqa: E402
 __all__ = ["hugegraph_client", "hugegraph_service"]
 
 
+@pytest.fixture(autouse=True)
+def _clear_kg_graph_cache():
+    """KgRuleEngine.load_graph caches per graph name (TTL); tests must not
+    share snapshots across cases."""
+    from hugegraph_llm.operators.graph_op.kg_rule_engine import KgRuleEngine
+
+    KgRuleEngine.invalidate_graph_cache()
+    yield
+
+
 def _clear_quality_schema(client):
     schema = client.schema()
     for remove in (
