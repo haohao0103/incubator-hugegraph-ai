@@ -101,12 +101,11 @@ EXAMPLE_FEISHU = json.dumps(
     indent=2,
 )
 
-# deterministic candidate demo for mode="nl2sql" (no LLM needed)
-# NOTE: SQL-A2 flags SELECT/ORDER BY aliases as unknown columns, so keep the
-# group-by candidate alias-free.
+# deterministic candidate demo for mode="nl2sql" (no LLM needed); the first
+# candidate uses a natural SELECT alias, which the validator now resolves.
 EXAMPLE_NL2SQL_CANDIDATES = "\n".join(
     [
-        "SELECT city, SUM(order.amount) FROM order GROUP BY city ORDER BY SUM(order.amount) DESC",
+        "SELECT city, SUM(order.amount) AS order_amount FROM order GROUP BY city ORDER BY order_amount DESC",
         "SELECT SUM(payment.amount) FROM payment",
         "SELECT SUM(order.amnt) FROM order",
     ]

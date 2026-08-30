@@ -46,11 +46,10 @@ DEMO_DOMAIN = "demo_golden"
 
 # (question, golden_sql) -- same style the demo examples use
 DEMO_GOLDEN = [
-    # NOTE: SQL-A2 flags SELECT/ORDER BY aliases as unknown columns, so keep
-    # the group-by golden alias-free.
+    # natural LLM-style SQL with a SELECT alias (SQL-A2 now resolves it)
     ("各城市订单总额",
-     "SELECT city, SUM(order.amount) FROM order "
-     "GROUP BY city ORDER BY SUM(order.amount) DESC"),
+     "SELECT city, SUM(order.amount) AS order_amount FROM order "
+     "GROUP BY city ORDER BY order_amount DESC"),
     ("订单总额",
      "SELECT SUM(order.amount) FROM order"),
     ("订单金额与支付金额对比",

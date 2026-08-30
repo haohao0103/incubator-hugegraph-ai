@@ -38,8 +38,8 @@ from hugegraph_llm.demo.rag_demo.unified_io_block import (  # noqa: E402
 )
 
 GOLDEN_ANSWER = (
-    "SELECT city, SUM(order.amount) FROM order "
-    "GROUP BY city ORDER BY SUM(order.amount) DESC"
+    "SELECT city, SUM(order.amount) AS order_amount FROM order "
+    "GROUP BY city ORDER BY order_amount DESC"
 )
 
 

@@ -101,17 +101,16 @@ CASES: List[Dict[str, Any]] = [
     },
     {
         "question": "各城市订单总额",
-        # NOTE: SQL-A2 flags SELECT/ORDER BY aliases as unknown columns, so
-        # keep the group-by query alias-free.
+        # natural LLM-style SQL with a SELECT alias (SQL-A2 now resolves it)
         "golden": (
-            "SELECT city, SUM(order.amount) FROM order "
-            "GROUP BY city ORDER BY SUM(order.amount) DESC"
+            "SELECT city, SUM(order.amount) AS order_amount FROM order "
+            "GROUP BY city ORDER BY order_amount DESC"
         ),
         "candidates": [
             "SELECT SUM(payment.amount) FROM payment",
             (
-                "SELECT city, SUM(order.amount) FROM order "
-                "GROUP BY city ORDER BY SUM(order.amount) DESC"
+                "SELECT city, SUM(order.amount) AS order_amount FROM order "
+                "GROUP BY city ORDER BY order_amount DESC"
             ),
         ],
     },

@@ -68,6 +68,27 @@ _FROM_RE = re.compile(
 _METRIC_FUNC_RE = re.compile(
     r"^(SUM|COUNT|AVG|MAX|MIN)\s*\(", re.IGNORECASE
 )
+# SELECT-list portion for alias extraction (lazy until the first FROM).
+_SELECT_LIST_RE = re.compile(r"\bSELECT\s+(.*?)\s+FROM\b", re.IGNORECASE | re.DOTALL)
+
+
+def _split_select_items(text: str) -> List[str]:
+    """Split a SELECT list on top-level commas (ignores commas inside parens)."""
+    items: List[str] = []
+    cur: List[str] = []
+    depth = 0
+    for ch in text:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            items.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    items.append("".join(cur))
+    return [i.strip() for i in items]
 
 
 @dataclass
@@ -428,6 +449,37 @@ class KgSqlValidator:
         return m.group(1).upper() if m else None
 
     @staticmethod
+    def _select_aliases(sql: str) -> Set[str]:
+        """Column aliases declared in the SELECT list (``AS x`` or implicit).
+
+        SQL engines resolve a bare identifier in ORDER BY / GROUP BY / HAVING
+        to the SELECT alias when one exists, so the validator must too --
+        otherwise natural LLM output like
+        ``SELECT city, SUM(order.amount) AS order_amount ... ORDER BY order_amount``
+        is wrongly flagged as an unknown column (SQL-A2).
+
+        Explicit ``AS alias`` everywhere; implicit aliases only when the
+        trailing identifier follows an expression (contains ``(`` or ``.``),
+        so a plain real column like ``SELECT city`` is never misread as one.
+        """
+        aliases: Set[str] = set()
+        for m in re.finditer(r"\bAS\s+([A-Za-z_][A-Za-z0-9_]*)\b", sql, re.IGNORECASE):
+            aliases.add(m.group(1))
+        m = _SELECT_LIST_RE.search(sql)
+        if m is not None:
+            for item in _split_select_items(m.group(1)):
+                am = re.match(r"^(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", item)
+                if am is None:
+                    continue
+                lead, cand = am.group(1), am.group(2)
+                if cand.lower() in _SQL_KEYWORDS:
+                    continue
+                if "(" not in lead and "." not in lead:
+                    continue
+                aliases.add(cand)
+        return aliases
+
+    @staticmethod
     def _parse_sql(sql: str) -> Dict[str, Any]:
         """Lightweight SQL extractor (table/alias/qualified/bare/aggregates).
 
@@ -445,14 +497,21 @@ class KgSqlValidator:
         qualified: List[Tuple[str, str]] = [
             (m.group(1), m.group(2)) for m in _QUALIFIED_RE.finditer(sql)
         ]
+        # SELECT aliases must not be treated as bare columns (SQL-A2): a bare
+        # alias in ORDER BY / GROUP BY / HAVING refers to the SELECT expression.
+        select_aliases = KgSqlValidator._select_aliases(sql)
+        alias_lower = {a.lower() for a in select_aliases}
         # bare columns: identifiers that are not keywords, not part of a
-        # qualified reference (either side of the dot), not function calls.
+        # qualified reference (either side of the dot), not function calls,
+        # and not SELECT aliases.
         qualified_left = {q[0] for q in qualified}
         bare: List[str] = []
         for m in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*", sql):
             tok = m.group(0)
             low = tok.lower()
             if low in _SQL_KEYWORDS:
+                continue
+            if low in alias_lower:
                 continue
             if low in qualified_left:
                 continue
@@ -483,4 +542,5 @@ class KgSqlValidator:
             "qualified_cols": qualified,
             "bare_cols": bare,
             "aggregates": aggregates,
+            "aliases": sorted(select_aliases),
         }

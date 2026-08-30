@@ -22,6 +22,7 @@ def _sample_graph() -> GraphData:
             "Field": [
                 {"name": "order.amount", "type": "DOUBLE"},
                 {"name": "order.order_id", "type": "BIGINT"},
+                {"name": "order.city", "type": "STRING"},
                 {"name": "payment.amount", "type": "DOUBLE"},
                 {"name": "payment.order_id", "type": "BIGINT"},
                 {"name": "user.user_id", "type": "BIGINT"},
@@ -36,6 +37,7 @@ def _sample_graph() -> GraphData:
             "hasColumn": [
                 ("order", "order.amount"),
                 ("order", "order.order_id"),
+                ("order", "order.city"),
                 ("payment", "payment.amount"),
                 ("payment", "payment.order_id"),
                 ("user", "user.user_id"),
@@ -89,6 +91,48 @@ class TestParseSql(unittest.TestCase):
     def test_aggregates_distinct(self):
         p = self.v._parse_sql("SELECT COUNT(DISTINCT order.order_id) FROM order")
         self.assertIn(("COUNT", "order", "order_id"), {(f, t, c) for f, t, c in p["aggregates"]})
+
+    def test_select_aliases_extracted_and_filtered_from_bare(self):
+        p = self.v._parse_sql(
+            "SELECT city, SUM(order.amount) AS order_amount FROM order "
+            "GROUP BY city ORDER BY order_amount DESC"
+        )
+        self.assertIn("order_amount", p["aliases"])
+        # the alias must not be treated as an unknown bare column
+        self.assertNotIn("order_amount", p["bare_cols"])
+        self.assertIn("city", p["bare_cols"])
+
+    def test_implicit_alias_extracted(self):
+        p = self.v._parse_sql(
+            "SELECT SUM(order.amount) total FROM order ORDER BY total"
+        )
+        self.assertIn("total", p["aliases"])
+        self.assertNotIn("total", p["bare_cols"])
+
+    def test_plain_column_not_misread_as_implicit_alias(self):
+        # "SELECT city" must not register "city" as an alias (no expression)
+        p = self.v._parse_sql("SELECT city FROM order")
+        self.assertNotIn("city", p["aliases"])
+        self.assertIn("city", p["bare_cols"])
+
+    def test_keyword_not_registered_as_implicit_alias(self):
+        # trailing identifier that is a SQL keyword is not an alias
+        p = self.v._parse_sql("SELECT SUM(order.amount) order FROM order")
+        self.assertNotIn("order", p["aliases"])
+
+    def test_distinct_bare_unknown_not_aliased(self):
+        # "DISTINCT nope": the leading part has no expression, so "nope" must
+        # stay a bare column (and be flagged later as unknown), not an alias
+        p = self.v._parse_sql("SELECT DISTINCT nope FROM order")
+        self.assertNotIn("nope", p["aliases"])
+        self.assertIn("nope", p["bare_cols"])
+
+    def test_public_parse_sql_wrapper(self):
+        from hugegraph_llm.operators.graph_op.kg_sql_validator import parse_sql
+
+        p = parse_sql("SELECT order.amount FROM order")
+        self.assertEqual(p["tables"], [("order", None)])
+        self.assertEqual(p["aliases"], [])
 
 
 class TestTableExistence(unittest.TestCase):
@@ -146,6 +190,42 @@ class TestColumnOwnership(unittest.TestCase):
         self.assertEqual(a2[0].level, "warning")
         self.assertIn("order", a2[0].suggested_fix)
         self.assertIn("payment", a2[0].suggested_fix)
+
+
+class TestSelectAliases(unittest.TestCase):
+    """SQL-A2 must resolve SELECT aliases in ORDER BY / GROUP BY / HAVING."""
+
+    def setUp(self):
+        self.v = KgSqlValidator(_sample_graph())
+
+    def test_order_by_explicit_alias_valid(self):
+        r = self.v.validate(
+            "SELECT city, SUM(order.amount) AS order_amount FROM order "
+            "GROUP BY city ORDER BY order_amount DESC"
+        )
+        self.assertTrue(r.is_valid, [i.message for i in r.issues])
+
+    def test_order_by_implicit_alias_valid(self):
+        r = self.v.validate(
+            "SELECT SUM(order.amount) total FROM order ORDER BY total"
+        )
+        self.assertTrue(r.is_valid, [i.message for i in r.issues])
+
+    def test_alias_with_metric_caliber_still_checked(self):
+        # alias is resolved, but the aggregate caliber check still applies
+        r = self.v.validate(
+            "SELECT city, AVG(order.amount) AS avg_amount FROM order "
+            "GROUP BY city ORDER BY avg_amount DESC"
+        )
+        b1 = [i for i in r.issues if i.rule_id == "SQL-B1"]
+        self.assertTrue(b1, "AVG must still mismatch the SUM metric")
+        self.assertFalse(r.is_valid)
+
+    def test_undefined_alias_still_error(self):
+        r = self.v.validate("SELECT order.amount FROM order ORDER BY nope")
+        a2 = [i for i in r.issues if i.rule_id == "SQL-A2" and "nope" in i.target]
+        self.assertTrue(a2)
+        self.assertFalse(r.is_valid)
 
 
 class TestMetricCaliber(unittest.TestCase):
