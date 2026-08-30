@@ -124,6 +124,64 @@ class TestFulltextRetriever(unittest.TestCase):
         hits = r.retrieve("表在", self.data)
         self.assertEqual(hits, [])
 
+    def test_overlap_guard_filters_single_char_hits(self):
+        # '订单总额' shares only 订/单 with comment '订单表' (2/4 chars):
+        # below the overlap threshold -> dropped, exactly the 货拉拉
+        # '不存在也答' noise source
+        data = {
+            "vertices": {
+                "Table": [{"name": "order", "comment": "订单表"}],
+                "Field": [],
+                "Metric": [{"name": "order_total", "definition": "订单总额：求和"}],
+            },
+            "edges": {
+                "hasColumn": [], "computedFrom": [], "computedFromField": [],
+                "dependsOn": [],
+            },
+        }
+        r = FulltextRetriever()
+        hits = r.retrieve("订单总额", data)
+        names = {h.name for h in hits}
+        self.assertIn("order_total", names)   # strong overlap kept
+        self.assertNotIn("order", names)      # weak overlap (订/单) dropped
+
+    def test_overlap_ratio_math(self):
+        self.assertGreater(FulltextRetriever._overlap_ratio("订单总额", "订单总额：求和"), 0.8)
+        self.assertLess(FulltextRetriever._overlap_ratio("订单总额", "订单表"), 0.6)
+        self.assertEqual(FulltextRetriever._overlap_ratio("订单总额", ""), 0.0)
+
+    def test_intent_weight_boosts_asked_label(self):
+        from hugegraph_llm.operators.graph_op.kg_query_understanding import (
+            QueryUnderstanding,
+            QueryUnderstandingConfig,
+        )
+
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(intent_weight=1.0),
+            query_understanding=QueryUnderstanding(
+                config=QueryUnderstandingConfig(short_query_threshold=5),
+            ),
+        )
+        # "在哪个表" -> table intent -> Table order boosted above metrics
+        ctx = multi.link("订单金额在哪个表", self.data)
+        self.assertEqual(ctx.ranking[0][0], "Table")
+
+    def test_intent_weight_general_question_noop(self):
+        # a general-intent question (no boost map) must not crash or reorder
+        from hugegraph_llm.operators.graph_op.kg_query_understanding import (
+            QueryUnderstanding,
+            QueryUnderstandingConfig,
+        )
+
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(intent_weight=1.0),
+            query_understanding=QueryUnderstanding(
+                config=QueryUnderstandingConfig(short_query_threshold=5),
+            ),
+        )
+        ctx = multi.link("order 数据", self.data)
+        self.assertIn("order", [t.get("name") for t in ctx.tables])
+
     def test_memory_miss_when_absent(self):
         r = FulltextRetriever()
         hits = r.retrieve("客单价是多少", self.data)  # '客单' not in definitions
@@ -144,12 +202,21 @@ class TestFulltextRetriever(unittest.TestCase):
 
             def exec(self, q):
                 if "Text.contains" in q:
-                    return {"data": [{"name": "avg_order_value"}, {}]}  # one nameless row
+                    # the row carries the matched text so the character-overlap
+                    # guard can validate the hit
+                    return {"data": [
+                        {"name": "avg_order_value", "definition": "平均每单成交金额"},
+                        {"name": "order_total", "definition": "订单总额"},
+                    ]}
                 return {"data": []}
 
         r = FulltextRetriever()
-        hits = r.retrieve("客单价是多少", self.data, client=_FakeClient())
-        self.assertTrue(any(h.name == "avg_order_value" for h in hits))
+        # "平均每单成交金额" overlaps avg_order_value.definition 8/8; the
+        # order_total row shares only 单/成/金/额 (4/8 < 0.6) -> dropped
+        hits = r.retrieve("平均每单成交金额", self.data, client=_FakeClient())
+        names = {h.name for h in hits}
+        self.assertIn("avg_order_value", names)
+        self.assertNotIn("order_total", names)
         self.assertTrue(all(h.source == "fulltext" for h in hits))
 
     def test_live_client_error_skipped(self):
@@ -361,6 +428,38 @@ class TestKgMultiSchemaLinker(unittest.TestCase):
         ctx = multi.link("t0.f t1.f t2.f t3.f t4.f t5.f", data=data)
         # owner tables promoted for the recalled fields, capped at the budget
         self.assertLessEqual(len(ctx.tables), 5)
+
+    def test_intent_weight_without_understanding_noop(self):
+        # intent_weight > 0 but no query-understanding stage -> intent dict is
+        # empty, the boost branch is skipped without crashing
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(intent_weight=1.0),
+            retrievers=[LexicalRetriever()],
+        )
+        ctx = multi.link("订单总额", self.data)
+        self.assertIn("order_total", [m.get("name") for m in ctx.metrics])
+
+    def test_ranking_promote_owner_via_table_attr_only(self):
+        # the field carries `table` but there is no hasColumn edge for it, so
+        # field_owner misses it and the ranking-insertion loop runs to the end
+        # (no matching field found) without crashing
+        data = {
+            "vertices": {
+                "Table": [{"name": "order", "comment": "订单表"}],
+                "Field": [{"name": "order.amount", "comment": "订单金额", "table": "order"}],
+                "Metric": [],
+            },
+            "edges": {
+                "hasColumn": [], "computedFrom": [], "computedFromField": [],
+                "dependsOn": [],
+            },
+        }
+        multi = KgMultiSchemaLinker(
+            config=MultiRecallConfig(),
+            retrievers=[FulltextRetriever(), LexicalRetriever()],
+        )
+        ctx = multi.link("订单金额", data)
+        self.assertIn("order", [t.get("name") for t in ctx.tables])
 
     def test_context_empty_property(self):
         multi = KgMultiSchemaLinker(config=MultiRecallConfig())

@@ -6,7 +6,9 @@
       "formula": "SUM(order.amount)",
       "source_tables": ["order"],
       "source_fields": ["order.amount"],
-      "depends_on": []
+      "depends_on": [],
+      "authoritative": true,
+      "priority": 90
     },
     {
       "name": "payment_total",
@@ -14,7 +16,9 @@
       "formula": "SUM(payment.amount)",
       "source_tables": ["payment"],
       "source_fields": ["payment.amount"],
-      "depends_on": []
+      "depends_on": [],
+      "authoritative": true,
+      "priority": 80
     },
     {
       "name": "order_count",
@@ -22,7 +26,9 @@
       "formula": "COUNT(order.order_id)",
       "source_tables": ["order"],
       "source_fields": ["order.order_id"],
-      "depends_on": []
+      "depends_on": [],
+      "authoritative": true,
+      "priority": 70
     },
     {
       "name": "avg_order_value",
@@ -30,7 +36,9 @@
       "formula": "",
       "source_tables": [],
       "source_fields": [],
-      "depends_on": []
+      "depends_on": [],
+      "authoritative": false,
+      "priority": 30
     },
     {
       "name": "driver_order_cnt",
@@ -38,7 +46,9 @@
       "formula": "",
       "source_tables": [],
       "source_fields": [],
-      "depends_on": []
+      "depends_on": [],
+      "authoritative": false,
+      "priority": 40
     }
   ]
 }

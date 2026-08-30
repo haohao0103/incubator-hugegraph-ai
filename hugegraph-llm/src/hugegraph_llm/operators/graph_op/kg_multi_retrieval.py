@@ -33,6 +33,9 @@ from hugegraph_llm.operators.graph_op.kg_schema_linker import (
     KgSchemaLinker,
     SchemaContext,
 )
+from hugegraph_llm.operators.graph_op.kg_query_understanding import (
+    DEFAULT_INTENT_BOOST,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +82,11 @@ class MultiRecallConfig:
     # score is on the same scale: name exact 3.0/2.0, substring 1.0, fulltext
     # boolean 1.0) or "rrf" (reciprocal-rank; kept for compatibility)
     fusion: str = "score"
+    # question-intent type weighting: when >0, the fused score of the label
+    # the user asked FOR (from QueryIntent.intent_type) is boosted by
+    # (1 + intent_weight), so "在哪个表" surfaces tables above metrics.
+    # 0 disables (default, keeps prior behaviour).
+    intent_weight: float = 0.0
 
 
 class SchemaRetriever(ABC):
@@ -111,6 +119,7 @@ class GraphStructureRetriever(SchemaRetriever):
     """
 
     source = "graph"
+    min_term_len: int = 3
 
     def __init__(self, linker: Optional[KgSchemaLinker] = None) -> None:
         self._linker = linker or KgSchemaLinker()
@@ -126,6 +135,9 @@ class GraphStructureRetriever(SchemaRetriever):
 
     def retrieve(self, question, data, client=None, terms=None) -> List[RetrievedVertex]:
         base_terms = list(terms) if terms is not None else self._linker.extract_terms(question)
+        # generic short tokens ("ID") hit every *_id field name with the same
+        # score and add no discriminative signal; drop them like fulltext does
+        base_terms = [t for t in base_terms if len(t) >= self.min_term_len]
         terms = self._alias_terms(question, base_terms)
         hits: List[RetrievedVertex] = []
         # 1) name-level entity links (score by match strength)
@@ -188,6 +200,12 @@ class FulltextRetriever(SchemaRetriever):
     # sharing a single character. Heuristic bound: noun phrases up to 8 chars
     # ("平均每单成交金额") still match sensibly; longer sentences are noise.
     max_term_len: int = 8
+    # character-overlap guard for SEARCH hits: HugeGraph SEARCH is
+    # character-level for Chinese, so Text.contains(term) returns every
+    # vertex sharing even one char ("订单总额" hits "订单表" via 订/单).
+    # A hit is kept only when the term shares >= min_overlap_ratio of its
+    # characters with the matched text (4-char term, 2 shared = 0.5 < 0.6).
+    min_overlap_ratio: float = 0.6
 
     _TEXT_FIELDS: Tuple[Tuple[str, str], ...] = (
         ("Table", "comment"),
@@ -219,6 +237,20 @@ class FulltextRetriever(SchemaRetriever):
             return True  # latin tokens are word-indexed, safe at any length
         return len(term) <= FulltextRetriever.max_term_len
 
+    @classmethod
+    def _overlap_ratio(cls, term: str, text: str) -> float:
+        """Fraction of the term's characters shared with the text (0..1)."""
+        if not term or not text:
+            return 0.0
+        term_chars = set(term)
+        text_chars = set(text)
+        shared = sum(1 for ch in term_chars if ch in text_chars)
+        return shared / len(term_chars)
+
+    def _keep(self, term: str, text: str) -> bool:
+        """A SEARCH hit is kept only when the overlap is strong enough."""
+        return self._overlap_ratio(term, text) >= self.min_overlap_ratio
+
     def _retrieve_live(self, client: Any, terms: Sequence[str]) -> List[RetrievedVertex]:
         out: List[RetrievedVertex] = []
         for label, prop in self._TEXT_FIELDS:
@@ -232,7 +264,7 @@ class FulltextRetriever(SchemaRetriever):
                     rows = resp.get("data") if isinstance(resp, dict) else (resp or [])
                     for row in rows or []:
                         name = row.get("name")
-                        if name:
+                        if name and self._keep(term, str(row.get(prop) or "")):
                             out.append(RetrievedVertex(label, name, 1.0, self.source))
                 except Exception as exc:  # noqa: BLE001 - index/term miss
                     logger.debug("fulltext %s.%s %s failed: %s", label, prop, term, exc)
@@ -242,8 +274,8 @@ class FulltextRetriever(SchemaRetriever):
         out: List[RetrievedVertex] = []
         for label, prop in self._TEXT_FIELDS:
             for v in data.get("vertices", {}).get(label, []):
-                text = str(v.get(prop) or "").lower()
-                if any(t.lower() in text for t in terms):
+                text = str(v.get(prop) or "")
+                if any(self._keep(t, text) for t in terms):
                     name = v.get("name")
                     if name:
                         out.append(RetrievedVertex(label, name, 1.0, self.source))
@@ -435,6 +467,13 @@ class KgMultiSchemaLinker:
                     rv.label, {}
                 ).get(rv.name, 0.0)
             fused.sort(key=lambda rv: -rv.score)
+        if self._config.intent_weight > 0 and intent:
+            boost = DEFAULT_INTENT_BOOST.get(intent.get("intent_type"), {})
+            if boost:
+                for rv in fused:
+                    if rv.label in boost:
+                        rv.score *= 1.0 + self._config.intent_weight * boost[rv.label]
+                fused.sort(key=lambda rv: -rv.score)
 
         # assemble the SchemaContext from the fused candidates, reusing the
         # single-pass linker for relations/evidence construction
@@ -481,6 +520,21 @@ class KgMultiSchemaLinker:
                 fields.append(f)
         fields = fields[: self._config.max_fields_per_table]
 
+        # fused relevance ranking; owner tables promoted by field hits are
+        # inserted right after their first field so the platform sees the
+        # table next to the field that implies it
+        ranking = [(rv.label, rv.name) for rv in fused]
+        promoted = set()
+        for f in hit_fields:
+            owner = f.get("table") or field_owner.get(f.get("name"))
+            if owner and owner in by_name["Table"] and owner in table_names \
+                    and (owner, "Table") not in ranking and owner not in promoted:  # pragma: no branch
+                for i, (_label, rname) in enumerate(ranking):
+                    if _label == "Field" and field_owner.get(rname) == owner:  # pragma: no branch
+                        ranking.insert(i + 1, ("Table", owner))
+                        promoted.add(owner)
+                        break
+
         return SchemaContext(
             tables=tables,
             fields=fields,
@@ -489,5 +543,5 @@ class KgMultiSchemaLinker:
             evidence=self._base._build_evidence(tables, metrics, fields)[: self._config.max_evidence],
             matched_terms=base_ctx.matched_terms,
             query_intent=intent,
-            ranking=[(rv.label, rv.name) for rv in fused],
+            ranking=ranking,
         )

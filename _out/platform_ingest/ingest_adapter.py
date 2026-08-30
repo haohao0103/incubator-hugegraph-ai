@@ -104,16 +104,22 @@ def normalize_catalog(raw: Dict[str, Any]) -> Dict[str, Any]:
 def normalize_metrics(raw: Dict[str, Any]) -> Dict[str, Any]:
     metrics = []
     for m in raw.get("metrics") or raw.get("指标") or []:
-        metrics.append(
-            {
-                "name": str(_pick(m, *_METRIC_NAME)),
-                "definition": str(_pick(m, *_METRIC_DEFINITION)),
-                "formula": str(_pick(m, *_METRIC_FORMULA)),
-                "source_tables": list(_pick(m, *_METRIC_TABLES, default=[]) or []),
-                "source_fields": list(_pick(m, *_METRIC_FIELDS, default=[]) or []),
-                "depends_on": list(_pick(m, *_METRIC_DEPENDS, default=[]) or []),
-            }
-        )
+        entry = {
+            "name": str(_pick(m, *_METRIC_NAME)),
+            "definition": str(_pick(m, *_METRIC_DEFINITION)),
+            "formula": str(_pick(m, *_METRIC_FORMULA)),
+            "source_tables": list(_pick(m, *_METRIC_TABLES, default=[]) or []),
+            "source_fields": list(_pick(m, *_METRIC_FIELDS, default=[]) or []),
+            "depends_on": list(_pick(m, *_METRIC_DEPENDS, default=[]) or []),
+        }
+        # authoritative / priority feed the entity-importance re-ranking
+        # (货拉拉's metric weights); pass them through when the platform
+        # provides them
+        if "authoritative" in m:
+            entry["authoritative"] = str(m["authoritative"]).lower()
+        if "priority" in m:
+            entry["priority"] = int(m["priority"])
+        metrics.append(entry)
     return {"metrics": metrics}
 
 

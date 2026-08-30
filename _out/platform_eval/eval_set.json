@@ -9,76 +9,179 @@
     "实付": "payment_total",
     "车费": "payment_total"
   },
+  "sql_distractors": [
+    {
+      "kind": "wrong_column",
+      "sql": "SELECT SUM(order.pay_id) FROM order"
+    },
+    {
+      "kind": "wrong_agg",
+      "sql": "SELECT AVG(order.amount) FROM order"
+    },
+    {
+      "kind": "wrong_table",
+      "sql": "SELECT SUM(payment.amount) FROM payment"
+    },
+    {
+      "kind": "wrong_field_agg",
+      "sql": "SELECT AVG(payment.amount) FROM payment"
+    },
+    {
+      "kind": "count_all",
+      "sql": "SELECT COUNT(*) FROM order"
+    }
+  ],
   "questions": [
     {
       "question": "订单总额是多少",
-      "expected": {"metrics": ["order_total"]},
-      "note": "常规：指标直接命中"
+      "expected": {
+        "metrics": [
+          "order_total"
+        ]
+      },
+      "note": "常规：指标直接命中",
+      "expected_sql": "SELECT SUM(order.amount) AS order_total FROM order"
     },
     {
       "question": "各城市订单金额",
-      "expected": {"metrics": ["order_total"], "fields": ["order.city"]},
-      "note": "多实体：指标+维度字段"
+      "expected": {
+        "metrics": [
+          "order_total"
+        ],
+        "fields": [
+          "order.city"
+        ]
+      },
+      "note": "多实体：指标+维度字段",
+      "expected_sql": "SELECT city, SUM(order.amount) AS order_total FROM order GROUP BY city"
     },
     {
       "question": "平均每单成交金额",
-      "expected": {"metrics": ["avg_order_value"]},
-      "note": "指标定义中文名命中"
+      "expected": {
+        "metrics": [
+          "avg_order_value"
+        ]
+      },
+      "note": "指标定义中文名命中",
+      "expected_sql": "SELECT SUM(order.amount) / COUNT(DISTINCT order.order_id) FROM order"
     },
     {
       "question": "客单价是多少",
-      "expected": {"metrics": ["avg_order_value"]},
-      "note": "badcase 同义词：客单价 vs 平均每单成交金额（definition 含客单价）"
+      "expected": {
+        "metrics": [
+          "avg_order_value"
+        ]
+      },
+      "note": "badcase 同义词：客单价 vs 平均每单成交金额（definition 含客单价）",
+      "expected_sql": "SELECT SUM(order.amount) / COUNT(DISTINCT order.order_id) FROM order"
     },
     {
       "question": "司机订单数",
-      "expected": {"metrics": ["driver_order_cnt"]},
-      "note": "常规：指标名命中"
+      "expected": {
+        "metrics": [
+          "driver_order_cnt"
+        ]
+      },
+      "note": "常规：指标名命中",
+      "expected_sql": "SELECT COUNT(DISTINCT order.driver_id) FROM order"
     },
     {
       "question": "订单数量",
-      "expected": {"metrics": ["order_count"]},
-      "note": "常规：数量类指标"
+      "expected": {
+        "metrics": [
+          "order_count"
+        ]
+      },
+      "note": "常规：数量类指标",
+      "expected_sql": "SELECT COUNT(*) FROM order"
     },
     {
       "question": "大单有多少",
-      "expected": {"metrics": ["order_total"]},
+      "expected": {
+        "metrics": [
+          "order_total"
+        ]
+      },
       "note": "badcase 同义词：大单 -> order_total（别名路救回）"
     },
     {
       "question": "支付总额",
-      "expected": {"metrics": ["payment_total"]},
-      "note": "常规：支付类指标"
+      "expected": {
+        "metrics": [
+          "payment_total"
+        ]
+      },
+      "note": "常规：支付类指标",
+      "expected_sql": "SELECT SUM(payment.amount) AS payment_total FROM payment"
     },
     {
       "question": "实付金额是多少",
-      "expected": {"metrics": ["payment_total"]},
-      "note": "badcase 同义词：实付 -> payment_total"
+      "expected": {
+        "metrics": [
+          "payment_total"
+        ]
+      },
+      "note": "badcase 同义词：实付 -> payment_total",
+      "expected_sql": "SELECT SUM(payment.amount) AS payment_total FROM payment"
     },
     {
       "question": "订单金额在哪个表",
-      "expected": {"tables": ["order"], "fields": ["order.amount"]},
+      "expected": {
+        "tables": [
+          "order"
+        ],
+        "fields": [
+          "order.amount"
+        ]
+      },
       "note": "badcase 找数：字段归属表"
     },
     {
       "question": "订单金额和支付金额",
-      "expected": {"tables": ["order", "payment"], "fields": ["order.amount", "payment.amount"]},
+      "expected": {
+        "tables": [
+          "order",
+          "payment"
+        ],
+        "fields": [
+          "order.amount",
+          "payment.amount"
+        ]
+      },
       "note": "badcase 多实体：跨表多字段"
     },
     {
       "question": "每个城市的订单总额",
-      "expected": {"metrics": ["order_total"], "fields": ["order.city"]},
-      "note": "常规：指标+维度"
+      "expected": {
+        "metrics": [
+          "order_total"
+        ],
+        "fields": [
+          "order.city"
+        ]
+      },
+      "note": "常规：指标+维度",
+      "expected_sql": "SELECT city, SUM(order.amount) AS order_total FROM order GROUP BY city"
     },
     {
       "question": "司机ID对应哪个字段",
-      "expected": {"fields": ["order.driver_id", "driver.driver_id"]},
+      "expected": {
+        "fields": [
+          "order.driver_id",
+          "driver.driver_id"
+        ]
+      },
       "note": "badcase 多实体：司机ID多表存在"
     },
     {
       "question": "司机姓名怎么取",
-      "expected": {"fields": ["driver.name"]},
-      "note": "常规：字段归属"
+      "expected": {
+        "fields": [
+          "driver.name"
+        ]
+      },
+      "note": "常规：字段归属",
+      "expected_sql": "SELECT driver.name FROM driver"
     },
     {
       "question": "风控引擎实时决策表在哪里",
@@ -88,7 +191,11 @@
     },
     {
       "question": "实时订单表可以用吗",
-      "expected": {"tables": ["order"]},
+      "expected": {
+        "tables": [
+          "order"
+        ]
+      },
       "note": "badcase 知识缺失变体：无'实时订单表'实体，但'订单表'order 合理命中（尾词剥离后'实时订单表'匹配 order.comment）"
     },
     {

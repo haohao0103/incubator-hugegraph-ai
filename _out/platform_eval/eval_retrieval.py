@@ -86,14 +86,26 @@ def evaluate(
     synonyms: Dict[str, str],
     graph: str,
     live: bool = True,
-    importance_weight: float = 0.0,
+    importance_weight: float = 0.5,
+    intent_weight: float = 0.8,
+    use_llm: bool = False,
+    distractors: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     client = _client(graph) if live else None
+    llm = None
+    if use_llm:
+        from hugegraph_llm.models.llms.init_llm import LLMs
+
+        llm = LLMs().get_chat_llm()  # falls back to heuristic inside
     linker = KgMultiSchemaLinker(
         client=client,
         synonyms=None,
-        config=MultiRecallConfig(importance_weight=importance_weight),
+        config=MultiRecallConfig(
+            importance_weight=importance_weight,
+            intent_weight=intent_weight,
+        ),
         query_understanding=QueryUnderstanding(
+            llm=llm,
             term_graph=KgTermGraph.from_jargon_map(synonyms),
             config=QueryUnderstandingConfig(short_query_threshold=8),
         ),
@@ -109,6 +121,14 @@ def evaluate(
     top1_ok = 0
     mrr_sum = 0.0
     q_count = 0
+    answer_total = 0
+    answer_top1 = 0
+
+    # deterministic answer-level probe: for questions with a golden SQL,
+    # vote over [golden + 2 distractors] and count golden landing at top-1.
+    # This measures the validator+voter's preference for the correct SQL,
+    # NOT end-to-end generation accuracy (that needs the platform's real set).
+    distractor_sqls = [d.get("sql") for d in (distractors or []) if d.get("sql")]
 
     for item in questions:
         q = item["question"]
@@ -163,6 +183,22 @@ def evaluate(
             "latency_ms": round(latency_ms, 1),
         })
 
+        # answer-level: vote [golden + 2 distractors], golden at top-1?
+        golden = item.get("expected_sql")
+        if golden and distractor_sqls:
+            answer_total += 1
+            candidates = [golden] + distractor_sqls[:2]
+            try:
+                from hugegraph_llm.operators.graph_op.kg_sql_voter import KgSqlVoter
+
+                voter = KgSqlVoter(graph_data=data)
+                votes = voter.vote(candidates)
+                if votes and votes[0].sql.strip() == golden.strip():
+                    answer_top1 += 1
+                rows[-1]["answer_top1"] = votes[0].sql.strip() == golden.strip()
+            except Exception as exc:  # pragma: no cover - voter guard
+                rows[-1]["answer_top1"] = None
+
     recall = hit_entities / total_entities if total_entities else 0.0
     topk_rate = topk_ok / q_count if q_count else 0.0
     mrr = mrr_sum / q_count if q_count else 0.0
@@ -175,6 +211,7 @@ def evaluate(
         "TopK命中率": round(topk_rate, 4),
         "MRR": round(mrr, 4),
         "拒答正确率": round(refusal_rate, 4),
+        "答案级top-1(投票)": round(answer_top1 / answer_total, 4) if answer_total else None,
         "平均延迟ms": round(sum(r["latency_ms"] for r in rows) / len(rows), 1) if rows else 0.0,
     }
     return {"metrics": metrics, "rows": rows}
@@ -202,7 +239,11 @@ def main() -> int:
     parser.add_argument("--graph", default="kg_platform")
     parser.add_argument("--offline", action="store_true",
                         help="run against in-memory graph data (no server)")
-    parser.add_argument("--importance", type=float, default=0.0)
+    parser.add_argument("--importance", type=float, default=0.5)
+    parser.add_argument("--intent-weight", type=float, default=0.8)
+    parser.add_argument("--llm", action="store_true",
+                        help="use the live LLM for query understanding "
+                             "(falls back to heuristic on flake)")
     args = parser.parse_args()
 
     with open(args.set, "r", encoding="utf-8") as fh:
@@ -220,6 +261,9 @@ def main() -> int:
         args.graph,
         live=not args.offline,
         importance_weight=args.importance,
+        intent_weight=args.intent_weight,
+        use_llm=args.llm,
+        distractors=payload.get("sql_distractors"),
     )
     metrics, rows = result["metrics"], result["rows"]
 
@@ -234,6 +278,8 @@ def main() -> int:
         print(f"{name:<16}{val:>10.2%}{target:>14.2%}{ok:>8}")
 
     print(f"{'拒答正确率':<16}{metrics['拒答正确率']:>10.2%}{'—':>14}")
+    if metrics["答案级top-1(投票)"] is not None:
+        print(f"{'答案级top-1(投票)':<16}{metrics['答案级top-1(投票)']:>10.2%}{'78%目标':>14}")
     print(f"{'平均延迟':<16}{metrics['平均延迟ms']:>10.1f}ms{'—':>14}")
 
     print("\n=== 逐题明细 ===")
@@ -243,8 +289,10 @@ def main() -> int:
         else:
             flag = "✓" if r["ok"] else "✗"
             miss = sorted(set(r["expected"]) - set(r["hit"]))
+            ans = r.get("answer_top1")
+            ans_flag = "✓" if ans else ("✗" if ans is False else "-")
             print(f"  [{flag}] {r['question']}  top1={r['top1']} "
-                  f"mrr_rank={r['mrr_rank']}  miss={miss or '-'}  ({r['latency_ms']}ms)")
+                  f"mrr_rank={r['mrr_rank']}  ans={ans_flag}  miss={miss or '-'}  ({r['latency_ms']}ms)")
 
     print(f"\nnote: 准确率是检索 top-1 代理指标（非端到端 SQL 准确率），"
           f"待平台真实评估集（含 golden SQL）后升级为答案级。")

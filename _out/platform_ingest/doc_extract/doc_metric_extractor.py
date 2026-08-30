@@ -193,3 +193,46 @@ def merge_glossary(
                 target[key] = vals
                 filled += 1
     return metric_payload, {"filled": filled, "conflicts": conflicts}
+
+
+# ---------------------------------------------------------------------------
+# 4) Term extraction: document -> canonical term nodes (中文名(英文名) pairs)
+# ---------------------------------------------------------------------------
+# "订单总额（order_total）" / "客单价(avg_order_value)" style pairs
+_TERM_PAIR_RE = re.compile(
+    r"([\u4e00-\u9fff]{2,})[\s]?[（(]([a-zA-Z_][a-zA-Z0-9_]*)[）)]"
+)
+
+
+def extract_terms_from_text(text: str) -> List[Dict[str, Any]]:
+    """Extract term nodes (canonical + Chinese alias) from document text.
+
+    Pattern: ``中文名（english_name）`` / ``中文名(english_name)``. Returns
+    TermNode-shaped dicts consumable by :class:`KgTermGraph`::
+
+        [{"canonical": "order_total", "aliases": ["订单总额"]}]
+    """
+    nodes: Dict[str, Dict[str, Any]] = {}
+    for match in _TERM_PAIR_RE.finditer(text or ""):
+        zh, en = match.group(1), match.group(2)
+        node = nodes.setdefault(en, {"canonical": en, "aliases": []})
+        if zh not in node["aliases"]:
+            node["aliases"].append(zh)
+    return list(nodes.values())
+
+
+def glossary_to_terms(glossary: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Term nodes from a metric glossary: the Chinese name that starts each
+    definition ("客单价：平均每单成交金额…") is the alias of the canonical
+    metric name -- the same signal doc-extracted definitions rely on."""
+    nodes: Dict[str, Dict[str, Any]] = {}
+    for entry in glossary:
+        name = str(entry.get("name", "")).strip()
+        if not name:
+            continue
+        node = nodes.setdefault(name, {"canonical": name, "aliases": []})
+        definition = str(entry.get("definition", "")).strip()
+        zh_head = re.match(r"^([\u4e00-\u9fff]{2,})", definition)
+        if zh_head and zh_head.group(1) not in node["aliases"]:
+            node["aliases"].append(zh_head.group(1))
+    return list(nodes.values())

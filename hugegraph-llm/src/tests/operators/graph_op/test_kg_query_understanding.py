@@ -164,6 +164,23 @@ class TestQueryUnderstanding(unittest.TestCase):
         # the full block stays as the primary term
         self.assertEqual(grams[0], "每个城市的订单总额")
 
+    def test_intent_classification(self):
+        qu = QueryUnderstanding(term_graph=self.terms)
+        self.assertEqual(qu.understand("订单金额在哪个表").intent_type, "table")
+        self.assertEqual(qu.understand("司机ID对应哪个字段").intent_type, "field")
+        self.assertEqual(qu.understand("订单总额是多少").intent_type, "metric")
+        self.assertEqual(qu.understand("客单价怎么算").intent_type, "metric")
+        # "金额/总额/数量" are metric-ish nouns (question asks for the metric)
+        self.assertEqual(qu.understand("各城市订单金额").intent_type, "metric")
+        self.assertEqual(qu.understand("订单数量").intent_type, "metric")
+        self.assertEqual(qu.understand("完全无关的随机词汇").intent_type, "general")
+        self.assertEqual(qu.understand("").intent_type, "general")
+
+    def test_intent_in_dict(self):
+        qu = QueryUnderstanding(term_graph=self.terms)
+        d = qu.understand("订单总额是多少").to_dict()
+        self.assertEqual(d["intent_type"], "metric")
+
     def test_empty_question(self):
         qu = QueryUnderstanding(term_graph=self.terms)
         intent = qu.understand("")

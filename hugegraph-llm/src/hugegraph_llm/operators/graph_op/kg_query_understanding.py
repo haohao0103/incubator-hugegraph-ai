@@ -44,6 +44,36 @@ _NOISE_TAILS = {
     "是哪个", "怎么样", "有没有", "能否", "能不能", "是",
 }
 
+# question-intent patterns: what entity type the user is asking FOR. The
+# intent drives type-weighted re-ranking ("在哪个表" must surface tables
+# above metrics, "是多少" metrics above tables). Patterns are tested in
+# dict order; table first because 哪个表/哪张表 are the most specific.
+INTENT_PATTERNS: Dict[str, Tuple[str, ...]] = {
+    "table": (
+        "哪个表", "哪张表", "在哪个表", "在什么表", "是什么表", "哪几张表",
+        "哪个库", "哪个报表", "哪个宽表", "在哪个库", "哪个表的", "哪张表的",
+        "找表", "有没有表", "在哪张表", "可以取到.*表", "哪个表能",
+    ),
+    "field": (
+        "哪个字段", "什么字段", "哪个列", "什么列", "字段是什么", "哪一列",
+        "哪个属性", "哪个栏位", "对应什么字段", "对应哪个字段", "字段名",
+        "字段是哪个", "哪个参数",
+    ),
+    "metric": (
+        "是多少", "怎么算", "如何算", "怎么取", "如何计算", "怎么计算",
+        "口径", "指标", "计算方式", "公式", "怎么算的", "如何统计", "统计口径",
+        "总额", "数量", "单量", "订单数", "单数", "金额",
+    ),
+}
+
+# default intent -> label -> boost applied to the fused score
+DEFAULT_INTENT_BOOST: Dict[str, Dict[str, float]] = {
+    "table": {"Table": 1.5},
+    "field": {"Field": 1.4},
+    "metric": {"Metric": 1.5},
+    "general": {},
+}
+
 
 @dataclass
 class QueryIntent:
@@ -55,6 +85,8 @@ class QueryIntent:
     expanded_terms: List[str] = field(default_factory=list)  # retrieval terms
     synonym_hits: List[Tuple[str, str]] = field(default_factory=list)  # (alias, canonical)
     extraction_method: str = "heuristic"
+    # what the user is asking FOR: "table" | "field" | "metric" | "general"
+    intent_type: str = "general"
 
     @property
     def local_context(self) -> str:
@@ -82,6 +114,7 @@ class QueryIntent:
             "expanded_terms": self.expanded_terms,
             "synonym_hits": [list(h) for h in self.synonym_hits],
             "extraction_method": self.extraction_method,
+            "intent_type": self.intent_type,
             "local_context": self.local_context,
             "global_context": self.global_context,
         }
@@ -191,4 +224,16 @@ class QueryUnderstanding:
             expanded_terms=terms,
             synonym_hits=hits,
             extraction_method=dk.extraction_method,
+            intent_type=self._classify_intent(question),
         )
+
+    @staticmethod
+    def _classify_intent(question: str) -> str:
+        """Rule-based question-intent classification (table/field/metric)."""
+        import re as _re
+
+        for intent, patterns in INTENT_PATTERNS.items():
+            for pat in patterns:
+                if _re.search(pat, question):
+                    return intent
+        return "general"

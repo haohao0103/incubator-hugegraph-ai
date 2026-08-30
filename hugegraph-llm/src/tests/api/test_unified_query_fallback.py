@@ -452,6 +452,21 @@ class TestUnifiedQuerySchemaMode(unittest.TestCase):
         self.assertIn("order", resp.subgraph.get("tables", []))
         self.assertIn("订单表", resp.answer)
 
+    @patch.object(KgRuleEngine, "load_graph", return_value=_sample_graph())
+    @patch("hugegraph_llm.utils.hugegraph_utils.get_hg_client")
+    def test_schema_intent_weight_override(self, mock_client, _load):
+        mock_client.return_value = object()
+        # explicit intent_weight in retriever_config overrides the default
+        req = UnifiedQueryRequest(
+            question="订单总额是多少",
+            mode="schema",
+            retriever_config={"intent_weight": 0.0},
+        )
+        resp = unified_query(req)
+        self.assertFalse(resp.no_evidence)
+        self.assertIn("order_total", resp.subgraph.get("metrics", []))
+        self.assertNotIn("intent_weight", resp.raw)  # raw only carries intent trace
+
     @patch.object(
         KgRuleEngine,
         "load_graph",

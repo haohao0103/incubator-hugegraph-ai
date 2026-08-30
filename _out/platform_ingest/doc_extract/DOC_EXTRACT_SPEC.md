@@ -72,3 +72,13 @@ python _out/platform_ingest/ingest_adapter.py \
 # 飞书文档（模拟）→ 口径抽取 → merge → 二次灌库 → 中文问题可命中
 python _out/platform_ingest/run_platform_pipeline.py --graph kg_platform
 ```
+
+## 术语抽取（v2 增补）
+
+除指标口径外，文档还产出**术语实体**（同义词层自动扩展）：
+
+- `extract_terms_from_text(text)`：抽取 `中文名（english_name）` / `中文名(english_name)` 成对写法 → TermNode（canonical=英文，aliases=[中文]）；
+- `glossary_to_terms(glossary)`：从已抽取指标的定义首词（"客单价：平均每单成交金额…"）回建术语别名——与口径抽取共用同一信号；
+- 产物与 `KgTermGraph.from_jargon_map({别名: 规范名})` 直接兼容，merge 进术语图后，查询理解的同义词扩展自动覆盖文档新说法（无需改 definition）。
+
+管线建议：文档 → `extract_metrics_from_text` + `extract_terms_from_text` → 口径 merge 回灌库 payload（现有）+ 术语 merge 进术语图（新增）→ 检索的别名路即可命中文档里出现过的说法。

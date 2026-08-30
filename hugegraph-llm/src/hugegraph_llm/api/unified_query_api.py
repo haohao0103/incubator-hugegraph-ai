@@ -174,6 +174,16 @@ def _run_schema_retrieval(req: UnifiedQueryRequest) -> UnifiedQueryResponse:
     retriever_config = dict(req.retriever_config or {})
     if "importance_weight" in retriever_config:
         config.importance_weight = float(retriever_config["importance_weight"])
+    else:
+        # entity-importance re-ranking is on by default for the schema
+        # retrieval service (authoritative/priority fed by the platform)
+        config.importance_weight = 0.5
+    if "intent_weight" in retriever_config:
+        config.intent_weight = float(retriever_config["intent_weight"])
+    else:
+        # question-intent type weighting is on by default for the schema
+        # retrieval service: "在哪个表" must surface tables above metrics
+        config.intent_weight = 0.8
 
     linker = KgMultiSchemaLinker(
         client=client,
