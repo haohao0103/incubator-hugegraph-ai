@@ -142,6 +142,11 @@ def load_graph(client: Any, graph_name: Optional[str] = None) -> GraphData:
     return KgRuleEngine(client, graph_name).load_graph()
 
 
+def parse_sql(sql: str) -> Dict[str, Any]:
+    """Public wrapper around the lightweight SQL extractor (see ``_parse_sql``)."""
+    return KgSqlValidator._parse_sql(sql)
+
+
 class KgSqlValidator:
     """Validate generated SQL against the metadata KG.
 
