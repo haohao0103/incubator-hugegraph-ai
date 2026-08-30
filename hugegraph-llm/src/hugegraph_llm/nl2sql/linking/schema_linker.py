@@ -237,9 +237,11 @@ class SchemaLinker:
         top_k: int = 10,
         include_tables: bool = True,
         include_columns: bool = True,
+        intent: Optional[str] = None,
     ) -> List[LinkedItem]:
         """Return the top-k schema elements relevant to ``question``."""
-        return self.link_multi([question], top_k, include_tables, include_columns)
+        return self.link_multi([question], top_k, include_tables,
+                               include_columns, intent=intent)
 
     def link_multi(
         self,
@@ -247,6 +249,7 @@ class SchemaLinker:
         top_k: int = 10,
         include_tables: bool = True,
         include_columns: bool = True,
+        intent: Optional[str] = None,
     ) -> List[LinkedItem]:
         """Seed from several texts (question + LLM keywords + jargon canonicals)
         and run one PPR. Seeds merge by max weight.
@@ -254,6 +257,9 @@ class SchemaLinker:
         With ``fusion`` set, each recall path (lexical / vector / BM25) is
         ranked independently and the rankings are fused at the result level
         (RRF or weighted score-sum) instead of the seed level.
+
+        ``intent`` ("table"/"field"/"metric") applies type-weighted re-ranking
+        — "在哪个表" surfaces tables, "口径是多少" surfaces the metric column.
         """
         if self._use_jargon:
             extra: List[str] = []
@@ -262,7 +268,8 @@ class SchemaLinker:
             texts = list(texts) + [e for e in extra if e not in texts]
 
         if self._fusion in ("rrf", "score"):
-            return self._fused_link(texts, top_k, include_tables, include_columns)
+            return self._fused_link(texts, top_k, include_tables,
+                                    include_columns, intent=intent)
 
         seeds: Dict[str, float] = {}
         for t in texts:
@@ -281,7 +288,7 @@ class SchemaLinker:
             return []
         scores = self._ppr(seeds)
         items = self._to_items(scores, include_tables, include_columns)
-        items = self._rerank(items)
+        items = self._rerank(items, intent=intent)
         return items[:top_k]
 
     def _fused_link(
@@ -290,6 +297,7 @@ class SchemaLinker:
         top_k: int,
         include_tables: bool,
         include_columns: bool,
+        intent: Optional[str] = None,
     ) -> List[LinkedItem]:
         """Result-level fusion: rank each recall path, fuse the rankings."""
         from ..fusion import rrf_fuse, score_fuse
@@ -299,7 +307,7 @@ class SchemaLinker:
                 return []
             scores = self._ppr(seeds)
             items = self._to_items(scores, include_tables, include_columns)
-            return self._rerank(items)
+            return self._rerank(items, intent=intent)
 
         def _lexical() -> Dict[str, float]:
             seeds: Dict[str, float] = {}
@@ -480,23 +488,33 @@ class SchemaLinker:
             {k: (v / mx if mx else 0.0) for k, v in imp.items()} if imp else {}
         )
 
-    def _rerank(self, items: List[LinkedItem]) -> List[LinkedItem]:
-        """Boost results by entity importance: score *= (1 + w * imp)."""
-        if not self._use_importance:
+    def _rerank(self, items: List[LinkedItem],
+                intent: Optional[str] = None) -> List[LinkedItem]:
+        """Boost results by entity importance: score *= (1 + w * imp), then by
+        question intent (table/field/metric) via type-weighted multipliers."""
+        from ..query_understanding import intent_boost
+
+        if not self._use_importance and not intent:
             return items
-        self._ensure_importance()
-        imp = self._importance or {}
-        if not imp:
-            return items
+
         w = self._importance_weight
+        imp = {}
+        if self._use_importance:
+            self._ensure_importance()
+            imp = self._importance or {}
+
+        tboost = intent_boost(intent) if intent else {}
         for it in items:
             boost = 0.0
             if it.node_type == NodeType.TABLE.value:
                 boost = imp.get(it.node_id, 0.0)
             elif it.node_type == NodeType.COLUMN.value and it.table:
                 boost = imp.get(f"table:{it.table}", 0.0)
-            if boost:
-                it.score = it.score * (1.0 + w * boost)
+            factor = 1.0
+            if tboost:
+                factor = tboost.get(it.node_type, 1.0)
+            if boost or factor != 1.0:
+                it.score = it.score * (1.0 + w * boost) * factor
         items.sort(key=lambda x: x.score, reverse=True)
         return items
 

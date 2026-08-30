@@ -102,6 +102,7 @@ class NL2SQLPipeline:
         self._top_k = top_k
         self._engine = engine if engine is not None else LocalEngine(schema)
         self._keyword_extractor = keyword_extractor
+        self._understanding = None  # lazy QueryUnderstanding
         self._linker = SchemaLinker(
             schema,
             engine=self._engine,
@@ -138,9 +139,18 @@ class NL2SQLPipeline:
         return texts
 
     def link(self, question: str, top_k: Optional[int] = None) -> List[LinkedItem]:
+        intent = self.understand(question).intent_type
         return self._linker.link_multi(
-            self._link_texts(question), top_k or self._top_k
+            self._link_texts(question), top_k or self._top_k, intent=intent
         )
+
+    def understand(self, question: str):
+        """Rule-based query understanding (intent + jargon expansion), offline."""
+        from .query_understanding import QueryUnderstanding
+
+        if self._understanding is None:
+            self._understanding = QueryUnderstanding()
+        return self._understanding.understand(question)
 
     # ---- L2: join path (standalone) ----
 

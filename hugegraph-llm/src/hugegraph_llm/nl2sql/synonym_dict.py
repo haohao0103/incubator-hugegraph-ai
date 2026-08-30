@@ -94,6 +94,19 @@ class JargonMap:
         """Canonical identifier for an exact slang term, or ``None``."""
         return self._map.get(slang)
 
+    def match(self, text: str) -> List[tuple]:
+        """All ``(alias, canonical)`` pairs whose alias appears in ``text``.
+
+        Longest match first, case-insensitive for Latin terms.
+        """
+        lower = text.lower()
+        hits: List[tuple] = []
+        for term in self._terms:
+            t = term.lower()
+            if t and t in lower:
+                hits.append((term, self._map[term]))
+        return hits
+
     def expand(self, text: str) -> List[str]:
         """Canonical identifiers for every slang term found in ``text``.
 

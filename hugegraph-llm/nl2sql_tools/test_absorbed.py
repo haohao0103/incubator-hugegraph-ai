@@ -13,6 +13,9 @@ from p2_embedder import make_embedder  # noqa: E402
 from hugegraph_llm.nl2sql.fusion import rrf_fuse, score_fuse  # noqa: E402
 from hugegraph_llm.nl2sql.linking.schema_linker import SchemaLinker  # noqa: E402
 from hugegraph_llm.nl2sql.metric_authority import authority_score, resolve_metric  # noqa: E402
+from hugegraph_llm.nl2sql.query_understanding import (  # noqa: E402
+    QueryUnderstanding, classify_intent,
+)
 from hugegraph_llm.nl2sql.sql_ops import SqlValidator, SqlVoter  # noqa: E402
 from hugegraph_llm.nl2sql.synonym_dict import JargonMap  # noqa: E402
 
@@ -86,6 +89,24 @@ def main():
           str([x.replace("column:dw.", "").replace("table:dw.", "T:") for x in ids[:6]]))
     items2 = lk.link("客户数", top_k=10)
     check("rrf link non-empty on semantic q", len(items2) > 0, str(len(items2)))
+
+    # ---- 6. query understanding: intent + jargon ----
+    intent_cases = {
+        "支付总额在哪个表": "table", "司机手机号是哪个字段": "field",
+        "各城市订单总额是多少": "metric", "今天天气如何": "general",
+    }
+    for q, want in intent_cases.items():
+        check(f"intent '{q}'", classify_intent(q) == want,
+              f"{classify_intent(q)} vs {want}")
+    u = QueryUnderstanding()
+    qi = u.understand("GTV 和订单量在哪个表")
+    check("understand expands jargon", "gmv" in qi.expanded_terms
+          and "order_count" in qi.expanded_terms, str(qi.expanded_terms))
+    check("understand intent", qi.intent_type == "table", qi.intent_type)
+    lk_i = SchemaLinker(schema, embedder=embedder, top_k_vector=3, vector_weight=0.5)
+    ti = lk_i.link("支付总额在哪个表", top_k=8, intent="table")
+    n_tables = sum(1 for i in ti[:5] if i.node_type == "table")
+    check("table-intent pushes tables up", n_tables >= 3, f"tables in top5={n_tables}")
 
     print("\n" + ("ALL PASS" if ok else "SOME FAILED"))
     sys.exit(0 if ok else 1)
