@@ -57,6 +57,7 @@ from hugegraph_llm.utils.log import log
 from ..engine.base import GraphEngine
 from ..engine.local import LocalEngine
 from ..schema_graph.model import NodeType, SchemaGraph
+from ..synonym_dict import JargonMap
 from ..vector_store import NumpySchemaVectorStore, SchemaVectorStore
 
 # Latin / digit runs and CJK codepoints -- the two token classes we index.
@@ -171,6 +172,8 @@ class SchemaLinker:
         use_bm25: bool = True,
         use_importance: bool = True,
         importance_weight: float = 0.15,
+        use_jargon: bool = True,
+        fusion: Optional[str] = None,
     ):
         """
         :param schema: Schema Graph built by :class:`SchemaGraphBuilder`.
@@ -215,6 +218,9 @@ class SchemaLinker:
         self._use_bm25 = use_bm25
         self._use_importance = use_importance
         self._importance_weight = importance_weight
+        self._use_jargon = use_jargon
+        self._fusion = fusion  # None | "rrf" | "score"
+        self._jargon = JargonMap() if use_jargon else None
         self._bm25 = None  # lazy BM25 index over schema node surfaces
         self._importance: Optional[Dict[str, float]] = None  # node_id -> [0,1]
 
@@ -242,9 +248,22 @@ class SchemaLinker:
         include_tables: bool = True,
         include_columns: bool = True,
     ) -> List[LinkedItem]:
-        """Seed from several texts (question + LLM-extracted keywords) and run
-        one PPR. Seeds merge by max weight, so a keyword only helps when it
-        lands closer to a node than the raw question did."""
+        """Seed from several texts (question + LLM keywords + jargon canonicals)
+        and run one PPR. Seeds merge by max weight.
+
+        With ``fusion`` set, each recall path (lexical / vector / BM25) is
+        ranked independently and the rankings are fused at the result level
+        (RRF or weighted score-sum) instead of the seed level.
+        """
+        if self._use_jargon:
+            extra: List[str] = []
+            for t in texts:
+                extra.extend(self._jargon.expand(str(t)))
+            texts = list(texts) + [e for e in extra if e not in texts]
+
+        if self._fusion in ("rrf", "score"):
+            return self._fused_link(texts, top_k, include_tables, include_columns)
+
         seeds: Dict[str, float] = {}
         for t in texts:
             if not t or not str(t).strip():
@@ -264,6 +283,77 @@ class SchemaLinker:
         items = self._to_items(scores, include_tables, include_columns)
         items = self._rerank(items)
         return items[:top_k]
+
+    def _fused_link(
+        self,
+        texts: List[str],
+        top_k: int,
+        include_tables: bool,
+        include_columns: bool,
+    ) -> List[LinkedItem]:
+        """Result-level fusion: rank each recall path, fuse the rankings."""
+        from ..fusion import rrf_fuse, score_fuse
+
+        def _path(seeds: Dict[str, float]) -> List[LinkedItem]:
+            if not seeds:
+                return []
+            scores = self._ppr(seeds)
+            items = self._to_items(scores, include_tables, include_columns)
+            return self._rerank(items)
+
+        def _lexical() -> Dict[str, float]:
+            seeds: Dict[str, float] = {}
+            for t in texts:
+                if not t or not str(t).strip():
+                    continue
+                for nid, w in self._seed_nodes(str(t)).items():
+                    seeds[nid] = max(seeds.get(nid, 0.0), w)
+            return seeds
+
+        def _vector() -> Dict[str, float]:
+            if self._embedder is None:
+                return {}
+            seeds: Dict[str, float] = {}
+            for t in texts:
+                if not t or not str(t).strip():
+                    continue
+                for nid, w in self._vector_seeds(str(t)).items():
+                    seeds[nid] = max(seeds.get(nid, 0.0), w)
+            return seeds
+
+        def _bm25() -> Dict[str, float]:
+            if not self._use_bm25:
+                return {}
+            seeds: Dict[str, float] = {}
+            for t in texts:
+                q = _tokens(str(t))
+                if q:
+                    for nid, w in self._bm25_seeds(q).items():
+                        seeds[nid] = max(seeds.get(nid, 0.0), w)
+            return seeds
+
+        path_items: List[List[LinkedItem]] = []
+        sources: List[str] = []
+        for name, seeds in (("lexical", _lexical()), ("vector", _vector()),
+                            ("bm25", _bm25())):
+            items = _path(seeds)
+            if items:
+                path_items.append(items[: max(20, top_k * 3)])
+                sources.append(name)
+        if not path_items:
+            return []
+        weights = {s: 1.0 for s in sources}
+        if self._fusion == "rrf":
+            fused = rrf_fuse(path_items, key_fn=lambda it: it.node_id,
+                             weights=weights)
+        else:
+            fused = score_fuse(path_items, key_fn=lambda it: it.node_id,
+                               score_fn=lambda it: it.score, weights=weights)
+        out: List[LinkedItem] = []
+        for it, fscore in fused:
+            it.score = fscore
+            out.append(it)
+        return out[:top_k]
 
     def link_columns(self, question: str, top_k: int = 10) -> List[LinkedItem]:
         return self.link(question, top_k, include_tables=False,

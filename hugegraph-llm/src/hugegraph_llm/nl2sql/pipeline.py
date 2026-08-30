@@ -175,6 +175,36 @@ class NL2SQLPipeline:
                 return cid
         return None
 
+    # ---- metric authority + SQL quality gate (optional capabilities) ----
+
+    def authoritative_metric(self, term_names: List[str]) -> Optional[str]:
+        """Pick the authoritative metric among candidate term names, using the
+        per-Term ``authoritative / priority / source`` properties (governance
+        stamp dominates). ``None`` when no candidate term exists."""
+        from .metric_authority import resolve_metric
+
+        cands = []
+        for n in term_names:
+            node = self._schema.nodes.get(f"term:{n}")
+            if node is not None:
+                cands.append((n, node.properties))
+        if not cands:
+            return None
+        winner = resolve_metric(cands)
+        return winner[0] if winner else None
+
+    def vote_sql(
+        self,
+        candidates: List[str],
+        linked_ids: Optional[List[str]] = None,
+        metric_agg: Optional[str] = None,
+    ) -> List[tuple]:
+        """Deterministically rank candidate SQLs (validity / 口径 / overlap).
+        No LLM call. Returns ``[(sql, score, report), ...]`` best first."""
+        from .sql_ops import SqlVoter
+
+        return SqlVoter(self._schema).vote(candidates, linked_ids, metric_agg)
+
     # ---- narrowed prompt context (standalone) ----
 
     def schema_context(
