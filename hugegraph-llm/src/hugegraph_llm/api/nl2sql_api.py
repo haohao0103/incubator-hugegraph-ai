@@ -131,6 +131,24 @@ _HG_URL_ENV = os.getenv("NL2SQL_HG_URL", "http://127.0.0.1:8081")
 # Central knobs (env-configurable; API per-request values override these).
 _DEFAULT_TOP_K = int(os.getenv("NL2SQL_DEFAULT_TOP_K", "10"))
 _MIN_SCORE_DEFAULT = os.getenv("NL2SQL_MIN_SCORE")  # e.g. "0.02"; None = off
+# Tenant column permissions: path to a JSON rules file (see nl2sql.permissions);
+# None disables permission filtering (allow-all, backward compatible).
+_PERMISSIONS = None
+_PERMISSIONS_PATH = os.getenv("NL2SQL_PERMISSIONS")
+
+
+def _load_permissions():
+    global _PERMISSIONS
+    if _PERMISSIONS is None and _PERMISSIONS_PATH:
+        try:
+            import json as _json
+            with open(_PERMISSIONS_PATH, encoding="utf-8") as f:
+                _PERMISSIONS = _json.load(f)
+            log.info("nl2sql: tenant permissions loaded from %s",
+                     _PERMISSIONS_PATH)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("nl2sql: permissions load failed (allow-all): %s", exc)
+    return _PERMISSIONS
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -140,6 +158,7 @@ _MIN_SCORE_DEFAULT = os.getenv("NL2SQL_MIN_SCORE")  # e.g. "0.02"; None = off
 class LinkRequest(BaseModel):
     question: str
     top_k: Optional[int] = Field(default=None, description="Override default retrieval size")
+    tenant: Optional[str] = Field(default=None, description="Tenant for column-level permissions")
     min_score: Optional[float] = Field(
         default=None,
         description="Floor on the top result's score; below it the question is "
@@ -160,6 +179,7 @@ class CommunitiesRequest(BaseModel):
 class SchemaContextRequest(BaseModel):
     question: str
     top_k: Optional[int] = None
+    tenant: Optional[str] = None
     include_joins: bool = False
     include_global: bool = Field(
         default=False,
@@ -280,6 +300,7 @@ def get_pipeline() -> NL2SQLPipeline:
                     embedder=_make_embedder(),
                     keyword_extractor=_make_keyword_extractor(),
                 )
+                _PIPELINE.set_permission_rules(_load_permissions())
                 _PIPELINE.prebuild()
     return _PIPELINE
 
@@ -381,7 +402,12 @@ def nl2sql_link(req: LinkRequest):
     """
     min_score = req.min_score if req.min_score is not None else (
         float(_MIN_SCORE_DEFAULT) if _MIN_SCORE_DEFAULT else None)
-    items = get_pipeline().link(req.question, top_k=req.top_k or _DEFAULT_TOP_K)
+    pipe = get_pipeline()
+    items = pipe.link(req.question, top_k=req.top_k or _DEFAULT_TOP_K)
+    if req.tenant and pipe._permission_rules:
+        from hugegraph_llm.nl2sql.permissions import PermissionGate
+        gate = PermissionGate(req.tenant, pipe._permission_rules)
+        items = gate.filter_column_items(items)
     best = max((i.score for i in items), default=0.0)
     out_of_kb = bool(not items or (min_score is not None and best < min_score))
     resp = {"question": req.question,
@@ -423,6 +449,7 @@ def nl2sql_schema_context(req: SchemaContextRequest):
     ctx = pipe.schema_context(
         req.question, top_k=req.top_k or _DEFAULT_TOP_K,
         include_joins=req.include_joins, include_global=req.include_global,
+        tenant=req.tenant,
     )
     resp = {"question": req.question, "schema_context": ctx}
     if not ctx:
@@ -546,6 +573,7 @@ def nl2sql_load_hugegraph(req: HgLoadRequest):
             schema, engine=_make_engine(schema), embedder=embedder,
             keyword_extractor=_make_keyword_extractor(),
         )
+        _PIPELINE.set_permission_rules(_load_permissions())
         _PIPELINE.prebuild()
     return {
         "status": "loaded",

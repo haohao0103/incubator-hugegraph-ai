@@ -24,6 +24,8 @@ SMALL_META = {
          "comment": "订单编号"},
         {"name": "gmv", "table": "dw.orders", "data_type": "decimal",
          "comment": "成交总额"},
+        {"name": "user_phone", "table": "dw.orders", "data_type": "string",
+         "comment": "用户手机号"},
         {"name": "pay_amount", "table": "dw.payments", "data_type": "decimal",
          "comment": "支付金额"},
         {"name": "order_id", "table": "dw.payments", "data_type": "bigint",
@@ -181,3 +183,33 @@ def test_load_hugegraph_path(monkeypatch):
     body = r.json()
     assert body["status"] == "loaded"
     assert body["tables"] == 2 and body["prebuilt"] is True
+
+
+def test_schema_context_sensitive_tag(monkeypatch):
+    c = _make_client(monkeypatch)
+    r = c.post("/nl2sql/schema_context",
+               json={"question": "订单"})
+    assert r.status_code == 200
+    ctx = r.json()["schema_context"]
+    assert "user_phone" in ctx and "[SENSITIVE]" in ctx
+
+
+def test_tenant_column_filter(monkeypatch):
+    schema = nl2sql_api.build_schema(SMALL_META)
+    pipe = NL2SQLPipeline(schema)
+    pipe.set_permission_rules({"t1": {"dw.orders": ["order_id", "gmv"]}})
+    monkeypatch.setattr(nl2sql_api, "get_pipeline", lambda: pipe)
+    router = APIRouter()
+    app = FastAPI()
+    nl2sql_http_api(router, app=app)
+    app.include_router(router)
+    c = TestClient(app)
+    # tenant t1: user_phone not granted -> filtered out
+    r = c.post("/nl2sql/schema_context",
+               json={"question": "订单", "tenant": "t1"})
+    assert r.status_code == 200
+    assert "user_phone" not in r.json()["schema_context"]
+    # tenant with no rules: allow-all (backward compatible)
+    r2 = c.post("/nl2sql/schema_context",
+                json={"question": "订单", "tenant": "other"})
+    assert "user_phone" in r2.json()["schema_context"]

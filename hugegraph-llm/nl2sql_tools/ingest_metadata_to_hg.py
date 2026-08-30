@@ -104,8 +104,15 @@ def bare_table(full: str) -> str:
     return full.split(".")[-1] if "." in full else full
 
 
-def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
-    """Write SchemaMetadata into the HugeGraph KG. Returns write counts."""
+def ingest(meta: dict, url: str, graph: str, clear: bool = False,
+           diff: bool = False) -> dict:
+    """Write SchemaMetadata into the HugeGraph KG. Returns write counts.
+
+    ``diff=True`` enables incremental sync: only tables/columns/terms that are
+    not already in the graph are written (PRIMARY_KEY upsert makes re-runs
+    idempotent; diff skips the already-present ones entirely). Existing
+    vertices are left untouched, so deleted metadata is *not* removed.
+    """
     base = f"{url.rstrip('/')}/graphs/{graph}/graph"
 
     if clear:
@@ -116,6 +123,24 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
     terms = meta.get("terms", [])
     term_bindings = meta.get("term_bindings", [])
     query_logs = meta.get("query_logs", [])
+
+    # incremental diff: existing names per label (only when diff=True)
+    existing = None
+    if diff:
+        existing = {
+            "Table": set(_fetch_ids(base, "Table")),
+            "Field": set(_fetch_ids(base, "Field")),
+            "Metric": set(_fetch_ids(base, "Metric")),
+        }
+
+    def _new_table(name):
+        return not (existing and name in existing["Table"])
+
+    def _new_field(fname):
+        return not (existing and fname in existing["Field"])
+
+    def _new_term(name):
+        return not (existing and name in existing["Metric"])
 
     table_names = {bare_table(t["name"]) for t in tables}
     col_records = []
@@ -129,16 +154,23 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
 
     v_payload = []
     for t in tables:
+        if not _new_table(bare_table(t["name"])):
+            continue
         props = {"name": bare_table(t["name"])}
         if t.get("comment"):
             props["comment"] = t["comment"]
         v_payload.append({"label": "Table", "properties": props})
     for c in col_records:
-        props = {"name": f"{c['table']}.{c['column']}", "type": c["data_type"]}
+        fname = f"{c['table']}.{c['column']}"
+        if not _new_field(fname):
+            continue
+        props = {"name": fname, "type": c["data_type"]}
         if c["comment"]:
             props["comment"] = c["comment"]
         v_payload.append({"label": "Field", "properties": props})
     for tm in terms:
+        if not _new_term(tm["name"]):
+            continue
         props = {"name": tm["name"]}
         if tm.get("comment"):
             props["definition"] = tm["comment"]
@@ -147,7 +179,7 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
         if tm.get("aliases"):
             props["aliases"] = ";".join(tm["aliases"])
         v_payload.append({"label": "Metric", "properties": props})
-    for q in query_logs:
+    for q in (query_logs if not diff else []):
         tables_in_q = sorted({bare_table(x) for x in q if x in table_names})
         if len(tables_in_q) >= 2:
             v_payload.append({"label": "Query",
@@ -162,12 +194,24 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
     field_ids = _fetch_ids(base, "Field")
     metric_ids = _fetch_ids(base, "Metric")
 
+    # In diff mode, only build edges for the vertices just written (existing
+    # vertices already have their edges from a previous run).
+    new_field_names = {
+        f"{c['table']}.{c['column']}"
+        for c in col_records
+        if _new_field(f"{c['table']}.{c['column']}")
+    }
+    new_term_names = {tm["name"] for tm in terms if _new_term(tm["name"])}
+
     e_payload = []
     for c in col_records:
+        fname = f"{c['table']}.{c['column']}"
+        if diff and fname not in new_field_names:
+            continue
         e_payload.append({
             "label": "hasColumn", "outV": table_ids.get(c["table"]),
             "outVLabel": "Table",
-            "inV": field_ids.get(f"{c['table']}.{c['column']}"),
+            "inV": field_ids.get(fname),
             "inVLabel": "Field", "properties": {},
         })
     term_table = {}
@@ -177,10 +221,14 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
     for tname, cols in term_table.items():
         for full_col in cols:
             tbl, _, col = full_col.rpartition(".")
+            fname = f"{bare_table(tbl)}.{col}"
+            if diff and (fname not in new_field_names
+                         and tname not in new_term_names):
+                continue
             e_payload.append({
                 "label": "computedFromField", "outV": metric_ids.get(tname),
                 "outVLabel": "Metric",
-                "inV": field_ids.get(f"{bare_table(tbl)}.{col}"),
+                "inV": field_ids.get(fname),
                 "inVLabel": "Field", "properties": {},
             })
     # drop any edge whose endpoint id could not be resolved (safety)
@@ -188,9 +236,10 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
     if e_payload:
         _request(f"{base}/edges/batch", "POST", e_payload)
 
-    # ---- lineage (Table -> Table, upstream -> downstream) ----
+    # ---- lineage (Table -> Table, upstream -> downstream); skip in diff mode
+    # (existing endpoints already carry their edges from a previous run)
     lineage = meta.get("lineage", [])
-    if lineage:
+    if lineage and not diff:
         _ensure_edge_label(url, graph, "lineage", "Table", "Table")
         lg_payload = []
         for pair in lineage:
@@ -205,9 +254,9 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
         if lg_payload:
             _request(f"{base}/edges/batch", "POST", lg_payload)
 
-    # ---- synonyms (Metric <-> Metric, same meaning) ----
+    # ---- synonyms (Metric <-> Metric); skip in diff mode ----
     synonyms = meta.get("synonyms", [])
-    if synonyms:
+    if synonyms and not diff:
         _ensure_edge_label(url, graph, "synonym", "Metric", "Metric")
         syn_payload = []
         for pair in synonyms:
@@ -222,13 +271,18 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
         if syn_payload:
             _request(f"{base}/edges/batch", "POST", syn_payload)
 
+    n_written = {"Table": 0, "Field": 0, "Metric": 0, "Query": 0}
+    for v in v_payload:
+        n_written[v["label"]] = n_written.get(v["label"], 0) + 1
     counts = {
-        "tables": len(tables), "columns": len(col_records), "terms": len(terms),
-        "queries": n_q,
-        "has_column_edges": len(col_records),
+        "tables": n_written.get("Table", 0),
+        "columns": n_written.get("Field", 0),
+        "terms": n_written.get("Metric", 0),
+        "queries": n_written.get("Query", 0),
+        "has_column_edges": sum(1 for e in e_payload if e["label"] == "hasColumn"),
         "term_bind_edges": sum(1 for e in e_payload if e["label"] == "computedFromField"),
-        "lineage_edges": len(lineage),
-        "synonym_edges": len(synonyms),
+        "lineage_edges": len(lg_payload) if "lg_payload" in dir() and diff is False else 0,
+        "synonym_edges": len(syn_payload) if "syn_payload" in dir() and diff is False else 0,
     }
     log(f"ingested: {counts}")
     return counts
@@ -240,14 +294,16 @@ def main():
     ap.add_argument("--url", default="http://127.0.0.1:8081")
     ap.add_argument("--graph", default="kg_rag")
     ap.add_argument("--clear", action="store_true",
-                    help="wipe Table/Field/Metric/Query vertices first")
+                    help="wipe the whole graph data first (kg_rag-dedicated)")
+    ap.add_argument("--diff", action="store_true",
+                    help="incremental: only write tables/columns/terms not yet in the graph")
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     log(f"=== hg ingest {args.graph} from {args.meta} ===")
     with open(args.meta, encoding="utf-8") as f:
         meta = json.load(f)
-    ingest(meta, args.url, args.graph, clear=args.clear)
+    ingest(meta, args.url, args.graph, clear=args.clear, diff=args.diff)
     log("ingest done (verify via loader next)")
 
 

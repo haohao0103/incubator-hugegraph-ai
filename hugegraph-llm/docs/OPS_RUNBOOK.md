@@ -73,3 +73,31 @@ PYTHONPATH=hugegraph-llm/src python -m uvicorn \
 - dev/staging/prod 各一套 `NL2SQL_HG_GRAPH` 图（图名带后缀隔离），配置独立 env。
 - 数据同步：dev 用样例，staging 用脱敏子集，prod 全量。
 - 权限：prod 加 token 鉴权 + 表级权限（等数仓 DBA 权限清单，P0 未完成项）。
+
+## 9. 增量同步（schema 变更）
+
+```bash
+# 全量首次 / 重建：
+python scripts/ingest_metadata_to_hg.py --meta <meta.json> --clear
+
+# 增量（只写图中没有的表/列/指标，PRIMARY_KEY 幂等，可反复执行）：
+python scripts/ingest_metadata_to_hg.py --meta <meta.json> --diff
+```
+
+调度示例（cron，每 30 分钟）：
+```
+*/30 * * * * cd <repo> && PYTHONPATH=hugegraph-llm/src \
+  python nl2sql_tools/ingest_metadata_to_hg.py --meta <meta.json> --diff \
+  >> _out/hg_ingest/logs/sync.log 2>&1
+```
+增量语义：只新增，不删除（删除走 --clear 全量重建）。
+
+## 10. 敏感字段与租户权限
+
+- 敏感检测：列名/注释含 phone/手机/身份证/password/token/银行卡 等 → schema_context 输出标 `[SENSITIVE]`；元数据列可显式 `sensitive: true/false` 覆盖启发式。
+- 租户权限（可选）：配置文件路径设 `NL2SQL_PERMISSIONS=<rules.json>`，格式：
+  ```json
+  {"tenant_a": {"dw.users": ["user_id", "city"]}, "tenant_b": ["dw.users"]}
+  ```
+  请求带 `tenant` 字段即按权限过滤列；未配置规则 = 全放行（向后兼容）。
+- 执行结果脱敏：`permissions.mask_value()` 提供通用打码，接 SqlExecutor 结果时按敏感列调用。

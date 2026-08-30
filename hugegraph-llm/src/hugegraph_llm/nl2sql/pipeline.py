@@ -111,6 +111,11 @@ class NL2SQLPipeline:
             vector_weight=vector_weight,
         )
         self._join_finder = JoinPathFinder(schema, engine=self._engine)
+        self._permission_rules = None  # optional tenant column allow-lists
+
+    def set_permission_rules(self, rules) -> None:
+        """Enable tenant-level column permissions (see nl2sql.permissions)."""
+        self._permission_rules = rules
 
     # ---- engine introspection ----
 
@@ -228,6 +233,7 @@ class NL2SQLPipeline:
         top_k: Optional[int] = None,
         include_joins: bool = False,
         include_global: bool = False,
+        tenant: Optional[str] = None,
     ) -> str:
         """Build a flat, narrowed schema description for a prompt.
 
@@ -237,6 +243,10 @@ class NL2SQLPipeline:
         domain sibling tables (Global context, mirroring production
         metadata-GraphRAG systems) so the model can discover related tables
         without an explicit join path.
+
+        ``tenant`` enables column-level permission filtering (when rules are
+        configured via :meth:`set_permission_rules`); sensitive columns are
+        tagged ``[SENSITIVE]`` in the output.
         """
         items = self.link(question, top_k)
         if not items:
@@ -245,6 +255,11 @@ class NL2SQLPipeline:
         lines: List[str] = []
         tables = [i for i in items if i.node_type == "table"]
         columns = [i for i in items if i.node_type == "column"]
+        if tenant and self._permission_rules:
+            from .permissions import PermissionGate
+
+            gate = PermissionGate(tenant, self._permission_rules)
+            columns = gate.filter_column_items(columns)
 
         if tables:
             lines.append("Tables:")
@@ -261,7 +276,10 @@ class NL2SQLPipeline:
                 parts = [p for p in (col_type, comment) if p]
                 suffix = f" -- {' '.join(str(p) for p in parts)}" if parts else ""
                 owner = f"{c.table}." if c.table else ""
-                lines.append(f"  {owner}{c.name}{suffix}")
+                from .permissions import is_sensitive
+
+                tag = " [SENSITIVE]" if is_sensitive(c.name, comment) else ""
+                lines.append(f"  {owner}{c.name}{suffix}{tag}")
 
         if include_joins and len(tables) >= 2:
             # Pass full table names (db.table) so they match the join-graph
