@@ -92,12 +92,12 @@ python scripts/ingest_metadata_to_hg.py --meta <meta.json> --diff
 ```
 增量语义：只新增，不删除（删除走 --clear 全量重建）。
 
-## 10. 敏感字段与租户权限
+## 10. 敏感字段与租户权限（当前阶段：只标识，不限制）
 
 - 敏感检测：列名/注释含 phone/手机/身份证/password/token/银行卡 等 → schema_context 输出标 `[SENSITIVE]`；元数据列可显式 `sensitive: true/false` 覆盖启发式。
-- 租户权限（可选）：配置文件路径设 `NL2SQL_PERMISSIONS=<rules.json>`，格式：
+- **当前只做标识，不做任何拦截**：即使配置了权限规则，请求也看不到任何列被过滤（`tenant` 字段已接收、`PermissionGate` 机制已就位，但未启用执行）。
+- 权限规则格式（将来启用时）：`NL2SQL_PERMISSIONS=<rules.json>`
   ```json
   {"tenant_a": {"dw.users": ["user_id", "city"]}, "tenant_b": ["dw.users"]}
   ```
-  请求带 `tenant` 字段即按权限过滤列；未配置规则 = 全放行（向后兼容）。
 - 执行结果脱敏：`permissions.mask_value()` 提供通用打码，接 SqlExecutor 结果时按敏感列调用。

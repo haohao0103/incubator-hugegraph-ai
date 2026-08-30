@@ -131,8 +131,9 @@ _HG_URL_ENV = os.getenv("NL2SQL_HG_URL", "http://127.0.0.1:8081")
 # Central knobs (env-configurable; API per-request values override these).
 _DEFAULT_TOP_K = int(os.getenv("NL2SQL_DEFAULT_TOP_K", "10"))
 _MIN_SCORE_DEFAULT = os.getenv("NL2SQL_MIN_SCORE")  # e.g. "0.02"; None = off
-# Tenant column permissions: path to a JSON rules file (see nl2sql.permissions);
-# None disables permission filtering (allow-all, backward compatible).
+# Tenant column permissions: mechanism only in this stage — the rules file is
+# loaded and stored but NOT enforced (sensitive columns are flagged, not
+# filtered). Enforcement flips on once governance provides the allow-list.
 _PERMISSIONS = None
 _PERMISSIONS_PATH = os.getenv("NL2SQL_PERMISSIONS")
 
@@ -403,11 +404,9 @@ def nl2sql_link(req: LinkRequest):
     min_score = req.min_score if req.min_score is not None else (
         float(_MIN_SCORE_DEFAULT) if _MIN_SCORE_DEFAULT else None)
     pipe = get_pipeline()
+    # stage note: sensitive columns are FLAGGED, not filtered yet (permission
+    # enforcement waits for the governance allow-list).
     items = pipe.link(req.question, top_k=req.top_k or _DEFAULT_TOP_K)
-    if req.tenant and pipe._permission_rules:
-        from hugegraph_llm.nl2sql.permissions import PermissionGate
-        gate = PermissionGate(req.tenant, pipe._permission_rules)
-        items = gate.filter_column_items(items)
     best = max((i.score for i in items), default=0.0)
     out_of_kb = bool(not items or (min_score is not None and best < min_score))
     resp = {"question": req.question,

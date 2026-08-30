@@ -244,9 +244,9 @@ class NL2SQLPipeline:
         metadata-GraphRAG systems) so the model can discover related tables
         without an explicit join path.
 
-        ``tenant`` enables column-level permission filtering (when rules are
-        configured via :meth:`set_permission_rules`); sensitive columns are
-        tagged ``[SENSITIVE]`` in the output.
+        ``tenant`` is accepted for forward compatibility but **does not filter**
+        yet — current stage only *flags* sensitive columns (``[SENSITIVE]``);
+        permission enforcement waits for the governance allow-list.
         """
         items = self.link(question, top_k)
         if not items:
@@ -255,11 +255,6 @@ class NL2SQLPipeline:
         lines: List[str] = []
         tables = [i for i in items if i.node_type == "table"]
         columns = [i for i in items if i.node_type == "column"]
-        if tenant and self._permission_rules:
-            from .permissions import PermissionGate
-
-            gate = PermissionGate(tenant, self._permission_rules)
-            columns = gate.filter_column_items(columns)
 
         if tables:
             lines.append("Tables:")
