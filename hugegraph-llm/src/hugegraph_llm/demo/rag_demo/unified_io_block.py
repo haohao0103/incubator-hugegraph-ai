@@ -21,6 +21,13 @@ One import box (source dropdown + payload JSON) and one query box, wired to the
 unified ingest/query API. This block calls the *same* core functions exposed by
 the HTTP routes (``unified_ingest`` / ``unified_query``) to keep a single code
 path.
+
+``mode="nl2sql"`` additionally builds the KG-aware NL2SQL pipeline directly
+(question -> linking -> generation -> validation -> voting -> lineage) with an
+optional golden-SQL feedback loop: when "回灌 golden" is on, the winning SQL is
+stored into the graph's ``Query`` vertices and retrieved on the next run, so the
+voting visibly improves (the ``golden_feedback`` stage appears and the chosen
+candidate is boosted by golden overlap).
 """
 
 import json
@@ -36,7 +43,7 @@ from hugegraph_llm.api.unified_query_api import unified_query
 from hugegraph_llm.utils.log import log
 
 SOURCE_TYPES = ["feishu", "catalog_csv", "jdbc", "metric_json", "auto"]
-QUERY_MODES = ["auto", "precise", "semantic", "hybrid"]
+QUERY_MODES = ["auto", "precise", "semantic", "hybrid", "nl2sql"]
 
 EXAMPLE_CATALOG = json.dumps(
     {
@@ -94,6 +101,17 @@ EXAMPLE_FEISHU = json.dumps(
     indent=2,
 )
 
+# deterministic candidate demo for mode="nl2sql" (no LLM needed)
+# NOTE: SQL-A2 flags SELECT/ORDER BY aliases as unknown columns, so keep the
+# group-by candidate alias-free.
+EXAMPLE_NL2SQL_CANDIDATES = "\n".join(
+    [
+        "SELECT city, SUM(order.amount) FROM order GROUP BY city ORDER BY SUM(order.amount) DESC",
+        "SELECT SUM(payment.amount) FROM payment",
+        "SELECT SUM(order.amnt) FROM order",
+    ]
+)
+
 
 def _ingest_handler(source_type, payload_text, domain, er_flag, vi_flag):
     try:
@@ -117,19 +135,97 @@ def _ingest_handler(source_type, payload_text, domain, er_flag, vi_flag):
         return f"❌ 导入失败: {exc}"
 
 
-def _query_handler(question, mode, domain, top_k):
-    req = UnifiedQueryRequest(
+def _nl2sql_run(question, domain, candidates_text, store_golden):
+    """Run the KG-aware NL2SQL pipeline with an optional golden feedback loop."""
+    from hugegraph_llm.config import huge_settings
+    from hugegraph_llm.operators.graph_op.kg_golden_sql import KgGoldenSqlStore
+    from hugegraph_llm.operators.graph_op.kg_nl2sql_pipeline import KgNL2SQLPipeline
+    from hugegraph_llm.utils.hugegraph_utils import get_hg_client
+
+    client = get_hg_client()
+    golden_store = None
+    if store_golden:
+        golden_store = KgGoldenSqlStore(client, huge_settings.graph_name)
+    pipe = KgNL2SQLPipeline(
         question=question,
-        mode=mode,
+        client=client,
         domain=domain or None,
-        top_k=int(top_k) if top_k else 5,
+        golden_store=golden_store,
+        store_best=bool(golden_store),
     )
+    if candidates_text and candidates_text.strip():
+        # deterministic path: vote on the pasted candidates, no LLM
+        cands = [c.strip() for c in candidates_text.splitlines() if c.strip()]
+        return pipe.run(candidates=cands)
+    return pipe.run()  # live glm-5.3 generation (degrades gracefully)
+
+
+def _render_query_markdown(resp_dict) -> str:
+    """Human-readable rendering of a UnifiedQueryResponse (nl2sql friendly)."""
+    route = resp_dict.get("route", "")
+    answer = resp_dict.get("answer") or ""
+    if route != "nl2sql":
+        return f"**route**: `{route}`\n\n**answer**:\n```\n{answer or '(empty)'}\n```"
+
+    stages = resp_dict.get("stages") or []
+    chain = " → ".join(s.get("stage", "") for s in stages)
+    lines = [f"**route**: `nl2sql`", f"**stages**: `{chain}`"]
+    lines.append(
+        "\n**chosen SQL**:\n```sql\n"
+        + (answer or "（未生成可用 SQL——可粘贴候选走确定性投票，或重试 LLM）")
+        + "\n```"
+    )
+    votes = (resp_dict.get("raw") or {}).get("votes") or []
+    if votes:
+        rows = ["| # | score | valid | SQL |", "|---|------:|:-----:|-----|"]
+        for i, v in enumerate(votes, 1):
+            rows.append(
+                f"| {i} | {float(v.get('score', 0)):.1f} | "
+                f"{'✅' if v.get('valid') else '❌'} | `{v.get('sql')}` |"
+            )
+        lines.append("\n**投票排名 voting**\n" + "\n".join(rows))
+    for s in stages:
+        out = s.get("output") or {}
+        if s.get("stage") == "lineage":
+            lines.append(f"\n**血缘 lineage**\n```\n{out.get('explain', '')}\n```")
+        elif s.get("stage") == "authority":
+            lines.append(
+                "\n**指标权威度 authority**\n```\n"
+                + json.dumps(out, ensure_ascii=False, indent=2)
+                + "\n```"
+            )
+        elif s.get("stage") == "golden_feedback":
+            lines.append(
+                "\n**golden 回灌**\n```\n"
+                + json.dumps(out, ensure_ascii=False, indent=2)
+                + "\n```"
+            )
+    return "\n".join(lines)
+
+
+def _query_handler(question, mode, domain, top_k, candidates_text, store_golden):
+    if not question or not str(question).strip():
+        return "❌ question 不能为空", "❌ question 不能为空"
     try:
-        res = unified_query(req)
-        return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+        if mode == "nl2sql":
+            resp = _nl2sql_run(question, domain, candidates_text, bool(store_golden))
+        else:
+            req = UnifiedQueryRequest(
+                question=question,
+                mode=mode,
+                domain=domain or None,
+                top_k=int(top_k) if top_k else 5,
+            )
+            resp = unified_query(req)
+        resp_dict = resp.model_dump()
+        return (
+            _render_query_markdown(resp_dict),
+            json.dumps(resp_dict, ensure_ascii=False, indent=2),
+        )
     except Exception as exc:  # noqa: BLE001
         log.error("unified query handler error: %s", exc)
-        return f"❌ 查询失败: {exc}"
+        msg = f"❌ 查询失败: {exc}"
+        return msg, msg
 
 
 def create_unified_io_block():
@@ -137,7 +233,8 @@ def create_unified_io_block():
         gr.Markdown(
             "## 统一导入 / 查询\n"
             "库表字段 comment · 指标 · 飞书文档 → 同一张 KG 图 `kg-rag`。\n"
-            "导入只写元数据（表/字段/指标定义），**不导行级数据**（行级属于关系图）。"
+            "导入只写元数据（表/字段/指标定义），**不导行级数据**（行级属于关系图）。\n"
+            "`mode=nl2sql`：KG 元数据生成 SQL——linking → 生成 → 校验 → 投票 → 血缘，可开 golden 回灌。"
         )
 
         with gr.Row():
@@ -171,13 +268,28 @@ def create_unified_io_block():
                     placeholder="去年大促退款率怎么算？相关文档有哪些？",
                 )
                 query_mode = gr.Dropdown(
-                    choices=QUERY_MODES, value="auto", label="mode (auto=智能路由)"
+                    choices=QUERY_MODES,
+                    value="auto",
+                    label="mode (auto=智能路由 / nl2sql=KG 元数据生成 SQL)",
                 )
                 with gr.Row():
                     query_topk = gr.Number(label="top_k", value=5, precision=0)
                     query_domain = gr.Textbox(label="domain (可选过滤)", placeholder="risk_control")
+                query_candidates = gr.Textbox(
+                    label="候选 SQL（nl2sql 专用，可选：每行一条；填了走确定性投票、不调 LLM）",
+                    placeholder="SELECT city, SUM(order.amount) AS order_amount FROM order GROUP BY city ...",
+                )
+                store_golden = gr.Checkbox(
+                    label="回灌 golden（nl2sql：把最优 SQL 存入图 Query 顶点，下次查询用于提升投票）",
+                    value=False,
+                )
+                with gr.Row():
+                    ex_nl2sql_1 = gr.Button("示例·各城市订单总额")
+                    ex_nl2sql_2 = gr.Button("示例·订单支付对比")
+                    ex_nl2sql_3 = gr.Button("示例·候选投票")
                 query_btn = gr.Button("查询 Query", variant="primary")
-                query_out = gr.Code(label="查询结果", language="json")
+                query_out_md = gr.Markdown("_点击查询后显示摘要_")
+                query_out = gr.Code(label="查询结果 (JSON)", language="json")
 
         ingest_btn.click(
             fn=_ingest_handler,
@@ -186,8 +298,15 @@ def create_unified_io_block():
         )
         query_btn.click(
             fn=_query_handler,
-            inputs=[query_q, query_mode, query_domain, query_topk],
-            outputs=query_out,
+            inputs=[
+                query_q,
+                query_mode,
+                query_domain,
+                query_topk,
+                query_candidates,
+                store_golden,
+            ],
+            outputs=[query_out_md, query_out],
         )
 
         # example loaders also set the source dropdown
@@ -202,4 +321,18 @@ def create_unified_io_block():
         ex_feishu.click(
             lambda: ("feishu", EXAMPLE_FEISHU),
             outputs=[ingest_source, ingest_payload],
+        )
+
+        # nl2sql example loaders (question + mode + optional candidates)
+        ex_nl2sql_1.click(
+            lambda: ("各城市订单总额", "nl2sql", ""),
+            outputs=[query_q, query_mode, query_candidates],
+        )
+        ex_nl2sql_2.click(
+            lambda: ("订单金额与支付金额对比", "nl2sql", ""),
+            outputs=[query_q, query_mode, query_candidates],
+        )
+        ex_nl2sql_3.click(
+            lambda: ("各城市订单总额", "nl2sql", EXAMPLE_NL2SQL_CANDIDATES),
+            outputs=[query_q, query_mode, query_candidates],
         )
