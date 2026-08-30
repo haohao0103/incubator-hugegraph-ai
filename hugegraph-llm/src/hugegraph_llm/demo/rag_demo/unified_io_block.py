@@ -134,11 +134,26 @@ def _ingest_handler(source_type, payload_text, domain, er_flag, vi_flag):
         return f"❌ 导入失败: {exc}"
 
 
+_EXECUTOR = None
+
+
+def _get_executor():
+    """Lazy singleton DuckDB executor (in-memory, seeded once, persists)."""
+    global _EXECUTOR
+    if _EXECUTOR is None:
+        from hugegraph_llm.operators.sql_exec.sql_executor import DuckDbExecutor
+
+        _EXECUTOR = DuckDbExecutor()
+    return _EXECUTOR
+
+
 def _nl2sql_run(question, domain, candidates_text, store_golden):
-    """Run the KG-aware NL2SQL pipeline with an optional golden feedback loop."""
+    """Run the KG-aware NL2SQL pipeline with an optional golden feedback loop,
+    then execute the winning SQL ("问 -> SQL -> 执行 -> 答案")."""
     from hugegraph_llm.config import huge_settings
     from hugegraph_llm.operators.graph_op.kg_golden_sql import KgGoldenSqlStore
     from hugegraph_llm.operators.graph_op.kg_nl2sql_pipeline import KgNL2SQLPipeline
+    from hugegraph_llm.operators.sql_exec.nl2sql_runner import KgNL2SQLRunner
     from hugegraph_llm.utils.hugegraph_utils import get_hg_client
 
     client = get_hg_client()
@@ -155,8 +170,8 @@ def _nl2sql_run(question, domain, candidates_text, store_golden):
     if candidates_text and candidates_text.strip():
         # deterministic path: vote on the pasted candidates, no LLM
         cands = [c.strip() for c in candidates_text.splitlines() if c.strip()]
-        return pipe.run(candidates=cands)
-    return pipe.run()  # live glm-5.3 generation (degrades gracefully)
+        return KgNL2SQLRunner(pipe, _get_executor()).run(candidates=cands)
+    return KgNL2SQLRunner(pipe, _get_executor()).run()  # live glm-5.3
 
 
 def _render_query_markdown(resp_dict) -> str:
@@ -183,6 +198,25 @@ def _render_query_markdown(resp_dict) -> str:
                 f"{'✅' if v.get('valid') else '❌'} | `{v.get('sql')}` |"
             )
         lines.append("\n**投票排名 voting**\n" + "\n".join(rows))
+    # execution block (runner output: 问->SQL->执行->答案)
+    execution = resp_dict.get("execution") or {}
+    if execution:
+        if execution.get("error"):
+            lines.append(f"\n**执行结果 execution**\n```\n❌ {execution['error']}\n```")
+        else:
+            head = " | ".join(str(c) for c in execution.get("columns", []))
+            rows_html = []
+            for r in execution.get("rows", [])[:5]:
+                rows_html.append("| " + " | ".join(str(c) for c in r) + " |")
+            table = "\n".join([f"| {head} |", "|" + "---|" * len(execution.get("columns", []))] + rows_html)
+            truncated = "（截断，仅显示前 %d 行）" % len(execution.get("rows", [])) if execution.get("truncated") else ""
+            lines.append(
+                f"\n**执行结果 execution**：{execution.get('row_count', 0)} 行 {truncated}"
+                f"\n{table or '（无数据）'}"
+            )
+        answer = resp_dict.get("answer")
+        if answer:
+            lines.append(f"\n**答案 answer**：\n{answer}")
     for s in stages:
         out = s.get("output") or {}
         if s.get("stage") == "lineage":
@@ -216,7 +250,7 @@ def _query_handler(question, mode, domain, top_k, candidates_text, store_golden)
                 top_k=int(top_k) if top_k else 5,
             )
             resp = unified_query(req)
-        resp_dict = resp.model_dump()
+        resp_dict = resp.to_dict() if hasattr(resp, "to_dict") else resp.model_dump()
         return (
             _render_query_markdown(resp_dict),
             json.dumps(resp_dict, ensure_ascii=False, indent=2),
