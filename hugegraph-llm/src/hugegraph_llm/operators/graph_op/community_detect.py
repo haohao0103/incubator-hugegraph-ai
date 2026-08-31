@@ -61,7 +61,7 @@ except ImportError:  # pragma: no cover - leidenalg presence is environment-depe
 ALGORITHM_LOUVAIN = "louvain"
 ALGORITHM_LEIDEN = "leiden"  # Preferred when leidenalg is available locally
 ALGORITHM_WCC = "wcc"
-ALGORITHM_LABEL_PROPAGATION = "label_propagation"
+ALGORITHM_LABEL_PROPAGATION = "lpa"  # Vermeer LPA Name() returns "lpa" (not "label_propagation")
 ALGORITHM_PAGERANK = "pagerank"
 ALGORITHM_CLUSTERING = "clustering_coefficient"
 ALGORITHM_DEGREE = "degree"
