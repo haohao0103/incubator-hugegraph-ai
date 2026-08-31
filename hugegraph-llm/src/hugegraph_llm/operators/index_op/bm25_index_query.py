@@ -34,7 +34,7 @@ import logging
 from typing import Any, Dict
 
 from hugegraph_llm.config import huge_settings
-from hugegraph_llm.indices.keyword_index import BM25Index
+from hugegraph_llm.indices.fulltext import BM25FullTextBackend
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class BM25IndexQuery:
         """
         self.topk = topk
         self.min_score = min_score
-        self._index = BM25Index.from_name(huge_settings.graph_name, "bm25")
+        self._index = BM25FullTextBackend.from_name(huge_settings.graph_name, "bm25")
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute BM25 search.
