@@ -47,6 +47,7 @@ from .engine.local import LocalEngine
 from .evaluation.evaluator import SQLScore, SQLEvaluator
 from .join_path.path_finder import JoinPath, JoinPathFinder
 from .linking.schema_linker import LinkedItem, SchemaLinker
+from .rerank import CrossEncoderReranker
 from .schema_graph.model import SchemaGraph
 
 
@@ -79,6 +80,7 @@ class NL2SQLPipeline:
         top_k_vector: int = 5,
         vector_weight: float = 0.9,
         keyword_extractor: Optional[Callable[[str], List[str]]] = None,
+        reranker: Optional["CrossEncoderReranker"] = None,
     ):
         """
         :param schema: Schema Graph from :class:`SchemaGraphBuilder`.
@@ -109,6 +111,7 @@ class NL2SQLPipeline:
             embedder=embedder,
             top_k_vector=top_k_vector,
             vector_weight=vector_weight,
+            reranker=reranker,
         )
         self._join_finder = JoinPathFinder(schema, engine=self._engine)
         self._permission_rules = None  # optional tenant column allow-lists

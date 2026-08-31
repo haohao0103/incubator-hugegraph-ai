@@ -56,6 +56,7 @@ from hugegraph_llm.utils.log import log
 
 from ..engine.base import GraphEngine
 from ..engine.local import LocalEngine
+from ..rerank import CrossEncoderReranker
 from ..schema_graph.model import NodeType, SchemaGraph
 from ..synonym_dict import JargonMap
 from ..vector_store import NumpySchemaVectorStore, SchemaVectorStore
@@ -152,6 +153,10 @@ class LinkedItem:
     score: float
     table: str = ""
     properties: Dict[str, object] = field(default_factory=dict)
+    # Cross-encoder score from the optional rerank stage. Kept separate from
+    # ``score`` so the retrieval score (and therefore min_score gating) keeps
+    # its original calibration.
+    rerank_score: Optional[float] = None
 
     def __str__(self) -> str:
         return f"{self.node_type}:{self.name}({self.score:.4f})"
@@ -174,9 +179,13 @@ class SchemaLinker:
         importance_weight: float = 0.15,
         use_jargon: bool = True,
         fusion: Optional[str] = None,
+        reranker: Optional["CrossEncoderReranker"] = None,
     ):
         """
         :param schema: Schema Graph built by :class:`SchemaGraphBuilder`.
+        :param reranker: optional cross-encoder reranker for two-stage
+                         retrieval (recall a larger pool, rescore, then
+                         truncate to top_k). ``None`` = single stage.
         :param alpha: PPR damping factor. Higher means relevance stays closer
                       to the seeds; lower spreads it further through the graph.
         :param engine: Graph compute engine. Defaults to an in-process
@@ -221,6 +230,7 @@ class SchemaLinker:
         self._use_jargon = use_jargon
         self._fusion = fusion  # None | "rrf" | "score"
         self._jargon = JargonMap() if use_jargon else None
+        self._reranker = reranker
         self._bm25 = None  # lazy BM25 index over schema node surfaces
         self._importance: Optional[Dict[str, float]] = None  # node_id -> [0,1]
 
@@ -302,6 +312,11 @@ class SchemaLinker:
         scores = self._ppr(seeds)
         items = self._to_items(scores, include_tables, include_columns)
         items = self._rerank(items, intent=intent)
+        # Stage 2 (two-stage retrieval): rescore a candidate_k-wide pool with
+        # the cross-encoder and only then cut to top_k. Running this before the
+        # cut is what lets items ranked below top_k by PPR win a top_k slot.
+        if self._reranker is not None:
+            return self._reranker.rerank(texts[0] if texts else "", items, top_k)
         return items[:top_k]
 
     def _fused_link(

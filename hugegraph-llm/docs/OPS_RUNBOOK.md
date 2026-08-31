@@ -28,6 +28,10 @@ PYTHONPATH=hugegraph-llm/src python -m uvicorn \
 | `NL2SQL_HG_RETRIES` | 3 | 图读取失败重试次数 |
 | `NL2SQL_DEFAULT_TOP_K` | 10 | link/schema_context 默认 top_k |
 | `NL2SQL_MIN_SCORE` | 未设 | 全局拒答阈值（低于即 out_of_kb） |
+| `NL2SQL_RERANK` | 未设 | =1 启用两阶段检索的 cross-encoder 重排（加载模型、每次查询多一次打分） |
+| `NL2SQL_RERANK_MODEL` | `BAAI/bge-reranker-base` | 重排模型（需本地已缓存，离线加载） |
+| `NL2SQL_RERANK_CANDIDATES` | 10 | 进入重排的候选池宽度（在最终 top_k 之前先扩大召回） |
+| `NL2SQL_RERANK_ALPHA` | 0.3 | PPR 分数混合权重 0.0..1.0；置空 = 纯 cross-encoder 排序（MRR 最高但 R@5 召回下降）；0.3 = 保住 R@5 基线同时 MRR/R@3 提升 |
 | `VERMEER_MASTER` | http://127.0.0.1:6688 | Vermeer 集群地址（可达则引擎自动切换） |
 
 ## 3. 日志
