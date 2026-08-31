@@ -99,6 +99,73 @@ def _ensure_edge_label(url: str, graph: str, name: str, source: str, target: str
     log(f"created edge label {name} ({source}->{target})")
 
 
+def _ensure_property_key(url: str, graph: str, name: str, data_type: str = "TEXT"):
+    """Create a property key if missing (idempotent)."""
+    schema_base = f"{url.rstrip('/')}/graphs/{graph}/schema"
+    keys = _request(f"{schema_base}/propertykeys", "GET").get("propertykeys", [])
+    if any(k.get("name") == name for k in keys):
+        return
+    _request(f"{schema_base}/propertykeys", "POST", {
+        "name": name, "data_type": data_type,
+        "cardinality": "SINGLE", "aggregate_type": "NONE",
+    })
+    log(f"created property key {name}")
+
+
+def _ensure_vertex_label(url: str, graph: str, name: str, props: list,
+                         pk: list = None, nullable: list = None):
+    """Create a vertex label if missing (idempotent).
+
+    ``pk=None`` => AUTOMATIC id strategy (used for the ``Query`` label, which
+    carries only ``schema_refs`` and no primary-key property). Optional props
+    are listed in ``nullable`` so vertices that omit them still write cleanly.
+    """
+    schema_base = f"{url.rstrip('/')}/graphs/{graph}/schema"
+    labels = _request(f"{schema_base}/vertexlabels", "GET").get("vertexlabels", [])
+    if any(l.get("name") == name for l in labels):
+        return
+    body = {"name": name, "properties": props,
+            "nullable_keys": list(nullable or [])}
+    if pk:
+        body["id_strategy"] = "PRIMARY_KEY"
+        body["primary_keys"] = pk
+    else:
+        body["id_strategy"] = "AUTOMATIC"
+    _request(f"{schema_base}/vertexlabels", "POST", body)
+    log(f"created vertex label {name}")
+
+
+def _ensure_schema(url: str, graph: str):
+    """Idempotently create the warehouse-metadata KG schema.
+
+    Mirrors the loader contract in ``nl2sql/hugegraph_schema_source.py``:
+    Table/Field/Metric (PRIMARY_KEY on ``name``) + Query (AUTOMATIC) and the
+    four edge labels. ``ingest()`` assumes these labels exist, so we bootstrap
+    them here to make the e2e reproducible on a fresh graph.
+    """
+    for pk, dt in [("name", "TEXT"), ("comment", "TEXT"), ("row_count", "LONG"),
+                   ("type", "TEXT"), ("definition", "TEXT"),
+                   ("formula", "TEXT"), ("aliases", "TEXT"),
+                   ("schema_refs", "TEXT")]:
+        _ensure_property_key(url, graph, pk, dt)
+    _ensure_vertex_label(url, graph, "Table",
+                         ["name", "comment", "row_count"], pk=["name"],
+                         nullable=["comment", "row_count"])
+    _ensure_vertex_label(url, graph, "Field",
+                         ["name", "type", "comment"], pk=["name"],
+                         nullable=["type", "comment"])
+    _ensure_vertex_label(url, graph, "Metric",
+                         ["name", "definition", "formula", "aliases"], pk=["name"],
+                         nullable=["definition", "formula", "aliases"])
+    _ensure_vertex_label(url, graph, "Query", ["schema_refs"], pk=None,
+                         nullable=["schema_refs"])
+    _ensure_edge_label(url, graph, "hasColumn", "Table", "Field")
+    _ensure_edge_label(url, graph, "computedFromField", "Metric", "Field")
+    _ensure_edge_label(url, graph, "lineage", "Table", "Table")
+    _ensure_edge_label(url, graph, "synonym", "Metric", "Metric")
+    log(f"schema ensured for graph {graph}")
+
+
 def bare_table(full: str) -> str:
     """'dw.orders' -> 'orders' (kg_rag stores bare table names)."""
     return full.split(".")[-1] if "." in full else full
@@ -114,6 +181,12 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False,
     vertices are left untouched, so deleted metadata is *not* removed.
     """
     base = f"{url.rstrip('/')}/graphs/{graph}/graph"
+
+    # Idempotent schema bootstrap: the warehouse-metadata KG needs its vertex
+    # labels (Table/Field/Metric/Query) + property keys + the four edge labels
+    # before any data can be written. ``ingest`` previously assumed they
+    # existed, which broke on a fresh graph (HTTP 400 "Undefined vertex label").
+    _ensure_schema(url, graph)
 
     if clear:
         _clear_graph(url, graph)
@@ -156,28 +229,28 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False,
     for t in tables:
         if not _new_table(bare_table(t["name"])):
             continue
-        props = {"name": bare_table(t["name"])}
-        if t.get("comment"):
-            props["comment"] = t["comment"]
+        # HG vertex labels declare non-null properties, so always send a value
+        # (empty string / 0) for every declared property.
+        props = {"name": bare_table(t["name"]),
+                 "comment": t.get("comment") or "",
+                 "row_count": int(t.get("row_count") or 0)}
         v_payload.append({"label": "Table", "properties": props})
     for c in col_records:
         fname = f"{c['table']}.{c['column']}"
         if not _new_field(fname):
             continue
-        props = {"name": fname, "type": c["data_type"]}
-        if c["comment"]:
-            props["comment"] = c["comment"]
+        props = {"name": fname,
+                 "type": c["data_type"] or "",
+                 "comment": c["comment"] or ""}
         v_payload.append({"label": "Field", "properties": props})
     for tm in terms:
         if not _new_term(tm["name"]):
             continue
-        props = {"name": tm["name"]}
-        if tm.get("comment"):
-            props["definition"] = tm["comment"]
-        if tm.get("expression"):
-            props["formula"] = tm["expression"]
-        if tm.get("aliases"):
-            props["aliases"] = ";".join(tm["aliases"])
+        aliases = tm.get("aliases") or []
+        props = {"name": tm["name"],
+                 "definition": tm.get("comment") or "",
+                 "formula": tm.get("expression") or "",
+                 "aliases": ";".join(aliases) if aliases else ""}
         v_payload.append({"label": "Metric", "properties": props})
     for q in (query_logs if not diff else []):
         tables_in_q = sorted({bare_table(x) for x in q if x in table_names})

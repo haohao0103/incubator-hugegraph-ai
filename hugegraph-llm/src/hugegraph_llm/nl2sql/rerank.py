@@ -103,6 +103,21 @@ class CrossEncoderReranker:
         return bool(self._available)
 
     # -- reranking -------------------------------------------------------
+    # -- lifecycle -------------------------------------------------------
+    def release(self) -> None:
+        """Drop the loaded cross-encoder to free ~1GB of memory.
+
+        Used by batch drivers that only need the reranker during the linking
+        phase and must reclaim RAM before a separate (LLM) phase. The model
+        reloads lazily on the next :meth:`rerank` call if one ever happens.
+        """
+        import gc
+
+        self._model = None
+        self._available = None
+        gc.collect()
+        log.info("nl2sql reranker released (%s)", self._model_name)
+
     def rerank(self, query: str, items: List[Any], top_k: int) -> List[Any]:
         """Rescore ``items`` against ``query`` and return the top ``top_k``.
 
