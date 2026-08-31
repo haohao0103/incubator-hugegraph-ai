@@ -32,10 +32,27 @@ from hugegraph_llm.utils.log import log
 SCHEMA_EXAMPLE_PROMPT = prompt.extract_graph_prompt
 
 
-def generate_extract_property_graph_prompt(text, schema=None) -> str:
+# Gleaning (multi-round completion), mirroring microsoft/graphrag's
+# CONTINUE_PROMPT / LOOP_PROMPT pair. The Y/N gate is what keeps this cheap:
+# when the first pass was already complete we spend one short call instead of
+# running a second full extraction.
+GLEANING_CONTINUE_PROMPT = (
+    "MANY vertices and edges were missed in the last extraction. "
+    "Remember to ONLY emit vertices/edges that match the given schema. "
+    "Add ONLY the ones that were missed, using the same JSON format:\n"
+)
+GLEANING_LOOP_PROMPT = (
+    "It appears some vertices or edges may have still been missed. "
+    "Answer Y if there are still vertices or edges that need to be added, "
+    "or N if there are none. Answer with a single letter: Y or N.\n"
+)
+
+
+def generate_extract_property_graph_prompt(text, schema=None, extra_instruction: str = "") -> str:
+    hint = f"\n{extra_instruction}\n" if extra_instruction else ""
     return f"""---
 Following the full instructions above, try to extract the following text from the given schema, output the JSON result:
-# Input
+{hint}# Input
 ## Text:
 {text}
 ## Graph schema
@@ -48,6 +65,62 @@ def split_text(text: str) -> List[str]:
     chunk_splitter = ChunkSplitter(split_type="paragraph", language="zh")
     chunks = chunk_splitter.split(text)
     return chunks
+
+
+def balance_curly_braces(json_string: str) -> str:
+    """Append the missing closing brackets, ignoring any inside string values.
+
+    A truncated LLM response usually just loses its trailing ``}`` (or ``]``).
+    Repairing that is cheap; losing the whole chunk is not. Approach mirrors
+    neo4j-graphrag's helper, extended to square brackets so truncated arrays
+    are recovered too.
+    """
+    stack: List[str] = []
+    fixed: List[str] = []
+    in_string = False
+    escape = False
+
+    for char in json_string:
+        if char == '"' and not escape:
+            in_string = not in_string
+        elif char == "\\" and in_string:
+            escape = not escape
+            fixed.append(char)
+            continue
+        else:
+            escape = False
+
+        if not in_string:
+            if char in "{[":
+                stack.append(char)
+                fixed.append(char)
+            elif char in "}]":
+                opener = "{" if char == "}" else "["
+                if stack and stack[-1] == opener:
+                    stack.pop()
+                    fixed.append(char)
+                else:
+                    continue  # unmatched closer — drop it
+            else:
+                fixed.append(char)
+        else:
+            fixed.append(char)
+
+    while stack:
+        fixed.append("}" if stack.pop() == "{" else "]")
+    return "".join(fixed)
+
+
+def _repair_json(raw_json: str) -> str:
+    """Best-effort repair of the JSON defects LLMs actually produce.
+
+    Deliberately dependency-free: neo4j-graphrag leans on the third-party
+    ``json_repair`` package, which this module does not carry. Covers the two
+    failures that dominate in practice — trailing commas and a tail cut off by
+    the output token limit.
+    """
+    text = re.sub(r",\s*([}\]])", r"\1", raw_json)  # trailing commas
+    return balance_curly_braces(text)               # truncated tail
 
 
 def filter_item(schema, items) -> List[Dict[str, Any]]:
@@ -83,9 +156,20 @@ class PropertyGraphExtract:
     # enough cross-entity context for the LLM to identify relationships (edges).
     MAX_CHUNK_CHARS = 500
 
-    def __init__(self, llm: BaseLLM, example_prompt: str = prompt.extract_graph_prompt) -> None:
+    def __init__(
+        self,
+        llm: BaseLLM,
+        example_prompt: str = prompt.extract_graph_prompt,
+        gleaning: bool = False,
+        max_gleanings: int = 3,
+    ) -> None:
         self.llm = llm
         self.example_prompt = example_prompt
+        # Gleaning: after the first pass per sub-chunk, ask the LLM (Y/N) whether
+        # anything was missed and re-extract with the CONTINUE hint if so.
+        # Default OFF — behaviour is unchanged unless explicitly enabled.
+        self.gleaning = gleaning
+        self.max_gleanings = max_gleanings
         self.NECESSARY_ITEM_KEYS = {"label", "type", "properties"}  # pylint: disable=invalid-name
 
     @staticmethod
@@ -135,6 +219,24 @@ class PropertyGraphExtract:
                 all_parsed_vertices.extend(parsed["vertices"])
                 all_parsed_edges.extend(parsed["edges"])
                 discarded_items.extend(parsed.get("discarded", []))
+
+                if self.gleaning:
+                    # Only spend extra LLM calls when the model says something is
+                    # still missing (Y/N gate), and bail out as soon as a round
+                    # returns nothing new.
+                    for _ in range(self.max_gleanings):
+                        if not self._should_glean(schema, sub_chunk, all_parsed_vertices,
+                                                  all_parsed_edges):
+                            break
+                        total_ll_calls += 1
+                        more = self.extract_property_graph_by_llm(
+                            schema, sub_chunk, extra_instruction=GLEANING_CONTINUE_PROMPT)
+                        parsed_more = self._parse_extracted_graph(schema, more)
+                        if not parsed_more["vertices"] and not parsed_more["edges"]:
+                            break
+                        all_parsed_vertices.extend(parsed_more["vertices"])
+                        all_parsed_edges.extend(parsed_more["edges"])
+                        discarded_items.extend(parsed_more.get("discarded", []))
 
         # Build schema maps
         vertex_label_map = {v["name"]: v for v in schema["vertexlabels"]}
@@ -192,7 +294,12 @@ class PropertyGraphExtract:
         json_str = json_match.group(1).strip()
 
         try:
-            property_graph = json.loads(json_str)
+            try:
+                property_graph = json.loads(json_str)
+            except json.JSONDecodeError:
+                # Best-effort repair before discarding the whole chunk.
+                property_graph = json.loads(_repair_json(json_str))
+                log.warning("Recovered malformed extraction JSON via repair pass.")
             if isinstance(property_graph, list):
                 vertices = [i for i in property_graph if isinstance(i, dict) and i.get("type") == "vertex"]
                 edges = [i for i in property_graph if isinstance(i, dict) and i.get("type") == "edge"]
@@ -268,11 +375,36 @@ class PropertyGraphExtract:
                     # Allow matching by label name:value (e.g. "company:摩拜单车" keyed by Chinese label)
                     vertex_id_map.setdefault((label, f"{label}:{pk_val}"), vid)
 
-    def extract_property_graph_by_llm(self, schema, chunk):
-        prompt = generate_extract_property_graph_prompt(chunk, schema)
+    def extract_property_graph_by_llm(self, schema, chunk, extra_instruction: str = ""):
+        prompt = generate_extract_property_graph_prompt(chunk, schema, extra_instruction)
         if self.example_prompt is not None:
             prompt = self.example_prompt + prompt
         return self.llm.generate(prompt=prompt)
+
+    def _should_glean(self, schema, chunk, vertices, edges) -> bool:
+        """Ask the LLM whether the last pass still missed anything (Y/N gate).
+
+        Mirrors microsoft/graphrag's LOOP_PROMPT. This is deliberately a tiny
+        prompt so the "already complete" case costs one short call instead of a
+        second full extraction. Any non-Y answer (or any failure) stops the loop.
+        """
+        already = {
+            "vertices": [v.get("id") or v.get("label") for v in vertices[-50:]],
+            "edges": [e.get("label") for e in edges[-50:]],
+        }
+        prompt = (
+            f"{self.example_prompt or ''}\n"
+            f"# Input\n## Text:\n{chunk}\n## Graph schema\n{schema}\n\n"
+            f"## Already extracted (last {len(already['vertices'])} vertices / "
+            f"{len(already['edges'])} edges)\n{already}\n\n"
+            f"# Question\n{GLEANING_LOOP_PROMPT}"
+        )
+        try:
+            answer = self.llm.generate(prompt=prompt)
+        except Exception as exc:  # noqa: BLE001 -- never fail extraction on the gate
+            log.warning("gleaning gate failed, stopping loop: %s", exc)
+            return False
+        return str(answer).strip().upper().startswith("Y")
 
     @staticmethod
     def _primary_key_id(vertex_label, properties):

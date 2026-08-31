@@ -387,6 +387,24 @@ JSON:"""
                 if prop not in {p.name for p in property_keys}:
                     property_keys.append(PropertyKeyDef(name=prop, data_type="text", cardinality="single"))
 
+        # Semantic-enrichment slots (see docs/EXTRACTION_SOURCE_COMPARISON.md):
+        # `description` = LLM free-text entity summary; `strength` = LLM-scored
+        # relationship weight. The generic backfill above types every edge
+        # property as text, so strength is (re)declared numeric here — otherwise
+        # weighted PPR / relation ranking would have a string to work with.
+        existing_pks = {p.name for p in property_keys}
+        if any("description" in vl.properties for vl in vertex_labels) \
+                and "description" not in existing_pks:
+            property_keys.append(
+                PropertyKeyDef(name="description", data_type="text", cardinality="single"))
+        if any("strength" in el.properties for el in edge_labels):
+            strength_pk = next((p for p in property_keys if p.name == "strength"), None)
+            if strength_pk is None:
+                property_keys.append(
+                    PropertyKeyDef(name="strength", data_type="int", cardinality="single"))
+            elif strength_pk.data_type.lower() in ("text", "string"):
+                strength_pk.data_type = "int"
+
         return SchemaDraft(
             property_keys=property_keys,
             vertex_labels=vertex_labels,
@@ -431,6 +449,15 @@ JSON:"""
             if not primary_keys and properties:
                 name_prop = next((p for p in properties if p.lower() == "name"), properties[0])
                 primary_keys = [name_prop]
+            # Reserve a `description` slot: an LLM-generated free-text summary of
+            # the entity. Auto-added and nullable, so community reports and
+            # entity-level semantic search have text to work with instead of
+            # only structured attributes. Schemas that do not carry it simply
+            # lose the field at extraction time (filter_item drops unknown props).
+            if "description" not in properties:
+                properties = list(properties) + ["description"]
+            if "description" not in nullable_keys:
+                nullable_keys = list(nullable_keys) + ["description"]
             normalized.append(VertexLabelDef(
                 name=name,
                 properties=properties,
@@ -453,6 +480,13 @@ JSON:"""
             target_label = str(item.get("target_label", item.get("targetLabel", ""))).strip()
             properties = self._as_string_list(item.get("properties", []))
             nullable_keys = self._as_string_list(item.get("nullable_keys", item.get("nullableKeys", [])))
+            # Reserve a `strength` slot: an LLM-scored relationship weight so the
+            # graph can be ranked/traversed as a weighted graph instead of an
+            # unweighted one. Nullable — schemas without it degrade gracefully.
+            if "strength" not in properties:
+                properties = list(properties) + ["strength"]
+            if "strength" not in nullable_keys:
+                nullable_keys = list(nullable_keys) + ["strength"]
             normalized.append(EdgeLabelDef(
                 name=name,
                 source_label=source_label,
