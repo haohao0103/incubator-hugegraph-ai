@@ -127,22 +127,20 @@ def ingest(meta: dict, url: str, graph: str, clear: bool = False) -> dict:
     v_payload = []
     for t in tables:
         props = {"name": bare_table(t["name"])}
-        if t.get("comment"):
-            props["comment"] = t["comment"]
+        # 非空属性统一兜底：comment/row_count（kg_rag schema 均为 non-null）
+        props["comment"] = t.get("comment") or ""
+        props["row_count"] = t.get("row_count") or 0
         v_payload.append({"label": "Table", "properties": props})
     for c in col_records:
         props = {"name": f"{c['table']}.{c['column']}", "type": c["data_type"]}
-        if c["comment"]:
-            props["comment"] = c["comment"]
+        props["comment"] = c.get("comment") or ""
         v_payload.append({"label": "Field", "properties": props})
     for tm in terms:
         props = {"name": tm["name"]}
-        if tm.get("comment"):
-            props["definition"] = tm["comment"]
-        if tm.get("expression"):
-            props["formula"] = tm["expression"]
-        if tm.get("aliases"):
-            props["aliases"] = ";".join(tm["aliases"])
+        # 非空属性统一兜底：definition/formula/aliases
+        props["definition"] = tm.get("comment") or ""
+        props["formula"] = tm.get("expression") or ""
+        props["aliases"] = (";".join(tm["aliases"]) if tm.get("aliases") else "")
         v_payload.append({"label": "Metric", "properties": props})
     for q in query_logs:
         tables_in_q = sorted({bare_table(x) for x in q if x in table_names})
