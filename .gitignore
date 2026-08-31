@@ -236,3 +236,6 @@ hugegraph-llm/benchmark_data/*
 # Benchmark intermediate artifacts (LightRAG workspace, etc.)
 **/poc_results/benchmark_cmp/lightrag_workspace/
 **/poc_results/benchmark_cmp/*.log
+
+# NL2SQL eval artifacts (logs, result JSONs, runtime env with real API keys)
+_out/

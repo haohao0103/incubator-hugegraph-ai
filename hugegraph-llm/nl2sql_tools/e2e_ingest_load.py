@@ -11,7 +11,7 @@ import time
 sys.path.insert(0, os.path.dirname(__file__))
 from ingest_metadata_to_hg import ingest  # noqa: E402
 from p2_corpus import (  # noqa: E402
-    build_warehouse_schema, WAREHOUSE_QUESTIONS,
+    build_warehouse_schema, CORRECTIONS, WAREHOUSE_QUESTIONS,
 )
 
 from hugegraph_llm.nl2sql.hugegraph_schema_source import (  # noqa: E402
@@ -32,6 +32,7 @@ def log(msg):
 def corpus_to_metadata(schema):
     """Dump the p2 corpus SchemaGraph back into SchemaMetadata JSON."""
     tables, columns, terms, term_bindings = [], [], [], []
+    calibers = []
     for n in schema.nodes.values():
         t = n.node_type.value
         if t == "table":
@@ -53,6 +54,14 @@ def corpus_to_metadata(schema):
                 "comment": n.properties.get("comment", ""),
                 "expression": n.properties.get("expression", ""),
             })
+            # 术语口径：随 term 一起 dump，ingest 侧写成 Caliber 顶点 + hasCaliber 边
+            for c in n.properties.get("calibers", []) or []:
+                calibers.append({
+                    "name": c.get("name", ""),
+                    "metric": n.name,
+                    "dimension": c.get("dimension", ""),
+                    "description": c.get("description", ""),
+                })
     lineage = []
     for e in schema.edges:
         if e.edge_type.value == "term_maps":
@@ -66,6 +75,8 @@ def corpus_to_metadata(schema):
     return {"tables": tables, "columns": columns, "terms": terms,
             "term_bindings": term_bindings, "lineage": lineage,
             "synonyms": synonyms if synonyms else [],
+            "calibers": [c for c in calibers if c.get("name")],
+            "corrections": CORRECTIONS,
             "query_logs": [["dw.orders", "dw.payments"], ["dw.orders", "dw.users"]]}
 
 

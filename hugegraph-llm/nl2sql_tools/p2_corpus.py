@@ -152,6 +152,55 @@ TERMS = [
     ("结算", [], "结算", ("payments", "settlement_amount")),
 ]
 
+# (term_name, caliber_name, dimension, description)
+# 口径 = 业务指标的统一计算约束（语义层核心价值）。每个 term 可挂 0..n 个口径；
+# 口径会随术语进 ingest（Caliber 顶点 + hasCaliber 边）并在 prompt 组装时注入。
+CALIBERS = [
+    ("成交额", "GMV口径", "status",
+     "成交额仅统计订单状态为 paid（已支付）的订单金额之和；退款/取消订单不计入"),
+    ("支付总额", "实付口径", "status",
+     "支付总额 = 用户实际支付成功的金额合计（pay_amount），不含退款金额"),
+    ("客单价", "客单价口径", "grain",
+     "客单价 = 成交总额 / 订单数，分母为订单数而非用户数"),
+    ("营收", "营收口径", "status",
+     "营收 = 已支付订单的成交额合计，与 GMV 口径一致（status='paid'）"),
+]
+
+
+# L3 纠错历史（CorrectionDecision）。applies_to 形如 "term:X"/"field:Y"/"caliber:Z"，
+# 挂到语义边上；召回时沿 TERM_MAPS/BELONGS_TO/synonym/caliber 传播，非种子节点上的
+# 纠错也能被命中（见 correction_propagation.py）。三条分别覆盖：
+#   corr_gmv_status    挂 term 成交额（词法种子直接命中）
+#   corr_gmv_caliber   挂 caliber GMV口径（非种子，需沿图传播召回）
+#   corr_pay_amount    挂 field payments.pay_amount（column 种子，TERM_MAPS 反查）
+CORRECTIONS = [
+    {
+        "id": "corr_gmv_status",
+        "question": "订单的成交总额",
+        "wrong_sql": "SELECT SUM(gmv) AS total_gmv FROM orders;",
+        "correct_sql": "SELECT SUM(gmv) AS total_gmv FROM orders WHERE order_status = 'paid';",
+        "correction_reason": "成交额仅统计 status='paid' 的订单（GMV口径）；未加过滤会把未支付/退款订单计入。",
+        "applies_to": ["term:成交额"],
+    },
+    {
+        "id": "corr_gmv_caliber",
+        "question": "买卖盘子有多大",
+        "wrong_sql": "SELECT SUM(gmv) AS total FROM orders;",
+        "correct_sql": "SELECT SUM(gmv) AS total FROM orders WHERE order_status = 'paid';",
+        "correction_reason": "GMV口径同样约束挂该口径的汇总指标（ads_daily_sales.gmv），聚合时需按口径过滤。",
+        "applies_to": ["caliber:GMV口径"],
+    },
+    {
+        "id": "corr_pay_amount",
+        "question": "支付金额是多少",
+        "wrong_sql": "SELECT pay_amount FROM payments;",
+        "correct_sql": "SELECT SUM(pay_amount) AS total_payment FROM payments;",
+        "correction_reason": "问总额时 pay_amount 需 SUM 聚合；实付口径只统计支付成功的金额。",
+        "applies_to": ["field:payments.pay_amount"],
+    },
+]
+
+
 # (child_col(table,col), parent_col(table,col))
 FOREIGN_KEYS = [
     (("orders", "user_id"), ("users", "user_id")),
@@ -191,8 +240,14 @@ def build_warehouse_schema() -> SchemaGraph:
     for tname, aliases, definition, bind in TERMS:
         # Term has no `definition` attr; the linker reads `definition or comment`,
         # so store the business definition in `comment`.
+        cals = [
+            {"name": cname, "dimension": dim, "description": desc}
+            for t_, cname, dim, desc in CALIBERS
+            if t_ == tname
+        ]
         g.add_node(Term(name=tname, aliases=list(aliases),
-                        comment=definition).to_node())
+                        comment=definition,
+                        properties={"calibers": cals} if cals else {}).to_node())
 
     def add(edge):
         g.add_edge(edge)

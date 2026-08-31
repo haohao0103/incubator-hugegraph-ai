@@ -29,6 +29,7 @@ from hugegraph_llm.nl2sql.hugegraph_schema_source import (  # noqa: E402
 )
 from hugegraph_llm.nl2sql.rerank import CrossEncoderReranker  # noqa: E402
 from hugegraph_llm.nl2sql.linking.schema_linker import SchemaLinker  # noqa: E402
+from hugegraph_llm.nl2sql.correction_propagation import fetch_corrections  # noqa: E402
 from hugegraph_llm.nl2sql.sql_ops import SqlValidator  # noqa: E402
 from hugegraph_llm.models.llms.init_llm import LLMs  # noqa: E402
 from hugegraph_llm.config import llm_settings  # noqa: E402
@@ -96,7 +97,7 @@ def node_display(schema, node_id):
     return node_id
 
 
-def build_prompt(question, items, schema):
+def build_prompt(question, items, schema, corrections=None, corr_stats=None):
     lines = ["你是一个数仓 Text2SQL 助手。只依据下面召回的表和字段生成 SQL。",
              f"问题：{question}", "召回的 schema（表/字段）："]
     seen = set()
@@ -105,6 +106,30 @@ def build_prompt(question, items, schema):
         if disp not in seen:
             seen.add(disp)
             lines.append(f"  - {disp}")
+
+    # 口径约束：从召回列反查绑定术语（TERM_MAPS 边），注入该术语的 caliber。
+    # 语义层差异化能力——LLM 只凭字段注释不知道「GMV 只统计 paid」，口径给了它。
+    item_ids = {it.node_id for it in items}
+    calibers = []
+    for e in schema.edges:
+        if e.edge_type.value != "term_maps" or e.target not in item_ids:
+            continue
+        t = schema.nodes.get(e.source)
+        if t:
+            calibers.extend(t.properties.get("calibers", []) or [])
+    if calibers:
+        lines.append("【口径约束（必须严格遵守）】")
+        for c in calibers:
+            lines.append(f"  - {c.get('name', '')}：{c.get('description', '')}")
+
+    # L3 历史纠错：沿语义边传播召回（同义词/指标链/口径可达也召回），避免重犯。
+    if corrections:
+        lines.append("【历史纠错（重要，避免重犯）】")
+        for c in corrections:
+            lines.append(f"  - 曾被纠正：错误SQL={c.get('wrong_sql', '')}")
+            lines.append(f"    正确SQL={c.get('correct_sql', '')}")
+            lines.append(f"    原因={c.get('correction_reason', '')}")
+
     lines.append("要求：仅使用上述字段；输出 SQL 本身，不要解释、不要 markdown 代码块。")
     return "\n".join(lines)
 
@@ -169,11 +194,14 @@ def main():
     rer.release()
 
     # 4) PHASE B — real MiMo SQL generation + validation (model released).
+    #    L3 纠错召回：对每个问题的 seed 沿语义边传播，把可达纠错注入 prompt。
     sql_valid = 0
     per_q = []
     for qi, (q, items, rank) in enumerate(linked, 1):
         qq = q["q"]
-        prompt = build_prompt(qq, items, schema)
+        corrs, cstats = fetch_corrections(schema, set(linker.seed_nodes(qq)))
+        prompt = build_prompt(qq, items, schema, corrections=corrs,
+                              corr_stats=cstats)
         try:
             gen = llm.generate(prompt=prompt)
         except Exception as e:  # noqa: BLE001
@@ -186,9 +214,13 @@ def main():
             "q": qq, "category": q["category"], "rank": rank,
             "gold": q.get("gold"), "sql": gen, "valid": rep.get("valid"),
             "linked": [core_of(i.node_id) for i in items[:5]],
+            "n_corrections": len(corrs),
+            "corr_propagated": len(cstats.get("propagated", [])),
         })
         log(f"[{qi:2d}/{len(WAREHOUSE_QUESTIONS)}][sql ][{q['category']:<8}] "
-            f"{qq:<14} rank={rank} valid={rep.get('valid')} sql={gen[:70]}")
+            f"{qq:<14} rank={rank} valid={rep.get('valid')} "
+            f"corr={len(corrs)}(prop {len(cstats.get('propagated', []))}) "
+            f"sql={gen[:70]}")
 
     summary = {
         "n": n,

@@ -399,6 +399,24 @@ class SchemaLinker:
         return self.link(question, top_k, include_tables=True,
                          include_columns=False)
 
+    def seed_nodes(self, question: str) -> List[str]:
+        """The seed node ids lexical/semantic recall produced for ``question``.
+
+        Public wrapper over the seeding internals, so downstream stages (e.g.
+        L3 correction propagation) can start from exactly the nodes a question
+        hits — terms included — without duplicating the seeding logic.
+        """
+        seeds: Dict[str, float] = {}
+        for t in (str(question),):
+            if not t or not t.strip():
+                continue
+            for nid, w in self._seed_nodes(t).items():
+                seeds[nid] = max(seeds.get(nid, 0.0), w)
+        if self._embedder is not None:
+            for nid, w in self._vector_seeds(str(question)).items():
+                seeds[nid] = max(seeds.get(nid, 0.0), w)
+        return list(seeds.keys())
+
     # ---- internals: lexical seeds (P0) ----
 
     def _seed_nodes(self, question: str) -> Dict[str, float]:

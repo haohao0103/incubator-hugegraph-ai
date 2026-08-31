@@ -28,8 +28,14 @@ The HugeGraph KG model we map from (verified against the live ``kg_rag`` graph):
     vertex   Field   {name="table.column", comment, type}-> SchemaGraph Column
     vertex   Metric  {name, formula, definition}         -> SchemaGraph Term
     vertex   Query   {schema_refs="t1;t2;col.x;..."}     -> co-occurrence mining
+    vertex   Caliber {name, dimension, description}      -> Term.properties["calibers"]
+    vertex   CorrectionDecision {name, question, wrong_sql, correct_sql,
+        correction_reason}                                -> node.properties["corrections"]
     edge     hasColumn          Table   -> Field         (structural ownership)
     edge     computedFromField  Metric  -> Field         (term -> column binding)
+    edge     hasCaliber         Metric  -> Caliber       (term -> caliber binding)
+    edge     correctionAppliesTo*  CorrectionDecision -> Metric|Field|Caliber
+        (L3 correction provenance; folded into node.properties["corrections"])
     edge     computedFrom       Metric  -> Table         (metric source table)
 
 Foreign keys are usually *not* declared in a warehouse catalog, so — unless the
@@ -134,8 +140,14 @@ class HugeGraphSchemaMapping:
     field_label: str = "Field"
     metric_label: str = "Metric"
     query_label: str = "Query"
+    caliber_label: str = "Caliber"
+    correction_label: str = "CorrectionDecision"
     has_column_edge: str = "hasColumn"
     computed_from_field_edge: str = "computedFromField"
+    has_caliber_edge: str = "hasCaliber"
+    correction_to_term_edge: str = "correctionAppliesToTerm"
+    correction_to_field_edge: str = "correctionAppliesToField"
+    correction_to_caliber_edge: str = "correctionAppliesToCaliber"
     lineage_edge: str = "lineage"          # Table -> Table upstream->downstream
     synonym_edge: str = "synonym"          # Metric <-> Metric same-meaning terms
 
@@ -150,6 +162,14 @@ class HugeGraphSchemaMapping:
     metric_definition_prop: str = "definition"
     metric_aliases_prop: str = "aliases"
     query_refs_prop: str = "schema_refs"
+    caliber_name_prop: str = "name"
+    caliber_dimension_prop: str = "dimension"
+    caliber_description_prop: str = "description"
+    correction_name_prop: str = "name"
+    correction_question_prop: str = "question"
+    correction_wrong_sql_prop: str = "wrong_sql"
+    correction_correct_sql_prop: str = "correct_sql"
+    correction_reason_prop: str = "correction_reason"
 
 
 def build_schema_from_hugegraph(
@@ -177,15 +197,25 @@ def build_schema_from_hugegraph(
     field_vs = _collect(base, "vertices", m.field_label, limit, timeout)
     metric_vs = _collect(base, "vertices", m.metric_label, limit, timeout)
     query_vs = _collect(base, "vertices", m.query_label, limit, timeout)
+    caliber_vs = _collect(base, "vertices", m.caliber_label, limit, timeout)
+    correction_vs = _collect(base, "vertices", m.correction_label, limit, timeout)
     cf_edges = _collect(base, "edges", m.computed_from_field_edge, limit, timeout)
+    hc_edges = _collect(base, "edges", m.has_caliber_edge, limit, timeout)
     lg_edges = _collect(base, "edges", m.lineage_edge, limit, timeout)
     syn_edges = _collect(base, "edges", m.synonym_edge, limit, timeout)
+    corr_edges = (
+        _collect(base, "edges", m.correction_to_term_edge, limit, timeout)
+        + _collect(base, "edges", m.correction_to_field_edge, limit, timeout)
+        + _collect(base, "edges", m.correction_to_caliber_edge, limit, timeout)
+    )
 
     log.info(
         "hg schema pull %s/%s: %s tables, %s fields, %s metrics, %s queries, "
-        "%s term-edges, %s lineage, %s synonym",
+        "%s calibers, %s corrections, %s term-edges, %s caliber-edges, "
+        "%s lineage, %s synonym, %s correction-edges",
         url, graph, len(table_vs), len(field_vs), len(metric_vs), len(query_vs),
-        len(cf_edges), len(lg_edges), len(syn_edges),
+        len(caliber_vs), len(correction_vs), len(cf_edges), len(hc_edges),
+        len(lg_edges), len(syn_edges), len(corr_edges),
     )
 
     b = SchemaGraphBuilder()
@@ -263,6 +293,33 @@ def build_schema_from_hugegraph(
             bound += 1
     log.info("hg schema: bound %s term-column pairs", bound)
 
+    # ---- Calibers: Metric -> Caliber edges -> Term.properties["calibers"] ----
+    # 口径是语义层核心：同一指标在不同维度/约束下口径不同（如 GMV 仅统计 paid）。
+    # 挂到 term.properties["calibers"] 后，linker/prompt 组装可注入「口径约束」。
+    caliber_by_id: Dict[str, dict] = {}
+    for v in caliber_vs:
+        props = v.get("properties", {}) or {}
+        cname = props.get(m.caliber_name_prop)
+        if not cname:
+            continue
+        caliber_by_id[v.get("id")] = {
+            "name": cname,
+            "dimension": props.get(m.caliber_dimension_prop, "") or "",
+            "description": props.get(m.caliber_description_prop, "") or "",
+        }
+    term_calibers: Dict[str, list] = {}
+    for e in hc_edges:
+        mname = metric_by_id.get(e.get("outV"))
+        cal = caliber_by_id.get(e.get("inV"))
+        if mname and cal:
+            term_calibers.setdefault(mname, []).append(cal)
+    if term_calibers:
+        for node in b._terms.values():
+            cals = term_calibers.get(node.name)
+            if cals:
+                node.properties["calibers"] = cals
+        log.info("hg schema: attached calibers to %s terms", len(term_calibers))
+
     # ---- Co-occurrence from historical queries (CO_OCCUR edges) ----
     query_sets: List[List[str]] = []
     for v in query_vs:
@@ -284,7 +341,102 @@ def build_schema_from_hugegraph(
 
     schema = b.build()
     _annotate_synonyms(schema, syn_edges, metric_by_id)
+    _annotate_corrections(schema, correction_vs, corr_edges, metric_by_id,
+                          field_by_id, caliber_by_id, hc_edges, m)
     return schema
+
+
+def _annotate_corrections(
+    schema: SchemaGraph,
+    correction_vs: List[dict],
+    corr_edges: List[dict],
+    metric_by_id: Dict[str, str],
+    field_by_id: Dict[str, tuple],
+    caliber_by_id: Dict[str, dict],
+    hc_edges: List[dict],
+    m: HugeGraphSchemaMapping,
+) -> None:
+    """Fold CorrectionDecision vertices + edges into node.properties["corrections"].
+
+    L3 纠错决策（带 provenance）：纠错内容在 CorrectionDecision 顶点，边
+    (correctionAppliesTo*) 定位它挂到哪个术语/字段/口径。折叠到目标节点属性后，
+    检索侧沿语义边传播时，可达节点的纠错一起召回（同义词/指标链/口径可达也召回）。
+    口径端点先经 hasCaliber 边反查归到所属术语，再挂到该术语节点。
+
+    挂载结构: node.properties["corrections"] = [ {id, question, wrong_sql,
+    correct_sql, correction_reason}, ... ] —— 与 PoC fetch_corrections 的
+    返回结构一致，按 id 去重由检索侧负责。
+    """
+    if not corr_edges:
+        return
+    # CorrectionDecision 顶点 -> 纠错内容
+    corr_by_id: Dict[str, dict] = {}
+    for v in correction_vs:
+        p = v.get("properties", {}) or {}
+        cid = p.get(m.correction_name_prop)
+        if not cid:
+            continue
+        corr_by_id[v.get("id")] = {
+            "id": cid,
+            "question": p.get(m.correction_question_prop, "") or "",
+            "wrong_sql": p.get(m.correction_wrong_sql_prop, "") or "",
+            "correct_sql": p.get(m.correction_correct_sql_prop, "") or "",
+            "correction_reason": p.get(m.correction_reason_prop, "") or "",
+        }
+    if not corr_by_id:
+        return
+    # 口径 -> 所属术语（hasCaliber: Metric -> Caliber 的反向）
+    caliber_to_term: Dict[str, str] = {}
+    for e in hc_edges:
+        mname = metric_by_id.get(e.get("outV"))
+        cname = next((c.get("name") for cid_, c in caliber_by_id.items()
+                      if cid_ == e.get("inV")), None)
+        if mname and cname:
+            caliber_to_term[cname] = mname
+    attached = 0
+    for e in corr_edges:
+        corr = corr_by_id.get(e.get("outV"))
+        if not corr:
+            continue
+        target_id = _correction_target_node_id(
+            e, metric_by_id, field_by_id, caliber_by_id, caliber_to_term)
+        if not target_id or target_id not in schema.nodes:
+            continue
+        schema.nodes[target_id].properties.setdefault(
+            "corrections", []).append(corr)
+        attached += 1
+    log.info("hg schema: attached %s corrections to schema nodes", attached)
+
+
+def _correction_target_node_id(
+    e: dict,
+    metric_by_id: Dict[str, str],
+    field_by_id: Dict[str, tuple],
+    caliber_by_id: Dict[str, dict],
+    caliber_to_term: Dict[str, str],
+) -> Optional[str]:
+    """Map a correction edge to the SchemaGraph node_id it attaches to.
+
+    Edge labels: correctionAppliesToTerm (-> Metric), correctionAppliesToField
+    (-> Field), correctionAppliesToCaliber (-> Caliber, re-mapped to the term
+    that owns the caliber via hasCaliber).
+    """
+    label = e.get("label", "")
+    inV = e.get("inV")
+    if label == "correctionAppliesToTerm":
+        mname = metric_by_id.get(inV)
+        return f"term:{mname}" if mname else None
+    if label == "correctionAppliesToField":
+        finfo = field_by_id.get(inV)
+        if not finfo:
+            return None
+        return f"column:{finfo[2]}"
+    if label == "correctionAppliesToCaliber":
+        cname = next((c.get("name") for cid_, c in caliber_by_id.items()
+                      if cid_ == inV), None)
+        if cname and cname in caliber_to_term:
+            return f"term:{caliber_to_term[cname]}"
+    return None
 
 
 def _annotate_synonyms(
