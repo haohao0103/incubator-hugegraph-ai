@@ -172,7 +172,7 @@ codeium-instructions.md
 
 # Environments
 .env
-.env.bak
+.env.bak*
 .venv
 .vscode
 .cursor
@@ -234,3 +234,11 @@ hugegraph-llm/benchmark_data/*
 **/poc_results/benchmark_cmp/lightrag_workspace/
 **/poc_results/benchmark_cmp/*.log
 _out/nl2sql_demo/schema_cache.json
+
+# Internal tooling data (WorkBuddy) — never commit
+.workbuddy/
+
+# Generated runtime artifacts under _out (keep tracked source scripts)
+_out/**/*.pid
+_out/**/logs/
+_out/sql_miner/meta.json
