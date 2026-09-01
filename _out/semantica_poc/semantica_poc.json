@@ -2,13 +2,13 @@
   "questions": {
     "Q1_first": {
       "question": "上个月各城市的GMV是多少？",
-      "sql": "-- [占位] 未配置 MiMo key；请注入 OPENAI_CHAT_API_KEY 后重跑以生成真实 SQL",
+      "sql": "SELECT users.city AS city, SUM(orders.amount) AS gmv FROM orders JOIN users ON orders.user_id = users.id WHERE orders.status = 'paid' AND orders.created_at >= DATE_FORMAT(CURRENT_DATE - INTERVAL 1 MONTH, '%Y-%m-01') AND orders.created_at < DATE_FORMAT(CURRENT_DATE, '%Y-%m-01') GROUP BY users.city",
       "matched_terms": [
-        "term_aov",
         "metric_gmv",
         "term_gmv_en",
-        "term_gmv",
-        "term_paid_orders"
+        "term_aov",
+        "term_paid_orders",
+        "term_gmv"
       ],
       "tables": [
         "tbl_order_items",
@@ -50,7 +50,7 @@
     },
     "Q1_after_correction": {
       "question": "上个月各城市的GMV是多少？",
-      "sql": "-- [占位] 未配置 MiMo key；请注入 OPENAI_CHAT_API_KEY 后重跑以生成真实 SQL",
+      "sql": "SELECT u.city, SUM(o.amount) AS gmv FROM orders o JOIN users u ON o.user_id = u.id WHERE o.status = 'paid' AND o.created_at >= date_trunc('month', now()) - interval '1 month' AND o.created_at < date_trunc('month', now()) GROUP BY u.city ORDER BY gmv DESC",
       "retrieved_corrections": 2,
       "correction_stats": {
         "seed": [
@@ -81,11 +81,11 @@
     },
     "Q2": {
       "question": "客单价最高的品类有哪些？",
-      "sql": "-- [占位] 未配置 MiMo key；请注入 OPENAI_CHAT_API_KEY 后重跑以生成真实 SQL",
+      "sql": "SELECT \n    products.category AS category,\n    SUM(DISTINCT orders.amount) / COUNT(DISTINCT orders.id) AS aov\nFROM orders\nJOIN order_items ON order_items.order_id = orders.id\nJOIN products ON order_items.product_id = products.id\nWHERE orders.status = 'paid'\nGROUP BY products.category\nORDER BY aov DESC",
       "matched_terms": [
         "term_paid_orders",
-        "term_aov",
         "term_gmv",
+        "term_aov",
         "metric_gmv"
       ],
       "tables": [
@@ -128,12 +128,12 @@
     }
   },
   "correction": {
-    "id": "corr_47d6fe35",
+    "id": "corr_83e07903",
     "reason": "GMV 仅统计 status='paid' 的订单（口径 cal:gmv.paid）；city 在 users 表，必须 JOIN users；时间用 created_at 过滤上月",
     "correct_sql": "SELECT u.city, SUM(o.amount) AS gmv FROM orders o JOIN users u ON o.user_id = u.id WHERE o.status = 'paid' AND o.created_at >= date_trunc('month', now()) - interval '1 month' GROUP BY u.city ORDER BY gmv DESC"
   },
   "correction_propagation": {
-    "id": "corr_5f02758d",
+    "id": "corr_5795705f",
     "applies_to": "cal_gmv_paid"
   }
 }

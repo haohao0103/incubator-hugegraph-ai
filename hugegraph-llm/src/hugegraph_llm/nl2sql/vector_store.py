@@ -60,6 +60,8 @@ from typing import List, Optional, Tuple
 
 from hugegraph_llm.utils.log import log
 
+from .schema_graph.model import NodeType, SchemaGraph
+
 
 class SchemaVectorStore(ABC):
     """Minimal vector store contract used by schema linking (P2 seeding)."""
@@ -366,3 +368,46 @@ def as_schema_store(store) -> SchemaVectorStore:
         return store
     # duck-typing: any object exposing the RAG base's add/search works
     return LegacyVectorStoreAdapter(store)
+
+
+# ---------------------------------------------------------------------------
+# Shared embedding helper (write path + read path use the same surfaces)
+# ---------------------------------------------------------------------------
+def embed_schema_nodes(schema: "SchemaGraph", embedder, store: SchemaVectorStore):
+    """Embed every schema node once into ``store``; return ``(count, dim)``.
+
+    This is the single implementation of "which text represents a schema node".
+    Both the write path (ingest-time vector refresh) and the read path
+    (:meth:`SchemaLinker._ensure_vector_index`) call it, so the vector index is
+    always built from the same surfaces — and, with one store instance injected
+    at construction, into the *same* vector store. Table / column nodes embed
+    ``name + comment + table``; term nodes embed ``name + aliases +
+    comment/definition`` so curated business vocabulary participates in
+    semantic recall (terms seed the PPR only; they never surface in link()).
+    """
+    ids: List[str] = []
+    texts: List[str] = []
+    for node_id, node in schema.nodes.items():
+        if node.node_type == NodeType.TERM:
+            aliases = " ".join(
+                str(a) for a in node.properties.get("aliases", []) if a
+            )
+            surface = " ".join([
+                node.name or "",
+                aliases,
+                str(node.properties.get("comment", "")),
+                str(node.properties.get("definition", "")),
+            ])
+        else:
+            surface = " ".join([
+                node.name or "",
+                str(node.properties.get("comment", "")),
+                str(node.properties.get("table", "")),
+            ])
+        ids.append(node_id)
+        texts.append(surface)
+    if not ids:
+        return 0, 0
+    vecs = [list(embedder(t)) for t in texts]
+    store.upsert(ids, vecs)
+    return len(ids), len(vecs[0]) if vecs else 0

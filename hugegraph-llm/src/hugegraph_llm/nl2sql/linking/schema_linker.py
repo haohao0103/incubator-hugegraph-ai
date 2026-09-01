@@ -59,7 +59,11 @@ from ..engine.local import LocalEngine
 from ..rerank import CrossEncoderReranker
 from ..schema_graph.model import NodeType, SchemaGraph
 from ..synonym_dict import JargonMap
-from ..vector_store import NumpySchemaVectorStore, SchemaVectorStore
+from ..vector_store import (
+    NumpySchemaVectorStore,
+    SchemaVectorStore,
+    embed_schema_nodes,
+)
 
 # Latin / digit runs and CJK codepoints -- the two token classes we index.
 _LATIN_RE = re.compile(r"[a-z0-9_]+")
@@ -582,35 +586,16 @@ class SchemaLinker:
         if self._vector_index is not None or self._vector_disabled:
             return
 
-        ids: List[str] = []
-        texts: List[str] = []
-        for node_id, node in self._schema.nodes.items():
-            if node.node_type == NodeType.TERM:
-                aliases = " ".join(
-                    str(a) for a in node.properties.get("aliases", []) if a
-                )
-                surface = " ".join([
-                    node.name or "",
-                    aliases,
-                    str(node.properties.get("comment", "")),
-                    str(node.properties.get("definition", "")),
-                ])
-            else:
-                surface = " ".join([
-                    node.name or "",
-                    str(node.properties.get("comment", "")),
-                    str(node.properties.get("table", "")),
-                ])
-            ids.append(node_id)
-            texts.append(surface)
-
         try:
-            vecs = [self._embedder(t) for t in texts]
             store = self._vector_store
             if store is None:
                 store = NumpySchemaVectorStore()
                 self._vector_store = store
-            store.upsert(ids, [list(v) for v in vecs])
+            # Single shared implementation of node-surface embedding; the
+            # ingest-time refresh (nl2sql.ingest) calls the same function with
+            # the same store instance, so the vector index can never diverge
+            # between the write and read paths.
+            embed_schema_nodes(self._schema, self._embedder, store)
             self._vector_index = True
         except Exception as exc:  # model/network/store failure -> lexical only
             log.warning("vector index build failed; P2 disabled: %s", exc)

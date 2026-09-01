@@ -81,6 +81,7 @@ class NL2SQLPipeline:
         vector_weight: float = 0.9,
         keyword_extractor: Optional[Callable[[str], List[str]]] = None,
         reranker: Optional["CrossEncoderReranker"] = None,
+        vector_store: Optional[object] = None,
     ):
         """
         :param schema: Schema Graph from :class:`SchemaGraphBuilder`.
@@ -98,6 +99,11 @@ class NL2SQLPipeline:
                                   pulls retrieval keywords out of a question
                                   before linking (LLM-gated); seeds merge by
                                   max weight with the raw question.
+        :param vector_store: where node embeddings live. Forwarded to
+                             :class:`SchemaLinker`; defaults to an in-process
+                             :class:`NumpySchemaVectorStore`. Passing the same
+                             store instance used by the ingest path guarantees
+                             the vector index and the graph never drift apart.
         """
         self._schema = schema
         self._llm = llm
@@ -112,6 +118,7 @@ class NL2SQLPipeline:
             top_k_vector=top_k_vector,
             vector_weight=vector_weight,
             reranker=reranker,
+            vector_store=vector_store,
         )
         self._join_finder = JoinPathFinder(schema, engine=self._engine)
         self._permission_rules = None  # optional tenant column allow-lists

@@ -3,7 +3,7 @@
 > 定位：验证 HugeGraph 知识图谱作为「语义层 / 知识底座」支撑上层平台 Text2SQL 的核心能力闭环。
 > 这是生产链路（平台侧 NL2SQL）的技术验证，不是独立玩具。
 
-- 执行时间：2026-08-31 19:39 ~ 19:50（Run 3 为基准 + L3 沿图传播升级验证）
+- 执行时间：2026-08-31 19:39 ~ 20:01（Run 3 基准 + L3 沿图传播升级 + 真实 MiMo 复验，key 取自 `hugegraph-llm/.env`）
 - 真实链路：HugeGraph 1.7（`kg_rag`，`127.0.0.1:8081`）+ semantica hg-backend `GraphStore` + 小米 MiMo `mimo-v2.5-pro`（OpenAI 兼容，真实调用）
 - 脚本：`/Users/mac/Desktop/apache-code/hg-rag-hmsgraphrag/incubator-hugegraph-ai/hugegraph-llm/nl2sql_tools/semantica_nl2sql_poc.py`
 - 结果 JSON：`/Users/mac/Desktop/apache-code/hg-rag-hmsgraphrag/incubator-hugegraph-ai/_out/semantica_poc/semantica_poc.json`
