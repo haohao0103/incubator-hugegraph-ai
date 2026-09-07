@@ -84,6 +84,36 @@ class TermRow:
 
 
 @dataclass
+class MetricRow:
+    """A metric definition as stored on the ``Metric`` vertex.
+
+    ``expression`` is the dialect-specific definition text (e.g.
+    ``SUM(order_detail.amount) WHERE order.status IN (2, 3)``); the
+    structured filter model it may have been authored with lives upstream.
+    """
+
+    name: str
+    description: str = ""
+    expression: str = ""
+    dialect: str = ""
+    confidence: float = 1.0
+
+
+@dataclass
+class QueryPatternRow:
+    """A recorded question -> SQL pair, with the tables it used.
+
+    Populated from ``Query`` vertices and their ``USES_TABLE`` edges --
+    which is exactly what M6 feedback recording writes. Recorded usage
+    therefore doubles as the few-shot store for SQL generation.
+    """
+
+    question: str
+    sql: str
+    tables: List[str] = field(default_factory=list)
+
+
+@dataclass
 class SemanticProjection:
     """The part of the graph retrieval needs, in plain Python."""
 
@@ -96,6 +126,10 @@ class SemanticProjection:
     #: keyed by ``table.column``
     columns: Dict[str, ColumnRow] = field(default_factory=dict)
     terms: Dict[str, TermRow] = field(default_factory=dict)
+    #: keyed by metric name
+    metrics: Dict[str, MetricRow] = field(default_factory=dict)
+    #: verified question -> SQL pairs, from Query vertices
+    query_patterns: List[QueryPatternRow] = field(default_factory=list)
     #: ``table.column -> [table.column, ...]``, join evidence
     references: Dict[str, List[str]] = field(default_factory=dict)
     #: ``(from_col, to_col) -> proven``
@@ -247,8 +281,34 @@ class GremlinSemanticReader(SemanticGraphReader):
         metricid_to_name: Dict[str, str] = {}
         for vid, props in iter_vertices(self.client, VertexLabel.METRIC.value):
             name = str(props.get("name", ""))
-            if name:
-                metricid_to_name[vid] = name
+            if not name:
+                continue
+            metricid_to_name[vid] = name
+            proj.metrics[name] = MetricRow(
+                name=name,
+                description=str(props.get("description", "") or ""),
+                expression=str(props.get("expression", "") or ""),
+                dialect=str(props.get("dialect", "") or ""),
+                confidence=float(props.get("confidence", 1.0) or 1.0),
+            )
+
+        qid_to_pattern: Dict[str, QueryPatternRow] = {}
+        for vid, props in iter_vertices(self.client, VertexLabel.QUERY.value):
+            question = str(props.get("name", "") or "")
+            sql = str(props.get("content", "") or "")
+            if not question or not sql:
+                continue
+            row = QueryPatternRow(question=question, sql=sql)
+            qid_to_pattern[vid] = row
+            proj.query_patterns.append(row)
+
+        for out_v, in_v, _props in iter_edges(
+            self.client, EdgeLabel.USES_TABLE.value
+        ):
+            pattern = qid_to_pattern.get(out_v)
+            table = tid_to_table.get(in_v)
+            if pattern and table:
+                pattern.tables.append(table)
 
         termid_to_name: Dict[str, str] = {}
         for vid, props in iter_vertices(self.client, VertexLabel.BUSINESS_TERM.value):

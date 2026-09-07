@@ -78,7 +78,6 @@ from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
 from hugegraph_llm.demo.rag_demo.unified_io_block import create_unified_io_block
 from hugegraph_llm.models.llms.init_llm import get_chat_llm
 from hugegraph_llm.resources.demo.css import CSS
-from hugegraph_llm.text2sql.examples import build_order_domain_model
 from hugegraph_llm.text2sql.pipeline import Text2SQLPipeline
 from hugegraph_llm.utils.log import log
 
@@ -253,13 +252,56 @@ def create_app():
     unified_query_http_api(api_auth)
     nl2sql_http_api(api_auth)
 
-    # Text2SQL semantic layer (order-domain PoC). Falls back to prompt-only when
-    # no chat LLM is configured.
+    # Text2SQL on the graph-native semantic layer. Prefers the configured
+    # HugeGraph graph (seeding the order-domain sample once); falls back to
+    # the in-memory projection when the server is unreachable, and to
+    # prompt-only when no chat LLM is configured.
     try:
-        text2sql_pipeline = Text2SQLPipeline(build_order_domain_model(), llm=get_chat_llm(llm_settings))
+        from pyhugegraph.client import PyHugeClient
+
+        from hugegraph_llm.semantic_layer.readers import GremlinSemanticReader
+        from hugegraph_llm.semantic_layer.retrieval import SemanticLayerRetriever
+        from hugegraph_llm.text2sql.orders import ensure_order_domain
+
+        graph_client = PyHugeClient(
+            url=huge_settings.graph_url,
+            graph=huge_settings.graph_name,
+            user=huge_settings.graph_user,
+            pwd=huge_settings.graph_pwd,
+            graphspace=huge_settings.graph_space,
+        )
+        if ensure_order_domain(graph_client):
+            log.info("Text2SQL: order domain seeded into graph '%s'",
+                     huge_settings.graph_name)
+        reader = GremlinSemanticReader(graph_client)
+        reader.projection(refresh=True)
+        text2sql_retriever = SemanticLayerRetriever(reader)
+        text2sql_kwargs = {}
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        log.warning(
+            "Text2SQL: graph unreachable (%s); using in-memory order domain", e
+        )
+        from hugegraph_llm.text2sql.orders import orders_projection
+
+        text2sql_retriever = None
+        text2sql_kwargs = {"projection": orders_projection()}
+    try:
+        if text2sql_retriever is not None:
+            text2sql_pipeline = Text2SQLPipeline(
+                text2sql_retriever, llm=get_chat_llm(llm_settings)
+            )
+        else:
+            text2sql_pipeline = Text2SQLPipeline.for_projection(
+                text2sql_kwargs["projection"], llm=get_chat_llm(llm_settings)
+            )
     except Exception as e:  # pylint: disable=broad-exception-caught
         log.warning("Text2SQL pipeline unavailable (no chat LLM configured): %s", e)
-        text2sql_pipeline = Text2SQLPipeline(build_order_domain_model())
+        if text2sql_retriever is not None:
+            text2sql_pipeline = Text2SQLPipeline(text2sql_retriever)
+        else:
+            text2sql_pipeline = Text2SQLPipeline.for_projection(
+                text2sql_kwargs["projection"]
+            )
     text2sql_http_api(api_auth, text2sql_pipeline)
 
     app.include_router(api_auth)

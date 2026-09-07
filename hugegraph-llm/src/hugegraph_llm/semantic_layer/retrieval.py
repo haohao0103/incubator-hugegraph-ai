@@ -181,6 +181,9 @@ class RetrievalResult:
     expanded: List[str] = field(default_factory=list)
     #: Tables removed because they could not be joined to the rest.
     disconnected: List[str] = field(default_factory=list)
+    #: Business terms whose name or alias appeared in the question,
+    #: canonical names best-match first. Feeds "resolved_terms" APIs.
+    matched_terms: List[str] = field(default_factory=list)
     #: Which recall paths fired; empty means retrieval found nothing.
     sources_used: List[str] = field(default_factory=list)
 
@@ -335,19 +338,23 @@ class SemanticLayerRetriever:
                     return table
         return None
 
-    def _recall_terms(self, question: str) -> List[Tuple[str, float]]:
+    def _recall_terms(
+        self, question: str
+    ) -> Tuple[List[Tuple[str, float]], List[str]]:
         """Exact business-term recall.
 
         This is the path that makes the semantic layer worth having: a
         business term ("月活", "MAU") is matched by name or alias and mapped
         straight to the tables and columns that define it, with no semantic
         similarity guesswork.
+
+        Returns ``(table_hits, matched_term_names)`` — the names feed
+        "resolved terms" APIs, best match first.
         """
         proj = self.reader.projection()
         if not proj.terms:
-            return []
+            return [], []
         lowered = question.lower()
-        out: List[Tuple[str, float]] = []
         scored: Dict[str, float] = {}
         for term, row in proj.terms.items():
             names = [term] + list(row.aliases)
@@ -359,7 +366,11 @@ class SemanticLayerRetriever:
                     # Prefer the longest match: "MAU" inside "mauve" is noise,
                     # "monthly active users" is signal.
                     scored[term] = max(scored.get(term, 0.0), float(len(probe)))
-        for term, weight in sorted(scored.items(), key=lambda kv: -kv[1]):
+
+        matched_names = sorted(scored, key=lambda t: (-scored[t], t))
+        out: List[Tuple[str, float]] = []
+        for term in matched_names:
+            weight = scored[term]
             tables = set()
             for column in proj.term_columns.get(term, []):
                 tables.add(column.split(".", 1)[0])
@@ -375,7 +386,7 @@ class SemanticLayerRetriever:
             for table in sorted(tables):
                 if not any(t == table for t, _ in out):
                     out.append((table, weight))
-        return out
+        return out, matched_names
 
     def _recall_bm25(self, question: str) -> List[Tuple[str, float]]:
         if not self._corpus():
@@ -529,7 +540,8 @@ class SemanticLayerRetriever:
             return result
 
         vector_hits = self._recall_vector(question)
-        term_hits = self._recall_terms(question)
+        term_hits, matched_terms = self._recall_terms(question)
+        result.matched_terms = matched_terms
         bm25_hits = self._recall_bm25(question)
         result.sources_used = [
             name

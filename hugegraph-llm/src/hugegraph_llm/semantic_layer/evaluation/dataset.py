@@ -43,18 +43,24 @@ __all__ = [
 ]
 
 #: ``FROM <t>`` and ``JOIN <t>`` -- the two places a table can appear.
+#: Backtick quoting (StarRocks/MySQL dialect, e.g. ``JOIN `order` o``) is
+#: unwrapped; without it, reserved-word table names would silently vanish
+#: from gold-table extraction.
 _TABLE_RE = re.compile(
-    r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE
+    r"\b(?:from|join)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?", re.IGNORECASE
 )
 
 _SQL_WORDS = {
-    "select", "where", "group", "order", "by", "having", "limit", "on",
+    "select", "where", "group", "by", "having", "limit", "on",
     "and", "or", "as", "inner", "left", "right", "outer", "full", "cross",
     "union", "all", "distinct", "case", "when", "then", "else", "end",
     "with", "values", "insert", "update", "delete", "set", "not", "null",
     "is", "in", "exists", "between", "like", "asc", "desc", "count", "sum",
     "avg", "min", "max", "coalesce", "cast", "date", "interval", "extract",
 }
+# NOTE: "order" is deliberately NOT a keyword here. The regex only captures
+# identifiers directly after FROM/JOIN, where "ORDER BY" cannot occur, and
+# `order` is an extremely common real table name (this sample domain has one).
 
 
 class DatasetError(ValueError):

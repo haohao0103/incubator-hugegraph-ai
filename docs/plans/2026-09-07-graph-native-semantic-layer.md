@@ -464,6 +464,30 @@ Query{content, exec_count, last_seen_ts, schema_refs}
 
 **诚实边界**：反馈回流改善的是**召回的排序材料**（CO_OCCUR 进入图遍历），但它是否真正提升 end-to-end 查询质量，仍受 M4 的 `not_measured` 限制——没有数仓执行 gold SQL，这个数字测不出来。CO_OCCUR 从真实使用中积累需要生产流量，评测数据集模拟不了这一点。
 
+### 5.13 Text2SQL 栈去重：以 semantic_layer 为唯一实现（2026-09-07 实测）
+
+对齐 cherry-pick 进来的 Text2SQL PoC 时按"重叠即删，semantic_layer 为准"做了归并。
+
+**删除（约 1190 行 + 5 个测试文件）**：
+
+| 模块 | 被 semantic_layer 何者取代 |
+|---|---|
+| `text2sql/model.py`（Table/Column/Join/Term 数据类） | `schema_def` 顶点/边 + `context.py` TableContext |
+| `text2sql/retrieval.py`（TermIndex/schema_link/find_join_path/build_sql_prompt，423 行） | M2 检索器 + `join_path.find_join_path` + 投影 |
+| `text2sql/schema.py`（DDL 渲染） | `TableContext.render` |
+| `text2sql/seed.py + writer.py + gremlin.py`（自建 PRIMARY_KEY 写图） | M0 schema + M1 连接器（顺带消灭了双 id 策略冲突） |
+| `text2sql/examples.py` | `text2sql/orders.py`（同一份数据，两种渲染） |
+
+**保留**：`pipeline.py` 重写为薄适配层（问题 → M2 检索 → join_path → 指标口径 → few-shot → prompt），HTTP API 契约不变；订单域样例数据完整保留。
+
+**为此给 semantic_layer 增加的读取能力**（均为通用能力，非 text2sql 专用）：投影读取 `Metric` 顶点的口径文本（`proj.metrics`）；读取 `Query` 顶点 + `USES_TABLE` 作为 few-shot 库——**M6 反馈数据天然就是 few-shot 存储**，用户确认过的每个问答自动变成未来 prompt 的示例；`RetrievalResult.matched_terms` 暴露术语解析结果。
+
+**顺带修掉 `extract_tables` 两个真 bug**（evaluation 共享代码）：不识别反引号引用（`` JOIN `order` `` 在 StarRocks/MySQL 方言下表名直接消失）；`_SQL_WORDS` 含 `"order"` 导致名为 `order` 的表被当关键词过滤——而这是最常见的真实表名。复跑 M4：数字逐位一致，CI 门禁通过。
+
+**测试行为变化（有意）**：旧 PoC 只返回术语锚定的表；现在 M2 连通扩展会把 FK 可达的 user/driver 一并带回（召回优先 + 预算器兜底的既定取舍）。无关问题测试改用纯 ASCII 串——CJK 单字切分的已知粗糙性（"完"命中"已完成"）属于 M4 调参轨道，不在此处掩盖。
+
+净效果：`text2sql` 包从 8 个模块 / ~1200 行缩到 2 个模块 / ~450 行，且不再有任何独立的 schema 栈。
+
 ---
 
 ## 6. 检索层：三段式召回与子图裁剪

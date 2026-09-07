@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient
 
 from hugegraph_llm.api.models.text2sql_requests import Text2SQLRequest
 from hugegraph_llm.api.text2sql_api import Text2SQLApi, text2sql_http_api
-from hugegraph_llm.text2sql.examples import build_order_domain_model
+from hugegraph_llm.text2sql.orders import orders_projection
 from hugegraph_llm.text2sql.pipeline import Text2SQLPipeline
 
 pytestmark = pytest.mark.unit
@@ -42,7 +42,7 @@ def _client(pipeline):
 def _pipeline_with_llm(sql="SELECT SUM(od.amount) AS gmv"):
     llm = MagicMock()
     llm.generate.return_value = sql
-    return Text2SQLPipeline(build_order_domain_model(), llm=llm)
+    return Text2SQLPipeline.for_projection(orders_projection(), llm=llm)
 
 
 def test_text2sql_returns_envelope():
@@ -54,12 +54,13 @@ def test_text2sql_returns_envelope():
     assert body["status"] == "succeeded"
     assert body["sql"] == "SELECT SUM(od.amount) AS gmv"
     assert "GMV" in body["resolved_terms"]
-    assert set(body["tables"]) == {"order_detail", "order"}
+    # M2 connected expansion pulls in the FK-reachable tables as well.
+    assert {"order_detail", "order"} <= set(body["tables"])
     assert body["metrics"] == ["gmv"]
 
 
 def test_text2sql_sql_none_when_no_llm():
-    pipeline = Text2SQLPipeline(build_order_domain_model())
+    pipeline = Text2SQLPipeline.for_projection(orders_projection())
     response = _client(pipeline).post("/text2sql", json={"question": "订单量"})
 
     assert response.status_code == status.HTTP_200_OK
@@ -77,7 +78,7 @@ def test_text2sql_error_returns_500():
 def test_service_answer_maps_result():
     llm = MagicMock()
     llm.generate.return_value = "SELECT 1"
-    pipeline = Text2SQLPipeline(build_order_domain_model(), llm=llm)
+    pipeline = Text2SQLPipeline.for_projection(orders_projection(), llm=llm)
 
     resp = Text2SQLApi.answer(Text2SQLRequest(question="订单量"), pipeline)
 

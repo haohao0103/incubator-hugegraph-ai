@@ -1,61 +1,57 @@
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
 #   http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-"""End-to-end orchestration: question -> semantic graph context -> SQL prompt.
+"""Question -> semantic-layer context -> SQL prompt.
 
-This is the "executable" entry point that chains the five retrieval operators.
-It is pure and LLM-agnostic: ``generate`` returns the assembled prompt when no
+This is a thin adapter, not a second retrieval stack. Everything it does
+delegates to the graph-native semantic layer:
+
+* table/column recall, business-term resolution and budgeted context
+  come from :class:`~semantic_layer.retrieval.SemanticLayerRetriever` (M2);
+* join paths come from :func:`~semantic_layer.join_path.find_join_path`
+  over ``REFERENCES`` edges, proven steps rendered as real ON conditions
+  and inferred ones as comments (M3 semantics);
+* metric definitions come from ``Metric`` vertices read into the
+  projection -- the 口径 text is rendered verbatim, never recomputed;
+* few-shot examples come from ``Query`` vertices -- the same store M6
+  feedback writes, so verified usage accumulates into better prompts.
+
+What was deleted with the old in-code stack: its own term index, schema
+linker, join finder, DDL renderer, graph writer and seed loader. The
+former ``QueryPattern``/``Value`` structures survive only as graph data
+(Query vertices, column comments).
+
+Pure and LLM-agnostic: ``generate`` returns the assembled prompt when no
 LLM is injected, or the LLM's SQL when one is.
 """
 
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from hugegraph_llm.text2sql.model import SemanticModel
-from hugegraph_llm.text2sql.retrieval import (
-    JoinStep,
-    MetricResolution,
-    SemanticGraph,
-    TermIndex,
-    build_sql_prompt,
-    find_join_path,
-    resolve_metric,
-    schema_link,
+from hugegraph_llm.semantic_layer.context import TableContext
+from hugegraph_llm.semantic_layer.join_path import JoinPath, find_join_path
+from hugegraph_llm.semantic_layer.readers import (
+    InMemorySemanticReader,
+    SemanticGraphReader,
 )
-from hugegraph_llm.text2sql.seed import seed_graph
+from hugegraph_llm.semantic_layer.retrieval import (
+    RetrievalConfig,
+    SemanticLayerRetriever,
+)
 
-
-def _dedupe(items: List[str]) -> List[str]:
-    seen = set()
-    result = []
-    for item in items:
-        if item not in seen:
-            seen.add(item)
-            result.append(item)
-    return result
-
-
-def _table_of_column(column_id: str) -> str:
-    return column_id.split(".", 1)[0]
-
-
-def _append_table(tables: List[str], table: str) -> None:
-    if table and table not in tables:
-        tables.append(table)
+__all__ = ["Text2SQLResult", "Text2SQLPipeline"]
 
 
 @dataclass
@@ -67,67 +63,83 @@ class Text2SQLResult:
     linked_columns: List[str] = field(default_factory=list)
     linked_metrics: List[str] = field(default_factory=list)
     tables: List[str] = field(default_factory=list)
-    join_paths: List[JoinStep] = field(default_factory=list)
-    metric_definitions: List[MetricResolution] = field(default_factory=list)
+    join_paths: List[JoinPath] = field(default_factory=list)
+    metric_definitions: List[str] = field(default_factory=list)
     prompt: str = ""
     sql: Optional[str] = None
 
 
 class Text2SQLPipeline:
-    """Chain term resolution -> schema linking -> join path -> metric -> prompt."""
+    """Assemble a SQL-generation prompt from the graph-native semantic layer."""
 
-    def __init__(self, model: SemanticModel, llm=None, db_type: str = "StarRocks"):
-        self.model = model
-        self.graph = SemanticGraph(seed_graph(model))
-        self.term_index = TermIndex(model.terms)
+    def __init__(
+        self,
+        retriever: SemanticLayerRetriever,
+        llm=None,
+        db_type: str = "StarRocks",
+        max_tokens: int = 4000,
+    ) -> None:
+        self.retriever = retriever
         self.llm = llm
         self.db_type = db_type
+        self.max_tokens = max_tokens
+
+    @classmethod
+    def for_projection(
+        cls,
+        projection,
+        llm=None,
+        db_type: str = "StarRocks",
+        max_tokens: int = 4000,
+    ) -> "Text2SQLPipeline":
+        """Build over an in-memory projection (tests, offline demos)."""
+        return cls(
+            SemanticLayerRetriever(InMemorySemanticReader(projection)),
+            llm=llm, db_type=db_type, max_tokens=max_tokens,
+        )
+
+    # -- planning -----------------------------------------------------------
 
     def plan(self, question: str) -> Text2SQLResult:
-        terms = self.term_index.find_in_text(question)
+        projection = self.retriever.reader.projection()
+        retrieval = self.retriever.retrieve(question, max_tokens=self.max_tokens)
 
-        columns: List[str] = []
+        tables = retrieval.tables
+        columns = self._columns_of(projection, tables)
+
+        # Metrics are term-driven (a term like GMV names its metric), which
+        # keeps the 口径 section focused instead of listing every metric
+        # whose columns happen to sit in a retrieved table.
         metrics: List[str] = []
-        for term in terms:
-            link = schema_link(self.graph, term)
-            columns.extend(link["columns"])
-            metrics.extend(link["metrics"])
-        columns = _dedupe(columns)
-        metrics = _dedupe(metrics)
+        for term in retrieval.matched_terms:
+            for metric in projection.term_metrics.get(term, []):
+                if metric in projection.metrics and metric not in metrics:
+                    metrics.append(metric)
 
-        tables: List[str] = []
-        for column in columns:
-            _append_table(tables, _table_of_column(column))
-        for metric_name in metrics:
-            resolved = resolve_metric(self.graph, metric_name)
-            if resolved:
-                col_refs = [resolved.measure, resolved.time_column] + list(resolved.dimensions)
-                col_refs += [filter_.column for filter_ in resolved.filters]
-                for col_ref in col_refs:
-                    if col_ref:
-                        _append_table(tables, _table_of_column(col_ref))
-
-        join_paths: List[JoinStep] = []
+        join_paths: List[JoinPath] = []
         if len(tables) > 1:
-            for table in tables[1:]:
-                join_paths.extend(find_join_path(self.graph, tables[0], table))
+            join_paths = [
+                find_join_path(projection, tables[0], table)
+                for table in tables[1:]
+            ]
+            join_paths = [p for p in join_paths if p.found]
 
-        metric_definitions = [r for r in (resolve_metric(self.graph, m) for m in metrics) if r is not None]
+        metric_definitions = [
+            self._render_metric(projection.metrics[m]) for m in metrics
+        ]
+        few_shot = self._few_shot(projection, tables, metrics)
 
-        few_shot = self._few_shot(tables, metrics)
-        prompt = build_sql_prompt(
-            self.graph,
-            question,
-            tables,
-            metrics,
-            join_paths,
-            few_shot,
-            self.db_type,
+        prompt = self._build_prompt(
+            contexts=retrieval.budget.contexts,
+            question=question,
+            metric_definitions=metric_definitions,
+            join_paths=join_paths,
+            few_shot=few_shot,
         )
 
         return Text2SQLResult(
             question=question,
-            resolved_terms=terms,
+            resolved_terms=retrieval.matched_terms,
             linked_columns=columns,
             linked_metrics=metrics,
             tables=tables,
@@ -137,7 +149,7 @@ class Text2SQLPipeline:
         )
 
     def generate(self, question: str) -> str:
-        """Return generated SQL when an LLM is injected, else the assembled prompt."""
+        """Return generated SQL when an LLM is injected, else the prompt."""
         result = self.plan(question)
         if self.llm is None:
             return result.prompt
@@ -145,35 +157,85 @@ class Text2SQLPipeline:
         return result.sql
 
     def answer(self, question: str) -> Text2SQLResult:
-        """Run the full pipeline and return the result with ``sql`` populated.
-
-        When an LLM is injected, ``sql`` holds the generated SQL; otherwise it is
-        left ``None`` and ``prompt`` carries the assembled context.
-        """
+        """Run the pipeline; ``sql`` is set only when an LLM is configured."""
         result = self.plan(question)
         if self.llm is not None:
             result.sql = self.llm.generate(prompt=result.prompt)
         return result
 
-    def _few_shot(self, tables: List[str], metrics: List[str]) -> List[str]:
-        """Retrieve verified SQL patterns that reference the involved tables/metrics."""
-        examples: List[str] = []
+    # -- pieces -------------------------------------------------------------
+
+    @staticmethod
+    def _columns_of(projection, tables: List[str]) -> List[str]:
+        out: List[str] = []
+        for table in tables:
+            for col in projection.columns_of(table):
+                out.append(col.qualified)
+        return out
+
+    @staticmethod
+    def _render_metric(metric) -> str:
+        """One line per metric: name, 口径 expression, description."""
+        line = f"{metric.name} = {metric.expression}" if metric.expression \
+            else metric.name
+        if metric.description:
+            line += f" -- {metric.description}"
+        return line
+
+    @staticmethod
+    def _few_shot(projection, tables: List[str], metrics: List[str]) -> List[str]:
+        """Verified (question -> SQL) pairs touching the retrieved tables.
+
+        Reads the same ``Query`` vertices that M6 feedback writes, so every
+        confirmed answer becomes a future few-shot example.
+        """
         table_set = set(tables)
-        metric_set = set(metrics)
-        for vertex in self.graph.vertices.values():
-            if vertex["label"] != "query_pattern":
-                continue
-            used_tables = set()
-            for edge in self.graph.out_edges(vertex["id"], "uses_table"):
-                table = self.graph.vertex(edge["inV"])
-                if table:
-                    used_tables.add(table.get("properties", {}).get("name", ""))
-            used_metrics = set()
-            for edge in self.graph.out_edges(vertex["id"], "uses_metric"):
-                metric = self.graph.vertex(edge["inV"])
-                if metric:
-                    used_metrics.add(metric.get("properties", {}).get("name", ""))
-            if table_set & used_tables or metric_set & used_metrics:
-                props = vertex.get("properties", {})
-                examples.append(f"{props.get('description', '')} -> {props.get('sql', '')}")
+        examples = []
+        for pattern in projection.query_patterns:
+            if table_set & set(pattern.tables):
+                examples.append(f"{pattern.question} -> {pattern.sql}")
         return examples
+
+    def _build_prompt(
+        self,
+        contexts: List[TableContext],
+        question: str,
+        metric_definitions: List[str],
+        join_paths: List[JoinPath],
+        few_shot: List[str],
+    ) -> str:
+        sections: List[str] = [
+            f"You are an expert {self.db_type} SQL engineer. "
+            "Generate ONLY a valid, executable SQL query.",
+            "",
+            "# Database schema (retrieved context)",
+        ]
+        sections.extend(ctx.render("full") for ctx in contexts)
+
+        if metric_definitions:
+            sections += [
+                "",
+                "# Metric definitions (口径 — follow EXACTLY, never recompute)",
+                *metric_definitions,
+            ]
+
+        if join_paths:
+            join_lines = [
+                f"- {path.tables[0]} JOIN {path.tables[-1]}: {path.to_sql()}"
+                for path in join_paths
+            ]
+            sections += [
+                "",
+                "# Join paths (use these exact ON conditions)",
+                *join_lines,
+            ]
+
+        if few_shot:
+            sections += [
+                "",
+                "# Few-shot examples (question -> verified SQL)",
+                *few_shot,
+            ]
+
+        sections += ["", "# Question", question, "", "SQL:"]
+        return "\n".join(sections)
