@@ -62,6 +62,29 @@ class RetrievalConfig:
     hop_decay: float = 0.5
     #: Hard cap on tables considered, after expansion.
     max_tables: int = 12
+    #: Minimum score for an *expanded* table, as a fraction of the strongest
+    #: seed. 0 disables the check (every reachable neighbour is kept).
+    #:
+    #: The threshold is *relative* rather than absolute because fused RRF
+    #: scores shift with how many recall paths fired, so a fixed cutoff would
+    #: behave differently per question. Seeds are never filtered: they were
+    #: recalled directly.
+    #:
+    #: Honest note from the 45-case ACME sweep: with rank-based RRF scores
+    #: this knob had almost no effect -- RRF compresses magnitude into a
+    #: narrow band, so 0.2-0.5 all produced identical output. It becomes
+    #: useful when a score-bearing source (vector similarity, BM25 magnitude)
+    #: joins the fusion and the spread widens.
+    min_score_ratio: float = 0.0
+    #: Minimum score for a *seed*, as a fraction of the strongest one.
+    #: 0 keeps every recalled table. At least one seed always survives.
+    #:
+    #: Same honest note as ``min_score_ratio``: flat RRF scores made this a
+    #: no-op on the ACME sweep (0.3 behaved identically to 0.0). Kept because
+    #: the API is right -- it will discriminate once score magnitudes are
+    #: available, and because it documents that seeds, not expansion, were
+    #: the dominant noise source (seed P=0.241 vs expanded P=0.011).
+    min_seed_ratio: float = 0.0
     #: Prompt budget for schema context.
     max_tokens: int = 4000
     #: Tokens held back for instructions and the question.
@@ -190,6 +213,29 @@ class SemanticLayerRetriever:
         return out
 
     @staticmethod
+    def _select_seeds(
+        fused: Sequence[Tuple[str, float]], cfg: RetrievalConfig
+    ) -> List[str]:
+        """Choose seeds: top-``k``, minus any falling below the quality bar.
+
+        The floor is relative to the strongest hit, and at least one seed
+        always survives -- otherwise a question with exactly one plausible
+        table would return nothing whenever that table scored lower than the
+        (possibly also weak) runner-up.
+        """
+        top = list(fused[: cfg.top_k])
+        if not top:
+            return []
+        if cfg.min_seed_ratio <= 0:
+            return [name for name, _ in top]
+        floor = max(score for _, score in top) * cfg.min_seed_ratio
+        kept = [name for name, score in top if score >= floor]
+        if not kept:
+            # Keep the single best rather than returning nothing.
+            return [top[0][0]]
+        return kept
+
+    @staticmethod
     def _node_to_table(node_id: str, proj: SemanticProjection) -> Optional[str]:
         """Map a vector-store id to a table name.
 
@@ -284,6 +330,8 @@ class SemanticLayerRetriever:
         found: Dict[str, Tuple[float, List[str]]] = {
             name: (score, ["recall"]) for name, score in seeds
         }
+        # Relative floor for expanded tables; 0 keeps every neighbour.
+        floor = (max(seed_scores.values()) if seed_scores else 0.0) * cfg.min_score_ratio
         frontier = list(seed_scores)
         for hop in range(1, cfg.hops + 1):
             next_frontier: List[str] = []
@@ -299,6 +347,8 @@ class SemanticLayerRetriever:
                             max(prev_score, score),
                             sorted(set(prev_reasons + reasons)),
                         )
+                        continue
+                    if score < floor:
                         continue
                     found[neighbour] = (score, sorted(set(reasons)))
                     next_frontier.append(neighbour)
@@ -422,10 +472,15 @@ class SemanticLayerRetriever:
         if not fused:
             return result
 
-        seeds = [name for name, _score in fused[: cfg.top_k]]
+        seeds = self._select_seeds(fused, cfg)
+        if not seeds:
+            return result
         result.seeds = seeds
 
-        candidates = self._expand(proj, [(s, dict(fused)[s]) for s in seeds], cfg)
+        score_by_table = dict(fused)
+        candidates = self._expand(
+            proj, [(s, score_by_table[s]) for s in seeds], cfg
+        )
         ordered = sorted(candidates.items(), key=lambda kv: -kv[1][0])
         ordered = ordered[: cfg.max_tables]
 

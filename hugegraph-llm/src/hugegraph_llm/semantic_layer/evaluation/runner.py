@@ -102,6 +102,7 @@ class EvaluationReport:
             f"  {'precision@5':28s} {o.precision_at_5:.3f}",
             f"  {'recall@5':28s} {o.recall_at_5:.3f}",
             f"  {'recall (all retrieved)':28s} {o.recall_full:.3f}",
+            f"  {'excess tables per gold':28s} {o.mean_excess_ratio:.2f}x",
             f"  {'all gold tables found':28s} {o.all_gold_found_rate:.3f}",
             f"  {'retrieved set joinable':28s} {o.retrieved_joinable_rate:.3f}",
             f"  {'gold set joinable':28s} {o.gold_joinable_rate:.3f}",

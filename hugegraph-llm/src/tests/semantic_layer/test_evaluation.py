@@ -256,6 +256,43 @@ def test_token_saving_without_baseline_is_zero():
     assert result.token_saving == 0.0
 
 
+def test_excess_ratio_counts_noise_per_gold():
+    """8 retrieved for 2 gold = 4 noise tables per relevant one."""
+    case = EvalCase("q", "SELECT * FROM orders JOIN customers ON 1=1")
+    result = _evaluator().score(
+        case, ["orders", "customers", "products", "island", "x1", "x2", "x3", "x4"]
+    )
+    assert result.excess_ratio == pytest.approx(4.0)
+
+
+def test_excess_ratio_one_is_perfect():
+    case = EvalCase("q", "SELECT * FROM orders JOIN customers ON 1=1")
+    result = _evaluator().score(case, ["orders", "customers"])
+    assert result.excess_ratio == 1.0
+
+
+def test_excess_ratio_without_gold_is_retrieved_count():
+    """No gold to divide by: the raw count is the honest fallback."""
+    case = EvalCase("q", "SELECT * FROM orders", gold_tables=["ghost"])
+    result = _evaluator().score(case, ["orders", "customers"])
+    assert result.excess_ratio == 2.0
+
+
+def test_p_at_5_ceiling_is_documented_by_excess():
+    """P@5 caps at gold/5; excess_ratio is the metric that can still move.
+
+    With 1 gold table, a perfect retriever scores P@5=0.2 -- the same value
+    as returning 4 noise tables alongside it. excess_ratio separates them:
+    1.0 vs 5.0.
+    """
+    case = EvalCase("q", "SELECT * FROM orders")
+    ev = _evaluator()
+    surgical = ev.score(case, ["orders"])
+    noisy = ev.score(case, ["orders", "customers", "products", "island", "x"])
+    assert surgical.precision_at_5 == pytest.approx(noisy.precision_at_5)
+    assert surgical.excess_ratio < noisy.excess_ratio
+
+
 def test_success_requires_both():
     case = EvalCase("q", "SELECT * FROM orders JOIN customers ON 1=1")
     # all gold present, but island makes the set unjoinable

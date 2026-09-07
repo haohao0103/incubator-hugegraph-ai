@@ -49,14 +49,18 @@ __all__ = [
 
 
 def precision_at_k(retrieved: Sequence[str], gold: Sequence[str], k: int) -> float:
-    """Fraction of the first ``k`` retrieved tables that are relevant."""
-    if k <= 0 or not retrieved:
+    """Fraction of the first ``k`` retrieved tables that are relevant.
+
+    Divides by ``k`` even when fewer tables were returned -- standard P@k.
+    Dividing by ``len(retrieved)`` instead would score a single-table answer
+    as 1.0 and make the metric incomparable across cases with different
+    retrieval sizes; ``excess_ratio`` covers that view properly.
+    """
+    if k <= 0:
         return 0.0
     top = list(retrieved[:k])
-    if not top:
-        return 0.0
     hits = sum(1 for table in top if table in gold)
-    return hits / len(top)
+    return hits / k
 
 
 def recall_at_k(retrieved: Sequence[str], gold: Sequence[str], k: int) -> float:
@@ -89,6 +93,14 @@ class CaseResult:
     tokens_used: int = 0
     baseline_tokens: int = 0
     token_saving: float = 0.0
+    #: ``len(retrieved) / len(gold)`` -- noise tables per gold table.
+    #: This, not P@5, is the honest precision measure here: gold sets are
+    #: small (ACME averages 1.56 tables), so P@5's fixed 5 slots cap it at
+    #: ~0.31 even for a perfect retriever, making 0.29 look like a problem
+    #: when it is actually 94% of the ceiling. An excess ratio of 1.0 means
+    #: surgical retrieval; 8.8 means the model wades through eight noise
+    #: tables per relevant one.
+    excess_ratio: float = 0.0
 
     # join soundness
     retrieved_joinable: bool = False
@@ -115,6 +127,7 @@ class CaseResult:
             "recall@5": round(self.recall_at_5, 3),
             "recall_full": round(self.recall_full, 3),
             "all_gold_found": self.all_gold_found,
+            "excess_ratio": round(self.excess_ratio, 2),
             "tokens_used": self.tokens_used,
             "baseline_tokens": self.baseline_tokens,
             "token_saving": round(self.token_saving, 3),
@@ -138,6 +151,10 @@ class MetricSummary:
     mean_tokens: float = 0.0
     mean_baseline_tokens: float = 0.0
     token_saving: float = 0.0
+    #: Mean of per-case ``retrieved/gold``. Unlike P@5 this is not capped by
+    #: the gold set size, so it can actually distinguish good retrieval from
+    #: over-retrieval. 1.0 is perfect; lower is impossible.
+    mean_excess_ratio: float = 0.0
     retrieved_joinable_rate: float = 0.0
     gold_joinable_rate: float = 0.0
     term_recall_rate: float = 0.0
@@ -161,6 +178,7 @@ class MetricSummary:
             token_saving=(
                 1 - total_tokens / total_baseline if total_baseline else 0.0
             ),
+            mean_excess_ratio=sum(r.excess_ratio for r in results) / n,
             retrieved_joinable_rate=sum(
                 1 for r in results if r.retrieved_joinable
             ) / n,
@@ -179,6 +197,7 @@ class MetricSummary:
             "mean_tokens": round(self.mean_tokens, 1),
             "mean_baseline_tokens": round(self.mean_baseline_tokens, 1),
             "token_saving": round(self.token_saving, 3),
+            "mean_excess_ratio": round(self.mean_excess_ratio, 2),
             "retrieved_joinable_rate": round(self.retrieved_joinable_rate, 3),
             "gold_joinable_rate": round(self.gold_joinable_rate, 3),
             "term_recall_rate": round(self.term_recall_rate, 3),
@@ -242,6 +261,9 @@ class RetrievalEvaluator:
             self.projection, retrieved_list
         )
         result.gold_joinable, _ = _joinable(self.projection, gold)
+        result.excess_ratio = (
+            len(retrieved_list) / len(gold) if gold else float(len(retrieved_list))
+        )
         return result
 
 

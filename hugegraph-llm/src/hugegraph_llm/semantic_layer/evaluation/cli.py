@@ -79,6 +79,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--hops", type=int, default=2)
     parser.add_argument("--max-tables", type=int, default=12)
     parser.add_argument(
+        "--min-score-ratio",
+        type=float,
+        default=0.0,
+        help="Drop expanded tables scoring below this fraction of the "
+             "strongest seed (0 keeps every neighbour).",
+    )
+    parser.add_argument(
         "--fail-under",
         action="append",
         metavar="METRIC=VALUE",
@@ -97,7 +104,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     client = PyHugeClient(args.url, args.graph, args.user, args.pwd)
     reader = GremlinSemanticReader(client)
     config = RetrievalConfig(
-        top_k=args.top_k, hops=args.hops, max_tables=args.max_tables
+        top_k=args.top_k,
+        hops=args.hops,
+        max_tables=args.max_tables,
+        min_score_ratio=args.min_score_ratio,
     )
 
     report = evaluate(
