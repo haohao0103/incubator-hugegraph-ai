@@ -1,0 +1,45 @@
+{"question": "What is our total monthly recurring revenue?", "gold_sql": "SELECT SUM(mrr_usd) FROM subscriptions", "source": "term"}
+{"question": "How many active employees do we have?", "gold_sql": "SELECT COUNT(*) FROM employees WHERE employment_status = 'active'", "source": "term"}
+{"question": "What is our annual recurring revenue?", "gold_sql": "SELECT SUM(arr_usd) FROM subscriptions", "source": "term"}
+{"question": "Show me our current headcount", "gold_sql": "SELECT COUNT(*) FROM employees", "source": "term"}
+{"question": "What is the average CSAT score?", "gold_sql": "SELECT AVG(csat_score) FROM support_tickets", "source": "term"}
+{"question": "How many open opportunities are there?", "gold_sql": "SELECT COUNT(*) FROM opportunities WHERE stage = 'open'", "source": "term"}
+{"question": "What is our total pipeline value?", "gold_sql": "SELECT SUM(amount) FROM opportunities WHERE closed_at IS NULL", "source": "term"}
+{"question": "How many marketing qualified leads did we get?", "gold_sql": "SELECT COUNT(*) FROM leads WHERE status = 'MQL'", "source": "term"}
+{"question": "What is our total ARR by customer?", "gold_sql": "SELECT c.company_name, SUM(s.arr_usd) FROM subscriptions s JOIN customers c ON s.customer_id = c.customer_id GROUP BY c.company_name", "source": "term"}
+{"question": "Which customers have the highest ARR?", "gold_sql": "SELECT c.company_name, s.arr_usd FROM subscriptions s JOIN customers c ON s.customer_id = c.customer_id ORDER BY s.arr_usd DESC", "source": "term"}
+{"question": "What is the average deal size by opportunity stage?", "gold_sql": "SELECT stage, AVG(amount) FROM opportunities GROUP BY stage", "source": "term"}
+{"question": "Show employee headcount by department", "gold_sql": "SELECT d.name, COUNT(e.employee_id) FROM employees e JOIN departments d ON e.department_id = d.department_id GROUP BY d.name", "source": "term"}
+{"question": "Which department has the largest annual budget?", "gold_sql": "SELECT name, budget_annual_usd FROM departments ORDER BY budget_annual_usd DESC", "source": "term"}
+{"question": "What is our average employee satisfaction score?", "gold_sql": "SELECT AVG(numeric_score) FROM performance_reviews", "source": "term"}
+{"question": "How many support tickets are still unresolved?", "gold_sql": "SELECT COUNT(*) FROM support_tickets WHERE resolved_at IS NULL", "source": "term"}
+{"question": "What is our lead conversion rate?", "gold_sql": "SELECT COUNT(*) FROM leads WHERE converted_at IS NOT NULL", "source": "term"}
+{"question": "Show me revenue per employee by team", "gold_sql": "SELECT t.name, COUNT(e.employee_id) FROM employees e JOIN teams t ON e.team_id = t.team_id GROUP BY t.name", "source": "term"}
+{"question": "Which sales rep owns the most opportunities?", "gold_sql": "SELECT e.first_name, e.last_name, COUNT(o.opportunity_id) FROM opportunities o JOIN employees e ON o.owner_employee_id = e.employee_id GROUP BY e.first_name, e.last_name ORDER BY COUNT(o.opportunity_id) DESC", "source": "term"}
+{"question": "What is the total amount invoiced per customer?", "gold_sql": "SELECT c.company_name, SUM(i.total_usd) FROM invoices i JOIN customers c ON i.customer_id = c.customer_id GROUP BY c.company_name", "source": "term"}
+{"question": "How much have we spent on campaigns this year?", "gold_sql": "SELECT SUM(spend_usd) FROM campaigns", "source": "term"}
+{"question": "SELECT customer_id, total_usd FROM invoices WHERE status = 'unpaid'", "gold_sql": "SELECT customer_id, total_usd FROM invoices WHERE status = 'unpaid'", "source": "schema"}
+{"question": "Show invoices joined to customers with company_name", "gold_sql": "SELECT i.invoice_id, c.company_name FROM invoices i JOIN customers c ON i.customer_id = c.customer_id", "source": "schema"}
+{"question": "List employees with their department_id and team_id", "gold_sql": "SELECT employee_id, department_id, team_id FROM employees", "source": "schema"}
+{"question": "Count support_tickets grouped by priority", "gold_sql": "SELECT priority, COUNT(*) FROM support_tickets GROUP BY priority", "source": "schema"}
+{"question": "Show opportunities with owner_employee_id and stage", "gold_sql": "SELECT opportunity_id, owner_employee_id, stage FROM opportunities", "source": "schema"}
+{"question": "List subscriptions with mrr_usd and arr_usd", "gold_sql": "SELECT subscription_id, mrr_usd, arr_usd FROM subscriptions", "source": "schema"}
+{"question": "Show products joined to product_categories", "gold_sql": "SELECT p.name, pc.name FROM products p JOIN product_categories pc ON p.category_id = pc.category_id", "source": "schema"}
+{"question": "List orders with their order_items and products", "gold_sql": "SELECT o.order_id, oi.quantity, p.name FROM orders o JOIN order_items oi ON o.order_id = oi.order_id JOIN products p ON oi.product_id = p.product_id", "source": "schema"}
+{"question": "Show payments joined to invoices and customers", "gold_sql": "SELECT p.amount, i.invoice_id, c.company_name FROM payments p JOIN invoices i ON p.invoice_id = i.invoice_id JOIN customers c ON p.customer_id = c.customer_id", "source": "schema"}
+{"question": "List employees with job_titles and departments", "gold_sql": "SELECT e.first_name, jt.title, d.name FROM employees e JOIN job_titles jt ON e.job_title_id = jt.job_title_id JOIN departments d ON e.department_id = d.department_id", "source": "schema"}
+{"question": "Show leads converted into customers with their campaigns", "gold_sql": "SELECT l.lead_id, c.company_name, camp.name FROM leads l JOIN customers c ON l.converted_customer_id = c.customer_id JOIN campaigns camp ON l.campaign_id = camp.campaign_id", "source": "schema"}
+{"question": "Which teams belong to which department?", "gold_sql": "SELECT t.name, d.name FROM teams t JOIN departments d ON t.department_id = d.department_id", "source": "schema"}
+{"question": "Show ticket_comments for each support_ticket", "gold_sql": "SELECT tc.body, st.category FROM ticket_comments tc JOIN support_tickets st ON tc.ticket_id = st.ticket_id", "source": "schema"}
+{"question": "Which employees report to which manager?", "gold_sql": "SELECT e.first_name, m.first_name FROM employees e JOIN employees m ON e.manager_id = m.employee_id", "source": "schema"}
+{"question": "Show projects and the department that owns them", "gold_sql": "SELECT p.name, d.name FROM projects p JOIN departments d ON p.department_id = d.department_id", "source": "schema"}
+{"question": "how much money are we making each month from subscriptions", "gold_sql": "SELECT SUM(mrr_usd) FROM subscriptions", "source": "free"}
+{"question": "who are our best performing sales people", "gold_sql": "SELECT e.first_name, e.last_name, COUNT(o.opportunity_id) FROM opportunities o JOIN employees e ON o.owner_employee_id = e.employee_id GROUP BY e.first_name, e.last_name ORDER BY COUNT(o.opportunity_id) DESC", "source": "free"}
+{"question": "are customers happy with our support", "gold_sql": "SELECT AVG(csat_score) FROM support_tickets", "source": "free"}
+{"question": "how many people work in each office", "gold_sql": "SELECT o.city, COUNT(e.employee_id) FROM employees e JOIN offices o ON e.office_id = o.office_id GROUP BY o.city", "source": "free"}
+{"question": "which products bring in the most money", "gold_sql": "SELECT p.name, SUM(oi.quantity * oi.unit_price) FROM order_items oi JOIN products p ON oi.product_id = p.product_id GROUP BY p.name ORDER BY SUM(oi.quantity * oi.unit_price) DESC", "source": "free"}
+{"question": "do we have any overdue invoices", "gold_sql": "SELECT COUNT(*) FROM invoices WHERE due_date < CURRENT_DATE AND paid_at IS NULL", "source": "free"}
+{"question": "what is the gender pay gap across job levels", "gold_sql": "SELECT jt.level, AVG(c.base_salary_usd) FROM compensation c JOIN employees e ON c.employee_id = e.employee_id JOIN job_titles jt ON e.job_title_id = jt.job_title_id GROUP BY jt.level", "source": "free"}
+{"question": "which marketing channel brings the most leads", "gold_sql": "SELECT camp.channel, COUNT(l.lead_id) FROM leads l JOIN campaigns camp ON l.campaign_id = camp.campaign_id GROUP BY camp.channel ORDER BY COUNT(l.lead_id) DESC", "source": "free"}
+{"question": "how long does it take us to resolve tickets", "gold_sql": "SELECT AVG(resolved_at - created_at) FROM support_tickets WHERE resolved_at IS NOT NULL", "source": "free"}
+{"question": "are we growing our customer base", "gold_sql": "SELECT COUNT(*) FROM customers WHERE created_at > CURRENT_DATE - INTERVAL '12 months'", "source": "free"}

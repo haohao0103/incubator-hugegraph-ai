@@ -352,6 +352,61 @@ hugegraph-llm/src/tests/semantic_layer/     # 29 个单测
 
 **必须诚实记录的召回缺口**：`vector_index=no` 意味着当前处于最弱召回档。用**模型真实词表**提问时很准，但**改写说法**会明显退化——例："monthly active users" 在该模型里并非术语（真实术语是 `active employees` / `monthly recurring revenue`），只能靠 BM25 猜，结果偏到 teams/products。这个缺口已由工具名暴露给 Agent，接上 Milvus 后即进入 `..._term_hybrid_search` 档位。这也是 §11 评测必须自建的核心理由之一。
 
+### 5.10 M4 落地：评测体系（2026-09-07 实测）
+
+模块 `semantic_layer/evaluation/`：`dataset.py`（数据集 + 从 gold SQL 自动抽取 gold 表）、`metrics.py`（四项指标）、`runner.py`（编排 + baseline）、`cli.py`（CI 入口）。数据集 `semantic_layer/resources/acme_eval.jsonl`（45 例：20 术语 / 15 schema / 10 改写，其中 20 例多表）。
+
+**设计要点**：
+
+- **gold 表从 gold SQL 自动抽取**，不手工标注。手工标注会和 SQL 漂移（标注 2 张表而 SQL join 了 3 张），且会安静地奖励"少召回"。
+- **每例标注 `source`**（`term` / `schema` / `free`）。区分"模型认识的词汇"与"改写说法"至关重要——合并统计会掩盖真实覆盖面，这是 benchmark 自我高估的典型方式。
+- **baseline 是全量 schema 注入**（无语义层的做法），而不是另一个检索系统。这才是"语义层是否值回票价"的诚实对照。
+- **`not_measured` 字段显式列出测不了的东西**：`execution_accuracy`（需数仓跑 gold SQL）、`end_to_end_sql_correctness`（取决于生成模型）。宁可留空也不填无法复现的数字。
+
+**CLI（可进 CI）**：
+
+```bash
+python -m hugegraph_llm.semantic_layer.evaluation.cli \
+    --dataset .../resources/acme_eval.jsonl --graph semantic_m2b \
+    --output report.json --fail-under "recall@5=0.90"
+```
+
+已验证三种门禁行为：达标 exit 0、不达标 exit 1 并打印实际值、非法指标名报错并列出可选项。
+
+**45 例实测结果（ACME 33 表）**：
+
+| 指标 | 值 |
+|---|---|
+| recall@5 | 0.963 |
+| all gold tables found | 1.000 |
+| retrieved set joinable | **1.000** |
+| gold set joinable | 1.000 |
+| business-term recall fired | 0.356 |
+| mean tokens（检索） | 841 |
+| mean tokens（全量） | 2194 |
+| **token saving** | **61.7%** |
+| 多表子集（20 例） | recall@5 0.917，joinable 1.000 |
+
+**评测暴露的真问题：precision@5 只有 0.293。**
+
+召回很高、joinable 100%、success 1.000 看着漂亮，但 P@5 0.293 说明**检索了约 12 张表才覆盖约 3.5 张 gold 表**——扩展过于激进。这正是"只看召回"会漏掉的问题：success 指标在过度召回下会被平凡满足（gold 表碰巧都在里面），而模型实际拿到的是一堆噪声表。
+
+配置扫描（同一数据集）：
+
+| 配置 | P@5 | R@5 | allGold | tokens | saving |
+|---|---|---|---|---|---|
+| 默认 top8/hop2/max12 | 0.293 | **0.963** | **1.000** | 841 | 61.7% |
+| hop0/max12 | 0.416 | 0.822 | 0.800 | 265 | 87.9% |
+| hop1/max6 | 0.319 | 0.833 | 0.844 | 328 | 85.1% |
+| **top5/hop1/max8** | 0.289 | 0.941 | 0.978 | **565** | **74.2%** |
+| hop1/max4 | 0.424 | 0.793 | 0.733 | 224 | 89.8% |
+
+**当前保留默认（top8/hop2/max12）的理由**：召回优先于 token 成本。表缺失会直接导致查询无法作答，而多余的表只会多花 token——并且 token 侧还有预算器兜底（可降级），表缺失则无补救。这是"宁可多召回再裁剪"的取舍，不是疏忽。
+
+若部署场景 token 吃紧，`top5/hop1/max8` 是更优点：少 2.2pp 召回换 33% token。但**该结论只在 ACME 一个数据集上验证过**，改默认前应在第二个数据集上复核，避免对单数据集过拟合。
+
+**待办**：precision 是下一个要攻的指标（0.29 偏低）。方向是给扩展加分数阈值（`hop_decay` 之外再设绝对下限），而非继续调 `max_tables`。
+
 ---
 
 ## 6. 检索层：三段式召回与子图裁剪
@@ -538,7 +593,7 @@ orders.product_id  = products.id           [FOREIGN_KEY, proven]
 | **M1 连接器契约** | `SourceConnector`（extract/transform/load/ingest）+ **HugeGraph 源连接器**（替代 warehouse 连接器，见 §5.6）+ 幂等 ID | 3 周 → **已完成** | kg_rag 12 表/73 列/11 术语全量导入，202 对象落库（见 §5.6） |
 | **M2 检索与裁剪** | 多路召回 + RRF + 图内 2 跳扩展 + Steiner + token 预算器 | 3 周 → **已完成** | 33 表实测 P95 2ms；预算永不超限（见 §5.8） |
 | **M3 MCP Server** | 语义层 tool 组 + 启动探测降级 + `get_join_path` | 2 周 → **已完成** | 33 表实测能力探测 + 7 工具；见 §5.9 |
-| **M4 评测体系** | 数据集 + 四项指标 + baseline 对比（与 M2/M3 并行） | 2 周 | 一键跑出报告，CI 可回归 |
+| **M4 评测体系** | 数据集 + 四项指标 + baseline 对比（与 M2/M3 并行） | 2 周 → **已完成** | 45 例数据集 + CLI + CI 门禁；见 §5.10 |
 | **M5 Ossie 双向** | 导入/导出 + trust 外挂 `custom_extensions` | 2 周 | ACME 样例往返无损 |
 | **M6 反馈回流** | Query 节点写入 + CO_OCCUR 权重周级重算 | 2 周 | 权重随查询分布变化，召回 Top-5 提升 |
 
