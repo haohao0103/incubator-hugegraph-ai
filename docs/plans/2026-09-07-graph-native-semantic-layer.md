@@ -435,6 +435,35 @@ python -m hugegraph_llm.semantic_layer.evaluation.cli \
 - `embed_from_settings()` 已把配置读取路径接通（复用 `Embeddings().get_embedding()`），换成有效端点 + 真实 embedding 模型（如 `text-embedding-3-small` 或 bge 系列）即自动进入语义召回。这是**配置修复**，不是代码工作。
 - 换端点后需要重跑 M4 评测才能声称质量提升；`min_seed_ratio`/`min_score_ratio` 的最优值也要在真实分数分布上重新扫描。
 
+### 5.12 M5/M6 落地：trust 双向与反馈回流（2026-09-07 实测）
+
+**M5——trust 双向。** 导出侧在 M1 已有（`custom_extensions[ossie-hugegraph]`），本轮补齐导入侧 `_parse_trust_extension`：dataset 与 metric 级 extension 读回 confidence / lineage_ref / freshness_ts / source_system，外厂 vendor 的 extension 安全忽略。至此 trust 字段**往返无损**——定义与信任都不丢，这正是 Ossie 规范不管、而本方案差异化的部分。
+
+**M6——反馈回流。** `feedback.py` 的 `FeedbackRecorder.record(question, sql)`：
+
+```
+Query{content, exec_count, last_seen_ts, schema_refs}
+  ├─ USES_TABLE → Table{use_count}
+  └─ CO_OCCUR   Table ↔ Table {weight:1}   每次共现一条边
+```
+
+三个实测确立的设计决策：
+
+1. **CO_OCCUR 事件化（每共现一条 weight=1 平行边），不做读-改-写累加。** 原因：pyhugegraph 的 `appendEdge` 把边 id（含 `>` 和 `:`）直接拼进 URL path，编码行为不可靠；读-改-写还有并发竞态。读侧 `tables_adjacent` 本来就 `both()` 聚合遍历，平行边零成本，pair 的权重即边数。
+2. **幂等：`sha1(question+sql)` 为身份**。重复提交只 `appendVertex` 递增 `exec_count`，不重复计边——一问一票。实测：同脚本跑第二遍，`deduplicated=True`、CO_OCCUR 边数不变。
+3. **端点经 `projection.table_vids` 解析**，不按 `table:{name}` 约定重建——Ossie 命名空间化的 id（`acme:table:orders`）会让约定式 id 指向不存在的顶点，服务端才报错。`SemanticProjection` 因此新增 `table_vids` 映射。
+
+**闭环链路**（全部实测打通）：Agent 调 `record_query_feedback` MCP 工具 → `SemanticLayerTools._handle_record_feedback` 落库并 **invalidate 全部缓存** → 下次检索的投影包含新 CO_OCCUR → `tables_adjacent` 把高频共现表当可 join 邻居。ACME 实测：反馈后 `customers` 的邻接从纯 `REFERENCES` 变为含 `CO_OCCUR→{invoices, payments, subscriptions}`。
+
+**过程中修掉的两个真 bug**：
+
+1. **反馈后投影缓存不失效**——`SemanticLayerTools.invalidate()` 只清了 retriever 的 BM25 缓存，没清 reader 的投影缓存，导致写进去的 CO_OCCUR 在同一进程里永远不可见。测试先红了才暴露；`invalidate()` 现在转发到 reader + retriever + 工具注册表三处。
+2. **dedup 后 `ok=False`**——重复提交其实记录成功，`ok=False` 会让按 ok 判断的调用方误报失败。已修，并加测试锁定语义。
+
+**已知噪音**：`_load_existing` 的存在性探测走 `getVertexById`，顶点不存在时 pyhugegraph 客户端会打 ERROR 日志（404 是预期路径）。功能正确，日志难看；客户端不暴露日志级别控制，接受。
+
+**诚实边界**：反馈回流改善的是**召回的排序材料**（CO_OCCUR 进入图遍历），但它是否真正提升 end-to-end 查询质量，仍受 M4 的 `not_measured` 限制——没有数仓执行 gold SQL，这个数字测不出来。CO_OCCUR 从真实使用中积累需要生产流量，评测数据集模拟不了这一点。
+
 ---
 
 ## 6. 检索层：三段式召回与子图裁剪

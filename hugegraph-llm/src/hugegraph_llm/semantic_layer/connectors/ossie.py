@@ -143,6 +143,31 @@ def _is_query_source(source: str) -> bool:
     )
 
 
+def _parse_trust_extension(raw: Any) -> Dict[str, Any]:
+    """Extract trust fields from a ``custom_extensions`` list.
+
+    Returns only the keys this connector understands, so foreign vendors'
+    extensions pass through harmlessly. Values are trusted as-is here:
+    coercion happens in ``_clean`` against the declared property types, and
+    a bogus confidence is a data-quality problem, not a parse error.
+    """
+    trust: Dict[str, Any] = {}
+    if not isinstance(raw, list):
+        return trust
+    for ext in raw:
+        if not isinstance(ext, dict):
+            continue
+        if ext.get("vendor_name") != TRUST_VENDOR:
+            continue
+        data = ext.get("data")
+        if not isinstance(data, dict):
+            continue
+        for key in ("confidence", "source_system", "lineage_ref", "freshness_ts"):
+            if key in data and data[key] is not None:
+                trust[key] = data[key]
+    return trust
+
+
 def _trust_extension(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Build the trust custom extension for a node, or None when unset.
 
@@ -265,6 +290,11 @@ class OssieConnector(SourceConnector):
                 edges.append((EdgeLabel.HAS_SCHEMA.value, db_id, sch_id, {}))
 
                 tbl_id = make_id(ns, "table", ds_name)
+                # Trust extensions (confidence/lineage/freshness) ride in
+                # custom_extensions on import -- the same place export puts
+                # them, so a round trip preserves what the spec itself does
+                # not model.
+                trust = _parse_trust_extension(dataset.get("custom_extensions"))
                 vertices[tbl_id] = {
                     "label": VertexLabel.TABLE.value,
                     "properties": self._clean({
@@ -272,7 +302,10 @@ class OssieConnector(SourceConnector):
                         "database": database,
                         "schema": schema,
                         "comment": dataset.get("description", "") or "",
-                        "source_system": f"ossie:{model_name}",
+                        "source_system": trust.get(
+                            "source_system", f"ossie:{model_name}"
+                        ),
+                        **{k: v for k, v in trust.items() if k != "source_system"},
                     }),
                 }
                 stats["tables"] += 1
@@ -361,6 +394,7 @@ class OssieConnector(SourceConnector):
                 if exprs:
                     dialect, expression = exprs[0]
                 m_id = make_id(ns, "metric", m_name)
+                m_trust = _parse_trust_extension(metric.get("custom_extensions"))
                 vertices[m_id] = {
                     "label": VertexLabel.METRIC.value,
                     "properties": self._clean({
@@ -368,7 +402,10 @@ class OssieConnector(SourceConnector):
                         "description": metric.get("description", "") or "",
                         "expression": expression,
                         "dialect": dialect,
-                        "source_system": f"ossie:{model_name}",
+                        "source_system": m_trust.get(
+                            "source_system", f"ossie:{model_name}"
+                        ),
+                        **{k: v for k, v in m_trust.items() if k != "source_system"},
                     }),
                 }
                 stats["metrics"] += 1

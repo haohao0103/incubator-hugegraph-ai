@@ -88,6 +88,11 @@ class SemanticProjection:
     """The part of the graph retrieval needs, in plain Python."""
 
     tables: Dict[str, TableRow] = field(default_factory=dict)
+    #: ``table name -> vertex id``. Names are the retrieval keys; ids are
+    #: needed whenever something must *write* back (feedback edges reference
+    #: endpoints by id, and Ossie namespaces its ids per model, so the
+    #: ``table:<name>`` convention alone is not enough).
+    table_vids: Dict[str, str] = field(default_factory=dict)
     #: keyed by ``table.column``
     columns: Dict[str, ColumnRow] = field(default_factory=dict)
     terms: Dict[str, TermRow] = field(default_factory=dict)
@@ -160,6 +165,9 @@ class SemanticGraphReader(ABC):
     def projection(self, refresh: bool = False) -> SemanticProjection:
         """Return the projection, cached unless ``refresh``."""
 
+    def invalidate(self) -> None:
+        """Drop any cached projection. No-op for uncached readers."""
+
 
 class InMemorySemanticReader(SemanticGraphReader):
     """Reader over an already-built projection. Used by tests and offline runs."""
@@ -184,6 +192,14 @@ class GremlinSemanticReader(SemanticGraphReader):
         self._cached = self._build()
         return self._cached
 
+    def invalidate(self) -> None:
+        """Force the next ``projection()`` to re-read from the server.
+
+        Callers that write back to the graph (feedback recording) must call
+        this, or their own writes stay invisible to their later reads.
+        """
+        self._cached = None
+
     # -- building -----------------------------------------------------------
 
     def _build(self) -> SemanticProjection:
@@ -197,6 +213,7 @@ class GremlinSemanticReader(SemanticGraphReader):
             if not name:
                 continue
             tid_to_table[vid] = name
+            proj.table_vids[name] = vid
             proj.tables[name] = TableRow(
                 name=name,
                 database=str(props.get("database", "") or ""),

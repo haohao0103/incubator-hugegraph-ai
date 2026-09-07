@@ -113,6 +113,7 @@ class SemanticLayerTools:
         vector_store: Any = None,
         embed: Optional[Callable[[str], List[float]]] = None,
         config: Optional[RetrievalConfig] = None,
+        feedback: Optional[Any] = None,
     ) -> None:
         self.reader = reader
         self.config = config or RetrievalConfig()
@@ -121,6 +122,7 @@ class SemanticLayerTools:
         )
         self._vector_store = vector_store
         self._embed = embed
+        self._feedback = feedback
         self._tools: Optional[Dict[str, ToolSpec]] = None
 
     # -- probing ------------------------------------------------------------
@@ -167,6 +169,10 @@ class SemanticLayerTools:
 
         if caps.has_terms:
             spec = self._search_terms()
+            tools[spec.name] = spec
+
+        if self._feedback is not None:
+            spec = self._record_query_feedback()
             tools[spec.name] = spec
 
         self._tools = tools
@@ -442,6 +448,56 @@ class SemanticLayerTools:
                 break
         return {"terms": hits, "returned": len(hits)}
 
+    def _record_query_feedback(self) -> ToolSpec:
+        return ToolSpec(
+            name="record_query_feedback",
+            description=(
+                "Record that a SQL query executed successfully, so future "
+                "retrieval learns which tables real questions actually need. "
+                "Call this after the user confirms the answer is right; pass "
+                "the original question and the SQL that answered it. Tables "
+                "are extracted from the SQL automatically."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The user's original question.",
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": "The SQL that successfully answered it.",
+                    },
+                    "tables": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Tables used, if known. Extracted from the SQL "
+                            "when omitted."
+                        ),
+                    },
+                },
+                "required": ["question", "sql"],
+            },
+            handler=self._handle_record_feedback,
+            tags=["feedback"],
+        )
+
+    def _handle_record_feedback(
+        self,
+        question: str,
+        sql: str,
+        tables: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        result = self._feedback.record(question, sql, tables=tables)
+        payload = result.to_dict()
+        if result.ok:
+            # Feedback changes the graph; without this the same process
+            # keeps retrieving against its stale cached projection.
+            self.invalidate()
+        return payload
+
     def _get_full_metadata_schema(self) -> ToolSpec:
         return ToolSpec(
             name="get_full_metadata_schema",
@@ -507,6 +563,12 @@ class SemanticLayerTools:
         return [spec.to_dict() for spec in self.register().values()]
 
     def invalidate(self) -> None:
-        """Drop caches after the graph is re-ingested."""
+        """Drop all caches after the graph changes (re-ingest or feedback).
+
+        The reader's projection cache matters as much as the retriever's:
+        without clearing it, feedback written by ``record_query_feedback``
+        would stay invisible to the very process that wrote it.
+        """
+        self.reader.invalidate()
         self.retriever.invalidate()
         self._tools = None

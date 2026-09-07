@@ -33,6 +33,14 @@ _LABEL_RE = re.compile(r"hasLabel\('([^']+)'\)")
 _RANGE_RE = re.compile(r"range\((\d+),\s*(\d+)\)")
 
 
+class _Vertex:
+    """Response shape of the client's vertex calls."""
+
+    def __init__(self, vid, properties):
+        self.id = vid
+        self.properties = properties
+
+
 class FakeHugeGraph:
     """Minimal in-memory graph with the slice of the API connectors use."""
 
@@ -76,6 +84,21 @@ class FakeHugeGraph:
 
     def addEdges(self, input_data):
         return [self.addEdge(*item) for item in input_data]
+
+    def getVertexById(self, vertex_id):
+        """Raises KeyError on absence, like the REST client's 404 path."""
+        data = self.vertices.get(str(vertex_id))
+        if data is None:
+            raise KeyError(vertex_id)
+        return _Vertex(str(vertex_id), dict(data["properties"]))
+
+    def appendVertex(self, vertex_id, properties):
+        """Merge-append: scalar props overwrite, exactly as PUT append does."""
+        vid = str(vertex_id)
+        if vid not in self.vertices:
+            raise KeyError(vid)
+        self.vertices[vid]["properties"].update(dict(properties or {}))
+        return _Vertex(vid, dict(self.vertices[vid]["properties"]))
 
     # -- reads (Gremlin) ---------------------------------------------------
 
