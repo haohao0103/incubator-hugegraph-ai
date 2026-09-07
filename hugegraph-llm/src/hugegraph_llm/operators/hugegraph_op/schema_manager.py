@@ -327,7 +327,10 @@ class SchemaManager:
 
     def _apply_data_type(self, builder, data_type: PropertyDataType) -> None:
         if data_type == PropertyDataType.BOOLEAN:
-            log.error("Boolean type is not supported")
+            # HugeGraph supports BOOLEAN (pyhugegraph exposes asBool()); the
+            # branch was previously missing, which left the builder without a
+            # data type and made property-key creation fail.
+            builder.asBool()
         elif data_type == PropertyDataType.BYTE:
             log.warning("Byte type is not supported, use int instead")
             builder.asInt()
