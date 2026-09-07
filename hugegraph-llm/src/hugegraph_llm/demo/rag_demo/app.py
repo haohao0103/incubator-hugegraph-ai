@@ -43,7 +43,8 @@ from hugegraph_llm.api.nl2sql_api import nl2sql_health, nl2sql_http_api
 from hugegraph_llm.api.rag_api import rag_http_api
 from hugegraph_llm.api.unified_ingest_api import unified_ingest_http_api
 from hugegraph_llm.api.unified_query_api import unified_query_http_api
-from hugegraph_llm.config import admin_settings, huge_settings, prompt
+from hugegraph_llm.api.text2sql_api import text2sql_http_api
+from hugegraph_llm.config import admin_settings, huge_settings, llm_settings, prompt
 from hugegraph_llm.demo.rag_demo.admin_ops_block import create_admin_ops_block, log_stream
 from hugegraph_llm.demo.rag_demo.agent_block import create_agent_block
 from hugegraph_llm.demo.rag_demo.graphrag_core_block import create_graphrag_core_block
@@ -75,7 +76,10 @@ from hugegraph_llm.demo.rag_demo.text2gremlin_block import (
 from hugegraph_llm.demo.rag_demo.vector_graph_block import create_vector_graph_block
 from hugegraph_llm.demo.rag_demo.multimodal_block import create_multimodal_block
 from hugegraph_llm.demo.rag_demo.unified_io_block import create_unified_io_block
+from hugegraph_llm.models.llms.init_llm import get_chat_llm
 from hugegraph_llm.resources.demo.css import CSS
+from hugegraph_llm.text2sql.examples import build_order_domain_model
+from hugegraph_llm.text2sql.pipeline import Text2SQLPipeline
 from hugegraph_llm.utils.log import log
 
 sec = HTTPBearer()
@@ -248,6 +252,15 @@ def create_app():
     unified_ingest_http_api(api_auth)
     unified_query_http_api(api_auth)
     nl2sql_http_api(api_auth)
+
+    # Text2SQL semantic layer (order-domain PoC). Falls back to prompt-only when
+    # no chat LLM is configured.
+    try:
+        text2sql_pipeline = Text2SQLPipeline(build_order_domain_model(), llm=get_chat_llm(llm_settings))
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        log.warning("Text2SQL pipeline unavailable (no chat LLM configured): %s", e)
+        text2sql_pipeline = Text2SQLPipeline(build_order_domain_model())
+    text2sql_http_api(api_auth, text2sql_pipeline)
 
     app.include_router(api_auth)
 
