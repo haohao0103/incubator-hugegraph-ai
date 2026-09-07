@@ -83,7 +83,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         type=float,
         default=0.0,
         help="Drop expanded tables scoring below this fraction of the "
-             "strongest seed (0 keeps every neighbour).",
+             "strongest seed (0 keeps every neighbour). Only discriminates "
+             "in weighted fusion mode.",
+    )
+    parser.add_argument(
+        "--min-seed-ratio",
+        type=float,
+        default=0.0,
+        help="Drop seeds scoring below this fraction of the strongest one "
+             "(0 keeps every recalled table; one seed always survives). "
+             "Only discriminates in weighted fusion mode.",
+    )
+    parser.add_argument(
+        "--fusion-mode",
+        choices=("rrf", "weighted"),
+        default="rrf",
+        help="rrf fuses by rank (robust, magnitude-blind); weighted fuses "
+             "normalised scores so thresholds become real quality bars.",
     )
     parser.add_argument(
         "--fail-under",
@@ -108,6 +124,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         hops=args.hops,
         max_tables=args.max_tables,
         min_score_ratio=args.min_score_ratio,
+        min_seed_ratio=args.min_seed_ratio,
+        fusion_mode=args.fusion_mode,
     )
 
     report = evaluate(

@@ -46,7 +46,72 @@ __all__ = [
     "RetrievalConfig",
     "RetrievalResult",
     "SemanticLayerRetriever",
+    "weighted_fuse",
 ]
+
+
+def weighted_fuse(
+    ranked_lists: Sequence[Sequence[Tuple[str, float]]],
+    weights: Sequence[float],
+    *,
+    unbounded: Sequence[int] = (),
+) -> List[Tuple[str, float]]:
+    """Linear fusion of normalised scores, best first.
+
+    Unlike :func:`rrf_fuse`, the output preserves *magnitude*: a 0.95 cosine
+    hit outranks a 0.55 one by more than a rank position. That is what makes
+    the seed/expansion thresholds meaningful.
+
+    Normalisation depends on whether a source's scores are already bounded:
+
+    * **Bounded** sources (vector cosine, term matches) are clamped to
+      [0, 1] and otherwise passed through. Their *absolute* value is the
+      signal -- 0.55 means "not very similar", and dividing by the batch max
+      would inflate a weak 0.55 into a strong-looking 0.58*max and make a
+      query whose every candidate is mediocre look like it has a great hit.
+      (First implementation normalised everything by max; its own tests
+      caught the error.)
+    * **Unbounded** sources (BM25) are divided by that query's maximum,
+      since a raw 12.0 means nothing without context.
+
+    :param unbounded: indices of ranked_lists whose scores are unbounded and
+        need max-normalisation. The retriever passes ``(2,)`` for BM25.
+    """
+    if len(weights) != len(ranked_lists):
+        raise ValueError("weights length must match ranked_lists")
+    unbounded_set = set(unbounded)
+
+    normalised: List[Dict[str, float]] = []
+    for index, ranked in enumerate(ranked_lists):
+        scores: Dict[str, float] = {}
+        if ranked:
+            if index in unbounded_set:
+                max_score = max(score for _, score in ranked)
+                if max_score > 0:
+                    scores = {
+                        doc_id: score / max_score for doc_id, score in ranked
+                    }
+            else:
+                # Zero similarity carries no signal -- keep it out rather
+                # than letting a 0-scored candidate occupy the result.
+                scores = {
+                    doc_id: max(0.0, min(1.0, score))
+                    for doc_id, score in ranked
+                    if score > 0
+                }
+        normalised.append(scores)
+
+    combined: Dict[str, float] = {}
+    evidence: Dict[str, int] = {}
+    for source_scores, weight in zip(normalised, weights):
+        for doc_id, score in source_scores.items():
+            combined[doc_id] = combined.get(doc_id, 0.0) + weight * score
+            evidence[doc_id] = evidence.get(doc_id, 0) + 1
+
+    return sorted(
+        combined.items(),
+        key=lambda item: (-item[1], -evidence[item[0]], item[0]),
+    )
 
 
 @dataclass
@@ -65,32 +130,43 @@ class RetrievalConfig:
     #: Minimum score for an *expanded* table, as a fraction of the strongest
     #: seed. 0 disables the check (every reachable neighbour is kept).
     #:
-    #: The threshold is *relative* rather than absolute because fused RRF
-    #: scores shift with how many recall paths fired, so a fixed cutoff would
-    #: behave differently per question. Seeds are never filtered: they were
-    #: recalled directly.
+    #: The threshold is *relative* rather than absolute because fused scores
+    #: shift with how many recall paths fired, so a fixed cutoff would behave
+    #: differently per question. Seeds are never filtered: they were recalled
+    #: directly.
     #:
-    #: Honest note from the 45-case ACME sweep: with rank-based RRF scores
-    #: this knob had almost no effect -- RRF compresses magnitude into a
-    #: narrow band, so 0.2-0.5 all produced identical output. It becomes
-    #: useful when a score-bearing source (vector similarity, BM25 magnitude)
-    #: joins the fusion and the spread widens.
+    #: Only meaningful in ``weighted`` fusion mode. On the 45-case ACME sweep
+    #: with rank-based RRF this knob was a no-op (0.2-0.5 identical to 0.0):
+    #: RRF compresses magnitude into a narrow band. In ``weighted`` mode the
+    #: normalised scores spread out and the floor starts discarding weak
+    #: branches.
     min_score_ratio: float = 0.0
     #: Minimum score for a *seed*, as a fraction of the strongest one.
     #: 0 keeps every recalled table. At least one seed always survives.
     #:
-    #: Same honest note as ``min_score_ratio``: flat RRF scores made this a
-    #: no-op on the ACME sweep (0.3 behaved identically to 0.0). Kept because
-    #: the API is right -- it will discriminate once score magnitudes are
-    #: available, and because it documents that seeds, not expansion, were
-    #: the dominant noise source (seed P=0.241 vs expanded P=0.011).
+    #: Same story as ``min_score_ratio``: a no-op under rank-based RRF
+    #: (measured on the ACME sweep), active under ``weighted`` fusion, where
+    #: it drops the weak-seed tail that dominated the noise (seed P=0.241 vs
+    #: expanded P=0.011 on the 45-case set).
     min_seed_ratio: float = 0.0
     #: Prompt budget for schema context.
     max_tokens: int = 4000
     #: Tokens held back for instructions and the question.
     reserve_tokens: int = 500
-    #: Per-source RRF weights: [vector, business-term, bm25].
+    #: Per-source weights: [vector, business-term, bm25]. In ``rrf`` mode
+    #: these multiply reciprocal ranks; in ``weighted`` mode they multiply
+    #: normalised scores.
     fusion_weights: Tuple[float, ...] = (1.0, 1.5, 1.0)
+    #: ``rrf`` fuses by rank: robust to incomparable score scales, immune to
+    #: outliers -- and blind to magnitude, which is why ``min_seed_ratio`` /
+    #: ``min_score_ratio`` are no-ops in this mode.
+    #:
+    #: ``weighted`` normalises each source's scores (vector cosine to [0,1],
+    #: BM25 by the query's max, terms to 1.0) and combines linearly. Scores
+    #: then carry magnitude, and the seed/expansion floors become real
+    #: quality bars. The trade-off: a single dominant source can swamp the
+    #: rest, so weights need care.
+    fusion_mode: str = "rrf"
 
 
 @dataclass
@@ -465,10 +541,17 @@ class SemanticLayerRetriever:
             if hits
         ]
 
-        fused = rrf_fuse(
-            [vector_hits, term_hits, bm25_hits],
-            weights=list(cfg.fusion_weights),
-        )
+        ranked_lists = [vector_hits, term_hits, bm25_hits]
+        if cfg.fusion_mode == "weighted":
+            fused = weighted_fuse(
+                ranked_lists, list(cfg.fusion_weights), unbounded=(2,)
+            )
+        elif cfg.fusion_mode == "rrf":
+            fused = rrf_fuse(ranked_lists, weights=list(cfg.fusion_weights))
+        else:
+            raise ValueError(
+                f"unknown fusion_mode: {cfg.fusion_mode!r} (expected 'rrf' or 'weighted')"
+            )
         if not fused:
             return result
 

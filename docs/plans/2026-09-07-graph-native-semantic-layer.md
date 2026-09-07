@@ -415,6 +415,26 @@ python -m hugegraph_llm.semantic_layer.evaluation.cli \
 
 **遗留待办**：precision 的实质改进需要**分数幅度信号**（normalized BM25 或向量余弦直接参与融合，替代纯排名 RRF），这依赖向量召回接入（M2 遗留的 `vector_index=no` 缺口），是下一个自然的工作项。
 
+### 5.11 向量召回接入与加权融合（2026-09-07 实测）
+
+新模块 `semantic_layer/indexer.py` + `retrieval.py` 新增 `weighted` 融合模式。
+
+**能力链路打通**：
+
+| 环节 | 结果 |
+|---|---|
+| 索引构建 | 84 文档（33 表 + 51 术语）0.05s 嵌入，批量调用，0 失败 |
+| 能力探测 | `vector_index=yes`，MCP 上下文工具自动升级为 **`get_context_by_term_hybrid_search`**（最高档） |
+| 阈值激活 | weighted 模式下 `min_seed_ratio` 0.5/0.7/0.9 产生**不同输出**（R@5 0.978→0.919→0.881→0.859）——RRF 下它们是完全相同的 no-op |
+
+**weighted 模式的设计与一个自己测试抓住的错误**：首版把所有源按 max 归一化——对有绝对语义的余弦分数这是错的：0.55 的余弦就是"不太像"，除以批内 max 会把它放大成 0.58、把 0.95 放大成 1.0，让"所有候选都平庸"的查询伪装出"第一名很强"。修正为按源性质区分：**bounded**（余弦/术语）clamp 到 [0,1] 直通、丢弃 0 分（无信号）；**unbounded**（BM25）按该查询 max 归一。`weighted_fuse(..., unbounded=(2,))`。
+
+**必须诚实记录：本环境的 embedding 端点不可用。** `EMBEDDING_TYPE=openai` 指向的端点返回 **401 Invalid token**，且 `OPENAI_EMBEDDING_MODEL=glm-5.3` 是 chat 模型而非 embedding 模型。因此：
+
+- 上表的机制数据用 `DeterministicEmbedder`（哈希嵌入）产生——**它没有语义内容**，只验证"阈值活了"这一机制。数字不代表语义检索质量，不能对外引用。
+- `embed_from_settings()` 已把配置读取路径接通（复用 `Embeddings().get_embedding()`），换成有效端点 + 真实 embedding 模型（如 `text-embedding-3-small` 或 bge 系列）即自动进入语义召回。这是**配置修复**，不是代码工作。
+- 换端点后需要重跑 M4 评测才能声称质量提升；`min_seed_ratio`/`min_score_ratio` 的最优值也要在真实分数分布上重新扫描。
+
 ---
 
 ## 6. 检索层：三段式召回与子图裁剪
