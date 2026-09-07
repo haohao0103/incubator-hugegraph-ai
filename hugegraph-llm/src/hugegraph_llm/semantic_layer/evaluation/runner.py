@@ -165,12 +165,19 @@ def evaluate(
     max_tokens: int = 4000,
     vector_store: Any = None,
     embed: Any = None,
+    executor: Any = None,
 ) -> EvaluationReport:
     """Run every case in a dataset and return the report.
 
     Each case is retrieved, scored, and compared against the full-schema
     baseline. Grouping by ``source`` happens afterwards so a regression can
     be attributed to vocabulary coverage rather than to retrieval itself.
+
+    :param executor: optional warehouse executor (e.g.
+        :class:`~semantic_layer.execution.SqliteExecutor`). When supplied,
+        every case's gold SQL is executed against it -- a validity check on
+        the evaluation set itself. Full execution accuracy (comparing
+        generated SQL's results against gold) additionally needs an LLM.
     """
     cfg = config or RetrievalConfig()
     retriever = SemanticLayerRetriever(
@@ -186,15 +193,16 @@ def evaluate(
     start = time.time()
     for case in dataset:
         result = retriever.retrieve(case.question, max_tokens=max_tokens)
-        results.append(
-            evaluator.score(
-                case,
-                result.tables,
-                tokens_used=result.budget.used_tokens,
-                term_recall_fired="business_term" in (result.sources_used or []),
-                sources_used=list(result.sources_used or []),
-            )
+        scored = evaluator.score(
+            case,
+            result.tables,
+            tokens_used=result.budget.used_tokens,
+            term_recall_fired="business_term" in (result.sources_used or []),
+            sources_used=list(result.sources_used or []),
         )
+        if executor is not None:
+            scored.gold_executable = executor.execute(case.gold_sql).ok
+        results.append(scored)
     elapsed_ms = (time.time() - start) * 1000
 
     by_source = {
@@ -215,15 +223,27 @@ def evaluate(
         results=results,
         baseline_tokens=baseline,
         elapsed_ms=elapsed_ms,
-        not_measured={
-            "execution_accuracy": (
-                "requires a warehouse to run gold SQL; not available here"
-            ),
-            "end_to_end_sql_correctness": (
-                "depends on the generating model, not on retrieval"
-            ),
-        },
+        not_measured=_not_measured(executor is not None),
     )
+
+
+def _not_measured(has_executor: bool) -> Dict[str, str]:
+    if has_executor:
+        execution = (
+            "warehouse executor supplied, but comparing generated SQL "
+            "against gold additionally needs a working LLM endpoint"
+        )
+    else:
+        execution = (
+            "no warehouse executor supplied; pass one to enable gold-SQL "
+            "executability checks"
+        )
+    return {
+        "execution_accuracy": execution,
+        "end_to_end_sql_correctness": (
+            "depends on the generating model, not on retrieval"
+        ),
+    }
 
 
 def write_report(report: EvaluationReport, path: str) -> None:

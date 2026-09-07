@@ -488,6 +488,36 @@ Query{content, exec_count, last_seen_ts, schema_refs}
 
 净效果：`text2sql` 包从 8 个模块 / ~1200 行缩到 2 个模块 / ~450 行，且不再有任何独立的 schema 栈。
 
+### 5.14 数仓执行腿：合成 SQLite 仓库 + gold 可执行性（2026-09-07 实测）
+
+新模块 `semantic_layer/execution/`，补上 NL2SQL 链路里一直缺失的"执行"一环。
+
+| 组件 | 职责 |
+|---|---|
+| `executor.py` | `SqliteExecutor`：只读连接（`mode=ro`，写操作在运行时层面不可能）、`ExecutionResult`（列/行/错误/耗时）、`results_equal`（多重集合比较——GROUP BY 顺序不是答案语义的一部分） |
+| `synthetic.py` | **从语义层投影生成 SQLite 仓库**：类型从 `ColumnRow`、FK 从 `REFERENCES`、行数 fact 200 / dim 40，固定 seed 确定性可复现 |
+
+**为什么"从图生成"是正确做法**：评测 gold SQL 是对照图模型手写的，由同一投影生成的库保证 schema 与语义层零漂移——事实正是如此，生成后 45 条 gold SQL **44 条立即执行成功**。
+
+**健全性检查当场揪出评测集 6 处笔误**（这些 gold SQL 引用了图中不存在的列，检索层从来召回不到它们）：`opportunities.amount`→`amount_usd`、`payments.amount`→`amount_usd`、`order_items.unit_price`→`unit_price_usd`、`compensation.base_salary_usd`→`base_salary`、`INTERVAL '12 months'`→SQLite `date('now','-12 months')`。修正后 **45/45 全部可执行**。教训：没有执行载体时，评测集本身无法被验证——这验证一直缺失。
+
+**实现过程中修掉的三个真 bug**（都在合成器，每个都会静默破坏 FK 一致性）：
+
+1. **建表顺序错误**：第一版按"是否被引用"两档 + 字母序——`orders` 与 `users` 互相都是被引用表，字母序让 `orders` 先建，其 FK 生成时 `users` 的 id 池还不存在 → 全部走 fallback。改为 Kahn 拓扑排序（依赖深度），环引用兜底排最后。
+2. **FK 父表名精确匹配**：`user_id` 找不到 `users`（差一个 s）。加 stem 匹配（`rstrip('s')`）+ 前缀包含。
+3. **`_primary_key` fallback 污染**：把 `order_items.order_id`（FK 列）误当主键收进 id 池。fallback 收窄到 `id` / `{table}_id`。
+
+**NL2SQL 链路现状（对数仓）**：
+
+```
+① 检索 ✅  ② join 约束 ✅  ③ 口径 ✅  ④ few-shot ✅
+⑤ LLM 生成  ❌ 端点 401（配置问题，代码就绪）
+⑥ SQL 执行  ✅ 合成 SQLite 仓库（5640 行，45/45 gold 可执行）
+⑦ 评测      ✅ gold_executable_rate 已进 M4；execution_accuracy 只差 ⑤
+```
+
+**诚实边界**：合成数据没有真实业务分布（金额均匀随机、枚举隐式），适合验证管线正确性与测 execution 可行性，不适合声称"对真实数仓的准确率"。neocarta 的 BigQuery DDL（33 表、描述内联）是更真实的数据源，但需要方言转换器（OPTIONS 剥离、STRUCT/ARRAY→JSON、日期字面量），列为后续增强。生产执行器应指向真实数仓（StarRocks/MySQL），`SqliteExecutor` 只是同形适配器。
+
 ---
 
 ## 6. 检索层：三段式召回与子图裁剪

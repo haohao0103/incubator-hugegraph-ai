@@ -111,6 +111,10 @@ class CaseResult:
     term_recall_fired: bool = False
     sources_used: List[str] = field(default_factory=list)
 
+    # executability (present when a warehouse executor was supplied)
+    #: gold SQL ran without error against the warehouse.
+    gold_executable: Optional[bool] = None
+
     @property
     def is_success(self) -> bool:
         """Every gold table retrieved, and the set is joinable."""
@@ -159,6 +163,9 @@ class MetricSummary:
     gold_joinable_rate: float = 0.0
     term_recall_rate: float = 0.0
     success_rate: float = 0.0
+    #: Fraction of gold SQL that executed cleanly on the warehouse.
+    #: None when no executor was supplied.
+    gold_executable_rate: Optional[float] = None
 
     @classmethod
     def from_results(cls, results: Sequence[CaseResult]) -> "MetricSummary":
@@ -185,6 +192,11 @@ class MetricSummary:
             gold_joinable_rate=sum(1 for r in results if r.gold_joinable) / n,
             term_recall_rate=sum(1 for r in results if r.term_recall_fired) / n,
             success_rate=sum(1 for r in results if r.is_success) / n,
+            gold_executable_rate=(
+                sum(1 for r in results if r.gold_executable) / n
+                if any(r.gold_executable is not None for r in results)
+                else None
+            ),
         )
 
     def to_dict(self) -> Dict[str, float]:
@@ -202,6 +214,11 @@ class MetricSummary:
             "gold_joinable_rate": round(self.gold_joinable_rate, 3),
             "term_recall_rate": round(self.term_recall_rate, 3),
             "success_rate": round(self.success_rate, 3),
+            "gold_executable_rate": (
+                round(self.gold_executable_rate, 3)
+                if self.gold_executable_rate is not None
+                else None
+            ),
         }
 
 
