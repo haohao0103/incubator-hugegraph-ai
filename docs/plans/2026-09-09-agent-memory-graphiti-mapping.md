@@ -134,8 +134,38 @@ TRANSITION 边   {from_state, to_state, valid_at, trigger_event}
 
 ---
 
-## 7. 下一步
+## 7. 落地进展
 
-1. `State` + `TRANSITION` 建模落进 schema_def，实现当前状态识别与流转路径（需求③）
-2. 双时间线字段 + RANGE 索引 + 哨兵值约定落地，跑 AS-OF 查询冒烟
-3. 与 `semantic_layer` 的能力合并点评估：预算器、BM25/RRF 融合、MCP 工具层
+| 步骤 | 状态 | 结果 |
+|---|---|---|
+| 双时间线 schema 落 HugeGraph | ✅ | `memory/schema.py`；RANGE 索引 + `OPEN` 哨兵 |
+| 时序原语（as_of / between / 失效 / 演化） | ✅ | `memory/temporal.py` |
+| 状态图（当前状态 / 流转路径） | ✅ | `add_state` / `close_state` / `current_state` / `transition_path` |
+| 真实服务器冒烟 | ✅ | 见 §8 |
+
+## 8. 真实服务器冒烟结果（单节点 HugeGraph 1.7.0，图 `memory_smoke`）
+
+```
+expired by f2: ['f1']                        ← 矛盾事实被失效而非删除
+as_of 2024-06: ['works at Acme']             ← 历史状态回溯 ✅
+as_of 2025-06: ['works at Globex']
+history of works_at: [Acme → Globex]         ← 演化追踪 ✅
+current state: suspended                      ← 当前状态识别 ✅
+transition path: [active → suspended]         ← 状态流转分析 ✅
+total facts retained: 2                       ← 旧事实保留，未删除
+```
+
+三项需求中 ①② 已由 Graphiti 模型直接满足，③ 由新增的 state 建模满足。
+
+**冒烟暴露并修复的两个 REST 编码 bug**（驱动自带 50 个离线测试用 fake client，**查不出**这两个问题）：
+
+1. `_json_str` 把所有值字符串化——Zep 模型（全 TEXT 属性、日期为 ISO 字符串）的遗留设计。对 LONG 类型的 `created_at` 发送 `"1704067200000"` 会被服务端拒绝：`actual type String`。改为数值/布尔透传，仅 list/dict 做 JSON 编码。
+2. `update_edge` 给边 id 加了引号。边 id 形如 `Su1>1>1>>Sc1`，加引号后服务端报 `Invalid format of edge id`；而**顶点 id 恰恰需要引号**——两种 id 的引用规则相反。已修正并加测试锁定。
+
+两处均已补测试（`tests/memory/test_driver_quoting.py`），且在 graphiti 0.29.2 / 0.30.2 上均 82/82 通过。
+
+## 9. 下一步
+
+1. 与 `semantic_layer` 的能力合并点评估：预算器、BM25/RRF 融合、MCP 工具层
+2. 向量检索外置化（当前为进程内余弦扫描）
+3. REST vs Gremlin 统一决策（待实测数据）

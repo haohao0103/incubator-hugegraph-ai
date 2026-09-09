@@ -72,10 +72,24 @@ _EDGE_LABELS: dict[tuple[str, str, str], list[str]] = {
 }
 
 
-def _json_str(v: Any) -> str | None:
-    """Encode list/dict model fields as JSON strings for HugeGraph TEXT props."""
+def _json_str(v: Any) -> Any:
+    """Encode a property value for the HugeGraph REST API.
+
+    Numeric and boolean values are passed through unchanged. The original
+    implementation stringified *everything*, which was fine for the
+    Zep-shaped model this client was written against (all-TEXT properties,
+    dates as ISO strings) but breaks any LONG/DOUBLE/BOOLEAN key: the server
+    rejects ``"1704067200000"`` for a Long property with "actual type
+    String". Temporal fields are epoch millis and must stay numeric.
+
+    Only list/dict values are JSON-encoded (HugeGraph has no such types).
+    """
     if v is None:
         return None
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v
     if isinstance(v, (list, dict)):
         return json.dumps(v, ensure_ascii=False)
     return str(v)
@@ -122,6 +136,41 @@ class HugeGraphClient:
         return f'"{vid}"'
 
     # ----- schema ---------------------------------------------------------- #
+    def ensure_schema(self, schema: dict) -> dict:
+        """Create schema objects described by ``schema``, idempotently.
+
+        Unlike :meth:`init_schema`, which carries the fixed Zep-shaped model
+        this client was written for (all-TEXT properties), this accepts an
+        externally supplied schema -- so temporal fields can be declared as
+        LONG and indexed for range queries, which TEXT would not allow.
+
+        Existing compatible objects are left alone: HugeGraph cannot alter a
+        property key's type once created, so a mismatch is reported rather
+        than silently ignored. Returns counts of what was created.
+        """
+        created = {"propertykeys": 0, "vertexlabels": 0,
+                   "edgelabels": 0, "indexes": 0}
+        for pk in schema.get("propertykeys", []):
+            if self._create_if_absent("/schema/propertykeys", pk, pk["name"]):
+                created["propertykeys"] += 1
+        for vl in schema.get("vertexlabels", []):
+            if self._create_if_absent("/schema/vertexlabels", vl, vl["name"]):
+                created["vertexlabels"] += 1
+        for el in schema.get("edgelabels", []):
+            if self._create_if_absent("/schema/edgelabels", el, el["name"]):
+                created["edgelabels"] += 1
+        return created
+
+    def _create_if_absent(self, path: str, body: dict, name: str) -> bool:
+        """POST unless an object of that name already exists. True if created."""
+        existing = self._req("GET", path)
+        names = {item.get("name") for item in (existing or {}).get(
+            path.rstrip("/").split("/")[-1], [])}
+        if name in names:
+            return False
+        self._req("POST", path, json=body)
+        return True
+
     def init_schema(self, rebuild: bool = True) -> None:
         """Create property keys, vertex/edge labels (idempotent).
 
@@ -229,10 +278,16 @@ class HugeGraphClient:
         return self._req("POST", "/graph/edges", json=body)
 
     def update_edge(self, edge_id: str, label: str, props: dict) -> dict:
-        """Append-merge properties onto an existing edge (by edge id)."""
+        """Append-merge properties onto an existing edge (by edge id).
+
+        Edge ids are **not** wrapped in quotes, unlike vertex ids. An edge
+        id looks like ``Su1>1>1>>Sc1``; quoting it makes HugeGraph reject it
+        with "Invalid format of edge id", while a vertex id needs the quotes.
+        The two id forms simply have different quoting rules.
+        """
         body = {"label": label,
                 "properties": {k: _json_str(v) for k, v in props.items() if v is not None}}
-        return self._req("PUT", f"/graph/edges/{self._qid(edge_id)}?action=append",
+        return self._req("PUT", f"/graph/edges/{edge_id}?action=append",
                          json=body)
 
     def get_edges_of(self, vid: str, direction: str = "OUT",
