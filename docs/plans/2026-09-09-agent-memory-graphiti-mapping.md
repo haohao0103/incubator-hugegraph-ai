@@ -207,8 +207,53 @@ top_k=1:       [works at Globex]                     ← 门控生效
 
 **101 个测试通过**（50 驱动 + 21 时序 + 19 检索 + 11 编码）。
 
-## 10. 下一步
+## 10. 向量通道（FAISS 先行，OceanBase 后续）
 
-1. 向量通道接入（`MultiRecallConfig` 里 `vector` 已预留但未挂载；memory 目前只有时序+附加通道）
+按部署路线规划：**开发/单机用 FAISS（进程内、零基础设施），生产切 OceanBase**。`memory/vector_channel.py` 因此把后端做成可插拔——切换是构造参数，不是重写。
+
+### 契约（刻意收窄）
+
+```python
+add(items: [(id, text)]) -> None          # 嵌入在此处完成，调用方不碰向量
+search(query, top_k) -> [(id, score)]     # 高分=更相似
+ranked_ids(query, top_k) -> [id]          # 供共享 RRF 使用
+```
+
+FAISS 实现包装仓库已有的 `FaissVectorIndex`（`indices/vector_index/`），不直接碰 faiss，从而索引持久化与属性处理与 hugegraph-llm 其余部分一致。
+
+### 融合语义：相关性 vs 有效性
+
+两个通道分工明确，合成后由共享 RRF 融合：
+
+| 通道 | 回答 |
+|---|---|
+| `temporal` | 该记忆**在 T 时是否成立** |
+| `vector` | 该记忆与问题**是否相关** |
+
+**门控优先于相关性**：向量通道命中的记忆若在 T 时不成立，一律不返回。
+
+### 真实服务器冒烟（`memory_vector_smoke`）
+
+```
+indexed: 3 facts
+仅时序:      channels=['temporal']              0.500 Globex / 0.250 dark mode
+时序+向量:   channels=['temporal','vector_faiss']
+门控验证:    T0 问 "globex" → ['works at Acme','prefers dark mode']
+             ✓ 向量认为 Globex 高度相关，但 T0 时它不成立 → 未返回
+```
+
+### 实现中修掉的三个真 bug
+
+1. **`dis_threshold` 语义误读**：它是**距离上界**（`dist < threshold` 才保留），不是相似度下界。传 `0.0`（直觉上的"不过滤"）会把所有结果都滤掉。改为传无穷大、在此处自行算相似度。
+2. **`add()` 批量嵌入一处失败全批丢弃**：改为逐项容错——一处失败只跳过该项，部分索引远好于静默空索引。
+3. **FAISS 返回无分数且可能重复**：索引只回 property payload（无 score），且同 id 可能出现多次。改为自存向量重算余弦 + 按 id 去重 + 按相似度重排（其自身顺序是按 L2 距离，不是本模块评分依据）。
+
+另有一个自我修正：`_similarity` 重构时误删 `dot` 计算行，被 `except` 静默吞掉返回 None——`except` 吞异常掩盖 bug 的典型案例，已加注释说明分数是"建议性"的但不应静默失败。
+
+**114 个测试通过**。
+
+## 11. 下一步
+
+1. OceanBase 通道实现（生产切换）：实现同一 `VectorChannel` 契约即可，`recall()` 无需改动
 2. 与 `semantic_layer` 的**并列关系**确认：两者是同一通用检索栈在不同领域的应用，无需互相依赖
 3. REST vs Gremlin 统一决策（待实测数据）

@@ -50,6 +50,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from hugegraph_llm.memory.schema import OPEN
 from hugegraph_llm.memory.temporal import Fact, TemporalStore
+from hugegraph_llm.memory.vector_channel import VectorChannel
 from hugegraph_llm.operators.graph_op.kg_retriever_base import (
     KGRetriever,
     RetrieverResult,
@@ -162,19 +163,25 @@ class TemporalRetriever(KGRetriever):
 def recall(
     store: TemporalStore,
     *,
+    query: str = "",
     at: Optional[int] = None,
     now: Optional[int] = None,
     config: Optional[MemoryRecallConfig] = None,
     extra_channels: Optional[Sequence[Sequence[str]]] = None,
+    vector_channel: Optional["VectorChannel"] = None,
 ) -> RetrieverResult:
     """Recall memories as of ``at``, ranked by recency.
 
     :param at: as-of time; None means "current beliefs".
     :param now: reference time for decay; defaults to ``at``.
+    :param query: question text; only needed when a vector channel is used.
     :param extra_channels: additional ranked fact-id lists from other
-        retrievers (a vector channel, for example). Each is fused with the
-        temporal channel through the shared RRF implementation, so adding a
-        channel needs no new fusion code.
+        retrievers. Each is fused with the temporal channel through the
+        shared RRF implementation, so adding a channel needs no new fusion
+        code.
+    :param vector_channel: optional semantic-similarity channel. It supplies
+        relevance; the temporal channel supplies validity. Fusing the two is
+        what makes recall both relevant and historically correct.
     """
     cfg = config or MemoryRecallConfig()
     reference = now if now is not None else at
@@ -207,6 +214,16 @@ def recall(
     # bare lists too, but unnamed channels are untraceable in metadata and
     # a mixed list breaks the caller's own unpacking.
     channels: List[Any] = [("temporal", temporal_ranking)]
+
+    if vector_channel is not None and query:
+        try:
+            channels.append(
+                (vector_channel.name,
+                 vector_channel.ranked_ids(query, cfg.top_k * 2))
+            )
+        except Exception as exc:  # noqa: BLE001 - relevance is best-effort
+            logger.warning("vector channel failed, recalling without it: %s", exc)
+
     for index, channel in enumerate(extra_channels or []):
         channels.append((f"extra_{index}", list(channel)))
 
