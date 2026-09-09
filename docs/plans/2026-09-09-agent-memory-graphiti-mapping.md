@@ -164,8 +164,51 @@ total facts retained: 2                       ← 旧事实保留，未删除
 
 两处均已补测试（`tests/memory/test_driver_quoting.py`），且在 graphiti 0.29.2 / 0.30.2 上均 82/82 通过。
 
-## 9. 下一步
+## 9. 检索层：站在通用 RAG 栈上（非语义层）
 
-1. 与 `semantic_layer` 的能力合并点评估：预算器、BM25/RRF 融合、MCP 工具层
-2. 向量检索外置化（当前为进程内余弦扫描）
+**重要更正**：最初提议"与 semantic_layer 合并检索能力"是错的——那混淆了**领域功能**（语义层=数仓元数据，服务 Text2SQL）与**工程能力**（检索栈）。memory 需要的是 RAG 检索流程，其归属是通用检索栈，不是语义层。
+
+### 复用关系
+
+| 组件 | 来源 | 是否领域耦合 |
+|---|---|---|
+| `KGRetriever` / `RetrieverResultItem` | `operators/graph_op/kg_retriever_base.py`（已有） | 否，通用 ✅ |
+| `ReciprocalRankFusion` | `operators/graph_op/rrf_fusion.py`（已有） | 否，通用 ✅ |
+| `SchemaRetriever` / `GraphStructureRetriever` 等 | `kg_multi_retrieval.py`（已有） | **是**（`NODE_LABELS = Table/Field/Metric`）❌ |
+
+**结论**：memory 复用前两个通用件，**不用** `SchemaRetriever` 系列——它是数仓 schema linking 专用（检索单元是 Table/Field/Metric 顶点），而 memory 的检索单元是 `RELATES_TO` **边**（fact），领域不匹配。
+
+### memory 自研部分（仅时序维度）
+
+`memory/retrieval.py`：
+
+1. **时序门控（filter，非 score）**——只保留 `as_of(t)` 成立的 fact。在 T 时不为真的事实，无论多匹配都不该出现。
+2. **时间衰减（score）**——半衰期 30 天的指数衰减，基于"事实为真持续了多久"而非"我们何时得知"。
+
+**关键顺序：门控先于打分。** 若先打分再过滤，过期事实会占用 rank 预算把当前事实挤出 `top_k`（`test_gating_precedes_scoring` 锁定此语义）。
+
+### 真实服务器冒烟（`memory_retrieval_smoke`）
+
+```
+as_of T0+10d:  0.794 works at Acme (current=False)   ← 仍为真，但后来被推翻
+               0.794 prefers dark mode (current=True)
+as_of T60:     0.500 works at Globex
+               0.250 prefers dark mode               ← 60 天衰减到 0.25
+top_k=1:       [works at Globex]                     ← 门控生效
+附加通道:      channels=['temporal','extra_0'] → 顺序变为 [f3, f2]
+```
+
+双时间线语义被这个输出精确验证：T0+10d 时 Acme **仍为真**（valid 区间内）但 `is_current=False`（T30 被 Globex 取代）——两个时间轴独立工作。
+
+### 测试暴露的两个问题（均已修）
+
+1. **通道未命名**：`extra_channels` 传入裸 list，与 RRF 的 `(channel, items)` 元组混用导致解包失败。统一为具名通道 `extra_N`。
+2. **我自己写错的测试期望**：原以为 `include_superseded=True` 能返回 T60 时的 Acme——但 Acme 在 T60 **事实本身已不成立**（valid 区间 T0–T30 已过），任何模式都不该返回。`include_superseded` 只控制"已被推翻的信念"，不控制"不为真的事实"。已改为能区分两轴的场景（valid 到 T60 但 T30 被 supersede）。
+
+**101 个测试通过**（50 驱动 + 21 时序 + 19 检索 + 11 编码）。
+
+## 10. 下一步
+
+1. 向量通道接入（`MultiRecallConfig` 里 `vector` 已预留但未挂载；memory 目前只有时序+附加通道）
+2. 与 `semantic_layer` 的**并列关系**确认：两者是同一通用检索栈在不同领域的应用，无需互相依赖
 3. REST vs Gremlin 统一决策（待实测数据）
