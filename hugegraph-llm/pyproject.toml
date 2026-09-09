@@ -71,6 +71,11 @@ vectordb = [
     "pymilvus==2.5.9",
     "qdrant-client==1.14.2",
 ]
+# Agent memory on Graphiti's bi-temporal knowledge graph. Not vendored: the
+# driver is verified against both 0.29.x and 0.30.x, so a range is safe.
+memory = [
+    "graphiti-core>=0.29,<0.31",
+]
 
 [project.urls]
 homepage = "https://hugegraph.apache.org/"
