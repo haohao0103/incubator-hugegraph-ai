@@ -126,6 +126,9 @@ class FaissChannel(VectorChannel):
         config: Optional[VectorChannelConfig] = None,
         index_name: str = "memory",
     ) -> None:
+        # Accepts either a plain (str -> vector) callable or the project's
+        # LocalEmbedder, which exposes embed() and returns a numpy array.
+        self._embed_fn = embed
         self.embed = embed
         self.config = config or VectorChannelConfig()
         self.index_name = index_name
@@ -148,7 +151,7 @@ class FaissChannel(VectorChannel):
             # memory in the batch -- and a silently-empty index is far worse
             # than a partially populated one.
             try:
-                vector = self.embed(text)
+                vector = self._embed(text)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("faiss channel: embed failed for %s: %s", doc_id, exc)
                 continue
@@ -166,6 +169,17 @@ class FaissChannel(VectorChannel):
         except Exception as exc:  # noqa: BLE001 - degrade, do not fail recall
             logger.warning("faiss channel: add failed: %s", exc)
 
+    def _embed(self, text: str) -> List[float]:
+        """Embed one text via a callable or a LocalEmbedder."""
+        fn = self._embed_fn
+        if hasattr(fn, "embed"):
+            vector = fn.embed(text)
+        else:
+            vector = fn(text)
+        if hasattr(vector, "tolist"):
+            vector = vector.tolist()
+        return [float(x) for x in (vector or [])]
+
     def _ensure_index(self, dim: int) -> None:
         if self._index is not None:
             return
@@ -182,7 +196,7 @@ class FaissChannel(VectorChannel):
         if self._index is None or not self._ids:
             return []
         try:
-            vector = self.embed(query)
+            vector = self._embed(query)
         except Exception as exc:  # noqa: BLE001
             logger.warning("faiss channel: embed failed: %s", exc)
             return []
@@ -231,7 +245,7 @@ class FaissChannel(VectorChannel):
             if stored is None:
                 return None
             if query_vector is None:
-                query_vector = self.embed(query)
+                query_vector = self._embed(query)
             dot = sum(a * b for a, b in zip(query_vector, stored))
             norm_a = sum(a * a for a in query_vector) ** 0.5
             norm_b = sum(b * b for b in stored) ** 0.5
