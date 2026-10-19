@@ -271,6 +271,11 @@ def _build_parser() -> argparse.ArgumentParser:
     audit_parser.add_argument("--offset", type=int, default=0, help="Offset")
     audit_parser.set_defaults(func=cmd_audit)
 
+    # skill graph (build / query / stats)
+    from hugegraph_llm.engines.skill_graph.cli import add_skill_parser
+
+    add_skill_parser(subparsers)
+
     return parser
 
 

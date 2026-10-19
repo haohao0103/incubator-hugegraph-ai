@@ -113,7 +113,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .relation-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin: 1px; background: var(--bg3); color: var(--text2); }
 
 /* Ebbinghaus chart */
-.ebbinghaus-chart { height: 200px; margin: 8px 0; }
+.ebbinghaus-wrapper { height: 200px; margin: 8px 0; position: relative; overflow: hidden; }
+.ebbinghaus-chart { height: 100% !important; width: 100% !important; }
 
 /* Welcome */
 .welcome { text-align: center; padding: 60px 40px; }
@@ -140,7 +141,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="badge">LLM-Powered</div>
   <div class="badge">Ebbinghaus</div>
   <div class="badge">Graph Store</div>
-  <div class="badge" style="color: var(--text2); border: 1px solid var(--border);">HugeGraph 1.7.0</div>
+  <div class="badge" style="color: var(--green); border: 1px solid var(--green);">HugeGraph Server</div>
   <div class="status" id="serverStatus">
     <span class="dot offline" id="statusDot"></span>
     <span id="statusText">Connecting...</span>
@@ -162,7 +163,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
       <div id="tab-stats" style="display:none"></div>
       <div id="tab-ebbinghaus" style="display:none">
         <p style="color:var(--text2);font-size:11px;margin-bottom:8px;">Retention = R(t) = e<sup>-0.821t</sup> + access_count x 0.3</p>
-        <canvas id="ebbinghausChart" class="ebbinghaus-chart"></canvas>
+        <div class="ebbinghaus-wrapper">
+          <canvas id="ebbinghausChart" class="ebbinghaus-chart"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -265,7 +268,14 @@ function switchTab(el, tabId) {
     if (el) el.style.display = id === tabId ? 'block' : 'none';
   });
   if (tabId === 'stats') refreshStats();
-  if (tabId === 'ebbinghaus') refreshEbbinghaus();
+  if (tabId === 'ebbinghaus') {
+    // Chart needs visible container to get correct dimensions
+    if (ebbinghausChart) {
+      ebbinghausChart.resize();
+    } else {
+      refreshEbbinghaus();
+    }
+  }
 }
 
 // ============================================================================
@@ -390,7 +400,7 @@ async function processAdd(text, classifyInfo) {
       { name: 'LLM Entity Extraction', status: 'done', detail: `Extracted ${result.entities.length} entities via LLM` },
       { name: 'Relation Extraction', status: 'done', detail: `Found ${result.relationships.length} relationships` },
       { name: `Decision: ${result.action}`, status: 'done', detail: result.reason },
-      { name: 'Graph Storage', status: 'done', detail: `Saved to HugeGraph graph store` },
+      { name: 'Graph Storage', status: 'done', detail: `Saved to HugeGraph Server` },
     ];
 
     const entityBadges = result.entities.map(e =>
@@ -558,44 +568,68 @@ async function refreshStats() {
 }
 
 async function refreshEbbinghaus() {
+  const tabEl = document.getElementById('tab-ebbinghaus');
+  const isVisible = tabEl && tabEl.style.display !== 'none';
+
   try {
     const stats = await apiGet('/api/stats');
     const data = stats.ebbinghaus_scores;
-    const canvas = document.getElementById('ebbinghausChart');
-    const ctx = canvas.getContext('2d');
 
-    if (ebbinghausChart) ebbinghausChart.destroy();
+    if (!isVisible && !ebbinghausChart) {
+      // Tab hidden and no chart yet — cache data, render when tab opens
+      window._pendingEbbinghaus = data;
+      return;
+    }
 
-    ebbinghausChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: data.map(d => `#${d.id}`),
-        datasets: [{
-          label: 'Retention Score',
-          data: data.map(d => d.retention),
-          backgroundColor: data.map(d =>
-            d.retention > 0.7 ? 'rgba(63,185,80,0.6)' :
-            d.retention > 0.3 ? 'rgba(210,153,34,0.6)' : 'rgba(248,81,73,0.6)'
-          ),
-          borderColor: data.map(d =>
-            d.retention > 0.7 ? '#3fb950' :
-            d.retention > 0.3 ? '#d29922' : '#f85149'
-          ),
-          borderWidth: 1,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
+    if (ebbinghausChart) {
+      ebbinghausChart.data.labels = data.map(d => `#${d.id}`);
+      ebbinghausChart.data.datasets[0].data = data.map(d => d.retention);
+      ebbinghausChart.data.datasets[0].backgroundColor = data.map(d =>
+        d.retention > 0.7 ? 'rgba(63,185,80,0.6)' :
+        d.retention > 0.3 ? 'rgba(210,153,34,0.6)' : 'rgba(248,81,73,0.6)'
+      );
+      ebbinghausChart.data.datasets[0].borderColor = data.map(d =>
+        d.retention > 0.7 ? '#3fb950' :
+        d.retention > 0.3 ? '#d29922' : '#f85149'
+      );
+      ebbinghausChart.update('none');
+    } else {
+      const canvas = document.getElementById('ebbinghausChart');
+      const ctx = canvas.getContext('2d');
+      ebbinghausChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.map(d => `#${d.id}`),
+          datasets: [{
+            label: 'Retention Score',
+            data: data.map(d => d.retention),
+            backgroundColor: data.map(d =>
+              d.retention > 0.7 ? 'rgba(63,185,80,0.6)' :
+              d.retention > 0.3 ? 'rgba(210,153,34,0.6)' : 'rgba(248,81,73,0.6)'
+            ),
+            borderColor: data.map(d =>
+              d.retention > 0.7 ? '#3fb950' :
+              d.retention > 0.3 ? '#d29922' : '#f85149'
+            ),
+            borderWidth: 1,
+          }]
         },
-        scales: {
-          y: { min: 0, max: 1, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
-          x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { display: false } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false },
+          },
+          hover: { mode: null },
+          scales: {
+            y: { min: 0, max: 1, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { display: false } }
+          }
         }
-      }
-    });
+      });
+    }
   } catch {}
 }
 
@@ -727,8 +761,8 @@ function drawGraph() {
 // Handle resize
 window.addEventListener('resize', drawGraph);
 
-// Auto-refresh Ebbinghaus every 10s
-setInterval(refreshEbbinghaus, 10000);
+// Auto-refresh Ebbinghaus every 60s
+setInterval(refreshEbbinghaus, 60000);
 
 // Initial load
 refreshAll();
