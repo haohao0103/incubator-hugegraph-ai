@@ -35,6 +35,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from hugegraph_llm.engines.skill_graph.errors import DuplicateSkillError
 from hugegraph_llm.engines.skill_graph.schema import (
     EdgeType,
     NodeType,
@@ -260,8 +261,17 @@ def load_skills(skills_dir: str) -> SkillGraph:
     paths = sorted(p for p in root.rglob("*") if p.is_file() and p.name.upper() == "SKILL.MD")
     nodes: List[SkillNode] = []
     edges: List[SkillEdge] = []
+    seen: Dict[str, Path] = {}
     for path in paths:
         node, node_edges = load_skill_file(path)
+        if node.id in seen:
+            # Two files resolving to one id would silently overwrite each other
+            # (the last one wins), serving the wrong skill with no error.
+            raise DuplicateSkillError(
+                f"duplicate skill id {node.id!r}: both {seen[node.id]} and {path} define "
+                f"name {node.name!r}; give each skill a unique name"
+            )
+        seen[node.id] = path
         nodes.append(node)
         edges.extend(node_edges)
     if not nodes:
@@ -271,7 +281,14 @@ def load_skills(skills_dir: str) -> SkillGraph:
     categories: Dict[str, str] = {}
     for node in nodes:
         if node.category:
-            categories[category_id(node.category)] = node.category
+            cid = category_id(node.category)
+            existing = categories.get(cid)
+            if existing is not None and existing != node.category:
+                raise DuplicateSkillError(
+                    f"categories {existing!r} and {node.category!r} both map to {cid!r}; "
+                    "rename one so each category has a unique id"
+                )
+            categories[cid] = node.category
     cat_nodes = [
         SkillNode(
             id=cid,

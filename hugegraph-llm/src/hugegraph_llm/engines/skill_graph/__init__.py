@@ -38,6 +38,10 @@ Public API::
     print(result.to_context())
 """
 
+from hugegraph_llm.engines.skill_graph.edge_inducer import (
+    InductionReport,
+    LLMEdgeInducer,
+)
 from hugegraph_llm.engines.skill_graph.embedder import (
     Embedder,
     HashingEmbedder,
@@ -52,6 +56,7 @@ from hugegraph_llm.engines.skill_graph.graph_builder import (
 from hugegraph_llm.engines.skill_graph.retriever import (
     RetrievalResult,
     RetrievedSkill,
+    ServiceSkillRetriever,
     SkillRetriever,
 )
 from hugegraph_llm.engines.skill_graph.schema import (
@@ -65,6 +70,9 @@ from hugegraph_llm.engines.skill_graph.schema import (
     cosine,
     skill_id,
     slugify,
+)
+from hugegraph_llm.engines.skill_graph.service_loader import (
+    load_graph_from_services,
 )
 from hugegraph_llm.engines.skill_graph.skill_loader import (
     load_skill_file,
@@ -97,8 +105,14 @@ __all__ = [
     "GraphBuilder",
     "BuildReport",
     "write_to_hugegraph",
+    # typed edge induction (SkillDAG recipe)
+    "LLMEdgeInducer",
+    "InductionReport",
     # retriever
     "SkillRetriever",
+    "ServiceSkillRetriever",
     "RetrievalResult",
     "RetrievedSkill",
+    # service-backed loading (production source of truth)
+    "load_graph_from_services",
 ]

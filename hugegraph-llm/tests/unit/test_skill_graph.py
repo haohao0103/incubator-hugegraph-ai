@@ -27,6 +27,7 @@ from hugegraph_llm.engines.skill_graph import (
     EdgeType,
     GraphBuilder,
     HashingEmbedder,
+    LLMEdgeInducer,
     NodeType,
     SkillEdge,
     SkillGraph,
@@ -36,6 +37,8 @@ from hugegraph_llm.engines.skill_graph import (
     skill_id,
 )
 from hugegraph_llm.engines.skill_graph.cli import main as skill_cli_main
+from hugegraph_llm.engines.skill_graph.hg_store import HugeGraphSkillStore
+from hugegraph_llm.engines.skill_graph.ob_store import SemanticHit
 from hugegraph_llm.engines.skill_graph.schema import category_id
 
 SKILLS = {
@@ -291,6 +294,596 @@ def test_cli_stats_from_directory(corpus: Path, capsys):
     assert rc == 0
     stats = json.loads(capsys.readouterr().out)
     assert stats["skills"] == len(SKILLS)
+
+
+# ── L1: typed edge induction (LLM, SkillDAG recipe) ──────────
+class _FakeLLM:
+    """Deterministic stand-in for a chat LLM (no network)."""
+
+    def generate(self, prompt=None, *args, **kwargs):
+        prompt = prompt or ""
+        if "ONE SHORT SENTENCE" in prompt:
+            return "a RAG flow requires a vector index and text chunking"
+        # classification prompt: decide from the A/B names it contains
+        if "rag-pipeline" in prompt and "vector-index" in prompt:
+            return '{"type": "depends_on"}'
+        if "text-chunking" in prompt and "data-ingestion" in prompt:
+            return '```json\n{"type": "composes_with"}\n```'
+        return '{"type": "none"}'
+
+
+def test_llm_edge_inducer_adds_typed_edges():
+    nodes = [_node("rag-pipeline"), _node("vector-index"), _node("text-chunking"), _node("data-ingestion")]
+    graph = SkillGraph(nodes=nodes)
+    inducer = LLMEdgeInducer(
+        llm=_FakeLLM(),
+        embedder=HashingEmbedder(dim=32),
+        threshold=0.0,  # every pair becomes a candidate; the LLM decides the type
+        candidate_top_k=4,
+        max_pairs=20,
+    )
+    builder = GraphBuilder(embedder=HashingEmbedder(dim=32), edge_inducer=inducer)
+    graph, report = builder.build(graph)
+
+    assert report.llm_edges >= 1
+    assert report.llm_induction["classified_pairs"] >= 1
+    llm_edges = [e for e in graph.edges if e.provenance == "llm"]
+    types = {e.edge_type for e in llm_edges}
+    assert EdgeType.DEPENDS_ON in types
+    # composes_with is symmetric -> materialised in both directions by the builder
+    comp = [e for e in graph.edges if e.edge_type == EdgeType.COMPOSES_WITH]
+    assert len(comp) == 2
+    # no similarity edges were induced when a typed inducer is supplied
+    assert report.similarity_edges == 0
+
+
+def test_llm_edge_inducer_requires_generate():
+    with pytest.raises(ValueError):
+        LLMEdgeInducer(llm=object())
+
+
+# ── L1: incremental build ────────────────────────────────────
+class _CountingLLM(_FakeLLM):
+    """FakeLLM that counts generate() calls, to prove incremental cheapness."""
+
+    def __init__(self):
+        super().__init__()
+        self.needs_calls = 0
+
+    def generate(self, prompt=None, *args, **kwargs):
+        if prompt and "ONE SHORT SENTENCE" in prompt:
+            self.needs_calls += 1
+        return super().generate(prompt, *args, **kwargs)
+
+
+def test_incremental_build_only_regenerates_needs_for_new_skills(tmp_path: Path):
+    nodes = [_node("rag-pipeline"), _node("vector-index"), _node("text-chunking"), _node("data-ingestion")]
+    graph = SkillGraph(nodes=nodes)
+    llm = _CountingLLM()
+    inducer = LLMEdgeInducer(llm=llm, embedder=HashingEmbedder(dim=32), threshold=0.0,
+                             candidate_top_k=4, max_pairs=20)
+    builder = GraphBuilder(embedder=HashingEmbedder(dim=32), edge_inducer=inducer)
+    graph, report = builder.build(graph)
+    full_needs_calls = llm.needs_calls
+    assert full_needs_calls == 4  # one needs view per skill in a full build
+
+    # persist, then add ONE new skill and build incrementally
+    out = tmp_path / "base.json"
+    graph.save(str(out))
+    base = SkillGraph.load(str(out))
+    new_node = _node("answer-generation")
+    base.add_node(new_node)
+    llm2 = _CountingLLM()
+    inducer2 = LLMEdgeInducer(llm=llm2, embedder=HashingEmbedder(dim=32), threshold=0.0,
+                              candidate_top_k=4, max_pairs=20)
+    builder2 = GraphBuilder(embedder=HashingEmbedder(dim=32), edge_inducer=inducer2)
+    base, report2 = builder2.build(base, new_skill_ids={new_node.id})
+
+    # only the new skill costs an LLM needs call; old skills reuse persisted views
+    assert llm2.needs_calls == 1
+    assert report2.llm_induction["needs_generated"] == 1
+    # old skills keep their previous llm edges; the new node is present
+    assert new_node.id in base.nodes
+    old_edges = [e for e in base.edges if e.provenance == "llm" and new_node.id not in (e.source, e.target)]
+    assert old_edges, "incremental build must not drop previously induced edges"
+
+
+def test_cli_incremental_build_new_and_updated(corpus: Path, tmp_path: Path, capsys):
+    base = tmp_path / "base.json"
+    merged = tmp_path / "merged.json"
+    rc = skill_cli_main(["build", "--skills-dir", str(corpus), "--out", str(base), "--no-similarity"])
+    assert rc == 0
+    capsys.readouterr()
+
+    # add a NEW skill and UPDATE an existing one
+    new_dir = corpus / "answer-generation"
+    new_dir.mkdir()
+    (new_dir / "SKILL.md").write_text(
+        "---\nname: answer-generation\ndescription: Compose LLM answers from retrieved chunks\n"
+        "metadata:\n  category: generation\n---\n\n# answer-generation\n",
+        encoding="utf-8",
+    )
+    updated = corpus / "rag-pipeline" / "SKILL.md"
+    updated.write_text(updated.read_text(encoding="utf-8").replace(
+        "Compose retrieval and generation into a RAG flow",
+        "Compose retrieval and generation into a production RAG flow",
+    ), encoding="utf-8")
+
+    rc = skill_cli_main(["build", "--skills-dir", str(corpus), "--base", str(base),
+                         "--out", str(merged), "--no-similarity"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    rebuilt = payload["incremental"]["rebuilt_skills"]
+    assert rebuilt == [skill_id("answer-generation"), skill_id("rag-pipeline")]
+
+    graph = SkillGraph.load(str(merged))
+    assert len(graph.skills()) == len(SKILLS) + 1
+    # unchanged skills keep their explicit edges; the updated one re-declares them
+    deps = [e for e in graph.edges if e.edge_type == EdgeType.DEPENDS_ON]
+    assert len(deps) == 4
+    # rerun with no changes: nothing is rebuilt
+    rc = skill_cli_main(["build", "--skills-dir", str(corpus), "--base", str(merged),
+                         "--out", str(tmp_path / "again.json"), "--no-similarity"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["incremental"]["rebuilt_skills"] == []
+
+
+def test_cli_incremental_rejects_clear_conflict(corpus: Path, tmp_path: Path):
+    base = tmp_path / "base.json"
+    skill_cli_main(["build", "--skills-dir", str(corpus), "--out", str(base), "--no-similarity"])
+    with pytest.raises(SystemExit):
+        skill_cli_main(["build", "--skills-dir", str(corpus), "--base", str(base), "--clear"])
+
+
+def test_incremental_rejects_embedder_dimension_change(corpus: Path, tmp_path: Path):
+    # build a base graph with a 32-d embedder
+    graph = load_skills(str(corpus))
+    graph, _ = GraphBuilder(embedder=HashingEmbedder(dim=32)).build(graph, induce_similarity=False)
+    # sneak in a new skill and try to build incrementally with a 64-d embedder
+    new_node = _node("latecomer")
+    graph.add_node(new_node)
+    with pytest.raises(ValueError, match="dimension mismatch"):
+        GraphBuilder(embedder=HashingEmbedder(dim=64)).build(
+            graph, induce_similarity=False, new_skill_ids={new_node.id}
+        )
+
+
+# ── service-backed loading (production source of truth) ──────
+def test_graph_from_gremlin_data_roundtrip():
+    from hugegraph_llm.engines.skill_graph.service_loader import graph_from_gremlin_data
+
+    vertices = [
+        {
+            "id": "skill::pptx",
+            "label": "skill",
+            "type": "vertex",
+            "properties": {
+                "node_name": "pptx",
+                "description": "PowerPoint decks",
+                "category": "documents",
+                "tags": "slides,presentation",
+                "node_type": "skill",
+                "source_path": "skills/pptx/SKILL.md",
+            },
+        },
+        {
+            "id": "category::documents",
+            "label": "category",
+            "type": "vertex",
+            "properties": {"node_name": "documents", "node_type": "category"},
+        },
+        # unknown label: must be skipped, not fatal
+        {"id": "skill::weird", "label": "legacy-widget", "type": "vertex", "properties": {}},
+    ]
+    edges = [
+        {
+            "id": "e1",
+            "label": "composes_with",
+            "type": "edge",
+            "outV": "skill::pptx",
+            "inV": "category::documents",
+            "properties": {"weight": 0.9, "provenance": "llm"},
+        },
+        {"id": "e2", "label": "unknown_relation", "type": "edge", "outV": "skill::pptx", "inV": "category::documents"},
+    ]
+    graph = graph_from_gremlin_data(vertices, edges)
+    assert set(graph.nodes) == {"skill::pptx", "category::documents"}
+    assert graph.nodes["skill::pptx"].tags == ["slides", "presentation"]
+    assert graph.nodes["category::documents"].node_type == NodeType.CATEGORY
+    assert len(graph.edges) == 1
+    edge = graph.edges[0]
+    assert edge.edge_type == EdgeType.COMPOSES_WITH
+    assert edge.weight == pytest.approx(0.9)
+    assert edge.provenance == "llm"
+
+
+def test_graph_from_gremlin_data_strips_build_prefix():
+    from hugegraph_llm.engines.skill_graph.service_loader import graph_from_gremlin_data
+
+    vertices = [
+        {"id": "1a2b3c4d:skill::pptx", "label": "skill",
+         "properties": {"node_name": "pptx", "node_type": "skill"}},
+        {"id": "1a2b3c4d:category::documents", "label": "category",
+         "properties": {"node_name": "documents", "node_type": "category"}},
+    ]
+    edges = [{
+        "id": "e1", "label": "composes_with",
+        "outV": "1a2b3c4d:skill::pptx", "inV": "1a2b3c4d:category::documents",
+        "properties": {"weight": 0.9, "provenance": "llm"},
+    }]
+    graph = graph_from_gremlin_data(vertices, edges, id_prefix="1a2b3c4d:")
+    assert set(graph.nodes) == {"skill::pptx", "category::documents"}
+    assert graph.edges[0].source == "skill::pptx"
+    assert graph.edges[0].target == "category::documents"
+
+
+def test_parse_embedding_from_oceanbase_vector_strings():
+    from hugegraph_llm.engines.skill_graph.service_loader import _parse_embedding
+
+    assert _parse_embedding(None) is None
+    assert _parse_embedding('[0.1,0.25,-0.3]') == pytest.approx([0.1, 0.25, -0.3])
+    assert _parse_embedding([1, 2]) == [1.0, 2.0]
+    assert _parse_embedding("0.5,0.6") == pytest.approx([0.5, 0.6])
+
+
+class _FakePointer:
+    def __init__(self, build_id: str):
+        self.build_id = build_id
+
+
+class _FakeHgStore:
+    """Minimal stand-in for HugeGraphSkillStore's read surface."""
+
+    def __init__(self, build_id: str):
+        from types import SimpleNamespace
+
+        self.config = SimpleNamespace(
+            url="http://hg:8080", graphspace=None, graph="skillgraph"
+        )
+        self.build_id = build_id
+        self.reads = []
+
+    def active_pointer(self):
+        return _FakePointer(self.build_id)
+
+    def read_build(self, build_id: str) -> SkillGraph:
+        self.reads.append(build_id)
+        return SkillGraph(nodes=[SkillNode(id="skill::pptx", name="pptx")])
+
+
+def test_service_graph_cache_reloads_only_when_the_pointer_moves(monkeypatch):
+    from hugegraph_llm.engines.skill_graph import service_loader
+
+    store = _FakeHgStore("build-a")
+    monkeypatch.setattr(service_loader, "_open_hg_store", lambda *a, **k: store)
+    monkeypatch.setattr(
+        service_loader, "hydrate_from_oceanbase", lambda graph, *a, **k: 0
+    )
+    cache = service_loader.ServiceGraphCache(max_entries=2)
+
+    first = service_loader.load_graph_from_services(cache=cache)
+    assert service_loader.load_graph_from_services(cache=cache) is first
+    assert store.reads == ["build-a"]
+
+    # publishing a new build invalidates by pointer, not by TTL
+    store.build_id = "build-b"
+    second = service_loader.load_graph_from_services(cache=cache)
+    assert second is not first
+    assert store.reads == ["build-a", "build-b"]
+
+    # rolling back to A is served from the still-warm snapshot
+    store.build_id = "build-a"
+    assert service_loader.load_graph_from_services(cache=cache) is first
+    assert store.reads == ["build-a", "build-b"]
+
+    # explicit refresh bypasses the hit
+    service_loader.load_graph_from_services(cache=cache, force_refresh=True)
+    assert store.reads == ["build-a", "build-b", "build-a"]
+
+
+def test_retriever_reuses_bm25_index_for_the_same_snapshot():
+    graph = SkillGraph(nodes=[SkillNode(id="skill::rag", name="rag", description="retrieval")])
+    other = SkillGraph(nodes=[SkillNode(id="skill::sql", name="sql", description="query")])
+    embedder = HashingEmbedder(dim=32)
+
+    first = SkillRetriever(graph, embedder=embedder)
+    assert SkillRetriever(graph, embedder=embedder)._bm25 is first._bm25
+    # a different snapshot must never share the index
+    assert SkillRetriever(other, embedder=embedder)._bm25 is not first._bm25
+
+
+def test_resource_names_reject_injection():
+    from hugegraph_llm.engines.skill_graph.errors import BuildValidationError
+    from hugegraph_llm.engines.skill_graph.manifest import (
+        BuildManifest,
+        build_scoped_table,
+        new_build_id,
+        short_build_id,
+    )
+    from hugegraph_llm.engines.skill_graph.ob_store import OceanBaseSkillStore
+
+    build_id = new_build_id()
+    assert build_scoped_table("skill_graph_skill_semantic", build_id).endswith(
+        "__" + build_id.rsplit("-", 1)[-1]
+    )
+
+    with pytest.raises(BuildValidationError):
+        short_build_id("20261020T101500Z-1a2b3c4d`; DROP TABLE x; --")
+    with pytest.raises(BuildValidationError):
+        BuildManifest(
+            build_id="not-a-build-id",
+            embedder_id="hash-32",
+            embedder_dim=32,
+            content_hash="deadbeef",
+        ).validate()
+    with pytest.raises(ValueError, match="invalid OceanBase table name"):
+        OceanBaseSkillStore(
+            host="127.0.0.1", user="root", database="test",
+            table="t`; DROP TABLE x; --",
+        )
+
+
+# ── query-down retrieval (OceanBase seeds + bounded HugeGraph expansion) ──
+class _BodyCursor:
+    def __init__(self):
+        self.calls = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=()):
+        self.calls.append((sql, tuple(params)))
+
+    def fetchall(self):
+        return [(nid, f"body:{nid}") for nid in self.calls[-1][1]]
+
+
+class _BodyConnection:
+    def __init__(self):
+        self.cursor_obj = _BodyCursor()
+
+    def cursor(self):
+        return self.cursor_obj
+
+
+def test_fetch_bodies_only_reads_requested_ids():
+    from hugegraph_llm.engines.skill_graph.ob_store import OceanBaseSkillStore
+
+    ob = object.__new__(OceanBaseSkillStore)
+    ob.table = "skill_graph_semantic"
+    ob._conn = _BodyConnection()
+
+    bodies = ob.fetch_bodies(["skill::a", "skill::b", "skill::a"], batch_size=1)
+
+    assert bodies == {"skill::a": "body:skill::a", "skill::b": "body:skill::b"}
+    # de-duplicated and chunked: one IN(...) statement per id here
+    assert len(ob._conn.cursor_obj.calls) == 2
+    assert all("IN (%s)" in sql for sql, _ in ob._conn.cursor_obj.calls)
+
+
+def test_hybrid_seed_search_fuses_channels_with_rrf(monkeypatch):
+    from hugegraph_llm.engines.skill_graph.ob_store import OceanBaseSkillStore, SemanticHit
+
+    def hit(nid):
+        return SemanticHit(node_id=nid, title=nid, surface_text=nid, score=1.0, channel="x")
+
+    ob = object.__new__(OceanBaseSkillStore)
+    monkeypatch.setattr(ob, "fulltext_search", lambda q, top_k=50: [hit("a"), hit("b"), hit("c")][:top_k])
+    monkeypatch.setattr(ob, "vector_search", lambda v, top_k=50: [hit("c"), hit("a")][:top_k])
+
+    fused = ob.hybrid_seed_search("query", [0.1, 0.2], per_channel=3, limit=3)
+
+    # a appears high in both rankings, so RRF must rank it first
+    assert [h.node_id for h in fused] == ["a", "c", "b"]
+    assert all(h.channel == "hybrid" for h in fused)
+    assert ob.hybrid_seed_search("query", [0.1], per_channel=0) == []
+
+
+def test_hybrid_seed_search_without_embedding_uses_fulltext_only(monkeypatch):
+    from hugegraph_llm.engines.skill_graph.ob_store import OceanBaseSkillStore, SemanticHit
+
+    ob = object.__new__(OceanBaseSkillStore)
+    monkeypatch.setattr(
+        ob,
+        "fulltext_search",
+        lambda q, top_k=50: [SemanticHit("a", "a", "a", 1.0, "fulltext")],
+    )
+    monkeypatch.setattr(
+        ob, "vector_search", lambda v, top_k=50: pytest.fail("vector channel must not run")
+    )
+
+    assert [h.node_id for h in ob.hybrid_seed_search("q", None)] == ["a"]
+
+
+class _GremlinGraphStore(HugeGraphSkillStore):
+    """In-memory Gremlin double: answers the three query shapes used by expansion."""
+
+    def __init__(self, vertices, edges):
+        self.vertices = {v["id"]: v for v in vertices}
+        self.edges = edges
+        self.queries = []
+
+    def _gremlin(self, query):
+        self.queries.append(query)
+        ids = [vid for vid in self.vertices if json.dumps(vid) in query]
+        if ".bothE(" in query:
+            data = [
+                e
+                for e in self.edges
+                if json.dumps(e["outV"]) in query and json.dumps(e["inV"]) in query
+            ]
+            return {"data": data}
+        if ".out(" in query:
+            targets = {
+                e["inV"]
+                for e in self.edges
+                if e["outV"] in ids and e["label"] in ("depends_on", "composes_with")
+            }
+            return {"data": [self.vertices[t] for t in targets if t in self.vertices]}
+        return {"data": [self.vertices[i] for i in ids]}
+
+
+def _versioned_graph(build_id="20261020T101500Z-1a2b3c4d"):
+    prefix = "1a2b3c4d:"
+    vertices = [
+        {"id": prefix + "skill::viewer", "label": "skill",
+         "properties": {"node_name": "viewer", "description": "render docs", "node_type": "skill"}},
+        {"id": prefix + "skill::render", "label": "skill",
+         "properties": {"node_name": "render", "description": "render output", "node_type": "skill"}},
+        {"id": prefix + "skill::layout", "label": "skill",
+         "properties": {"node_name": "layout", "description": "layout pages", "node_type": "skill"}},
+        {"id": prefix + "skill::other", "label": "skill",
+         "properties": {"node_name": "other", "description": "unrelated", "node_type": "skill"}},
+    ]
+    edges = [
+        {"id": "e1", "label": "depends_on", "outV": prefix + "skill::viewer",
+         "inV": prefix + "skill::render", "properties": {"weight": 1.0}},
+        {"id": "e2", "label": "depends_on", "outV": prefix + "skill::render",
+         "inV": prefix + "skill::layout", "properties": {"weight": 1.0}},
+        {"id": "e3", "label": "belongs_to", "outV": prefix + "skill::viewer",
+         "inV": prefix + "skill::other", "properties": {}},
+    ]
+    return build_id, _GremlinGraphStore(vertices, edges)
+
+
+def test_expand_prerequisites_reads_only_the_seed_closure():
+    build_id, store = _versioned_graph()
+
+    graph = store.expand_prerequisites(["skill::viewer"], build_id, max_depth=2)
+
+    assert set(graph.nodes) == {"skill::viewer", "skill::render", "skill::layout"}
+    assert {e.target for e in graph.edges} == {"skill::render", "skill::layout"}
+    # "other" is not a prerequisite, so neither it nor its edge is read
+    assert "skill::other" not in graph.nodes
+    # only dependency labels are traversed, never belongs_to
+    out_queries = [q for q in store.queries if ".out(" in q]
+    assert out_queries and all('"depends_on"' in q for q in out_queries)
+
+
+def test_expand_prerequisites_honours_depth_and_node_caps():
+    build_id, store = _versioned_graph()
+
+    shallow = store.expand_prerequisites(["skill::viewer"], build_id, max_depth=1)
+    assert set(shallow.nodes) == {"skill::viewer", "skill::render"}
+
+    capped = store.expand_prerequisites(
+        ["skill::viewer", "skill::other"], build_id, max_depth=5, max_nodes=2
+    )
+    assert len(capped.nodes) == 2
+
+
+def test_expand_prerequisites_rejects_injected_edge_labels():
+    build_id, store = _versioned_graph()
+
+    with pytest.raises(ValueError, match="unknown edge type"):
+        store.expand_prerequisites(
+            ["skill::viewer"], build_id, edge_types=["depends_on') .drop(); g.V('"]
+        )
+
+
+class _FakeActivePointer:
+    def __init__(self, build_id="20261020T101500Z-1a2b3c4d", table="skill_graph_semantic",
+                 embedder_id="hashing-8", embedder_dim=8):
+        self.build_id = build_id
+        self.ob_table = table
+        self.embedder_id = embedder_id
+        self.embedder_dim = embedder_dim
+
+
+class _FakeServiceHg:
+    def __init__(self, pointer, graph):
+        self.pointer = pointer
+        self.graph = graph
+        self.calls = []
+
+    def active_pointer(self):
+        return self.pointer
+
+    def expand_prerequisites(self, seed_ids, build_id, **kwargs):
+        self.calls.append((list(seed_ids), build_id, kwargs))
+        return self.graph
+
+
+class _FakeOb:
+    last = None
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.closed = False
+        _FakeOb.last = self
+
+    def hybrid_seed_search(self, query, query_embedding=None, per_channel=50, limit=100):
+        return [
+            SemanticHit("skill::viewer", "viewer", "viewer", 0.9, "hybrid"),
+            SemanticHit("skill::ghost", "ghost", "ghost", 0.5, "hybrid"),
+        ]
+
+    def fetch_bodies(self, node_ids, batch_size=200):
+        return {nid: f"body:{nid}" for nid in node_ids}
+
+    def close(self):
+        self.closed = True
+
+
+def _service_graph():
+    return SkillGraph(
+        nodes=[
+            SkillNode(id="skill::viewer", name="viewer", description="render docs"),
+            SkillNode(id="skill::render", name="render", description="render output"),
+        ],
+        edges=[SkillEdge(source="skill::viewer", target="skill::render",
+                         edge_type=EdgeType.DEPENDS_ON)],
+    )
+
+
+def test_service_retriever_uses_bounded_query_path(monkeypatch):
+    from hugegraph_llm.engines.skill_graph import ServiceSkillRetriever, ob_store
+
+    pointer = _FakeActivePointer()
+    hg = _FakeServiceHg(pointer, _service_graph())
+    embedder = HashingEmbedder(dim=8)
+    pointer.embedder_id = embedder.identity
+    monkeypatch.setattr(ob_store, "OceanBaseSkillStore", _FakeOb)
+
+    retriever = ServiceSkillRetriever(embedder=embedder, hg_store=hg)
+    result = retriever.retrieve("how do I render a page", top_k_seeds=2)
+
+    # the graph is never read in bulk: only the seed closure is requested
+    assert hg.calls[0][0] == ["skill::viewer", "skill::ghost"]
+    assert hg.calls[0][1] == pointer.build_id
+    assert hg.calls[0][2]["max_depth"] == retriever.max_depth
+    assert _FakeOb.last.kwargs["table"] == pointer.ob_table
+    assert _FakeOb.last.closed is True
+
+    assert [s.id for s in result.skills][:2] == ["skill::viewer", "skill::render"]
+    assert result.skills[0].body == "body:skill::viewer"
+    # the ghost seed is reported instead of silently dropped
+    assert result.degraded is True
+    assert "missing from HugeGraph" in result.warnings[0]
+
+
+def test_service_retriever_fails_fast_on_missing_pointer_or_embedder_mismatch(monkeypatch):
+    from hugegraph_llm.engines.skill_graph import ServiceSkillRetriever, ob_store
+    from hugegraph_llm.engines.skill_graph.errors import (
+        EmbeddingMismatchError,
+        GraphReadError,
+    )
+
+    monkeypatch.setattr(ob_store, "OceanBaseSkillStore", _FakeOb)
+    embedder = HashingEmbedder(dim=8)
+
+    no_pointer = _FakeServiceHg(None, _service_graph())
+    with pytest.raises(GraphReadError, match="no active skill-graph build pointer"):
+        ServiceSkillRetriever(embedder=embedder, hg_store=no_pointer).retrieve("q")
+
+    mismatched = _FakeServiceHg(_FakeActivePointer(embedder_id="other-embedder"),
+                                _service_graph())
+    with pytest.raises(EmbeddingMismatchError, match="indexed with embedder"):
+        ServiceSkillRetriever(embedder=embedder, hg_store=mismatched).retrieve("q")
 
 
 # ── dataset downloader ───────────────────────────────────────

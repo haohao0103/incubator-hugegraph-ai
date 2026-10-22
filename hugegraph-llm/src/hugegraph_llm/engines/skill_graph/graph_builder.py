@@ -40,10 +40,16 @@ embedder is the dependency-free :class:`~...embedder.HashingEmbedder`.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from hugegraph_llm.engines.skill_graph.embedder import Embedder, HashingEmbedder
+from hugegraph_llm.engines.skill_graph.embedder import (
+    Embedder,
+    HashingEmbedder,
+    embedder_dim,
+    embedder_identity,
+)
+from hugegraph_llm.engines.skill_graph.errors import BuildValidationError, EmbeddingMismatchError
 from hugegraph_llm.engines.skill_graph.schema import (
     PREREQUISITE_EDGE_TYPES,
     SYMMETRIC_EDGE_TYPES,
@@ -58,6 +64,67 @@ from hugegraph_llm.engines.skill_graph.schema import (
 log = logging.getLogger(__name__)
 
 
+def _known_dim(graph: SkillGraph) -> int:
+    """Dimension of any already-embedded node (0 when none), for incremental reports."""
+    for node in graph.nodes.values():
+        if node.embedding:
+            return len(node.embedding)
+    return 0
+
+
+def assert_incremental_compatible(graph: SkillGraph, embedder: object) -> int:
+    """Fail fast when an incremental build would mix vector spaces.
+
+    Two failure modes are indistinguishable at query time unless we check the
+    *identity* now:
+
+    * a different dimension (obvious), and
+    * a **different model with the same dimension** (silent - cosine still
+      returns plausible numbers, but they are meaningless).
+
+    Legacy graphs without a manifest can only be checked dimension-wise; the
+    returned dim lets the builder keep reporting it.
+    """
+    dims = {len(n.embedding) for n in graph.nodes.values() if n.embedding}
+    if len(dims) > 1:
+        raise EmbeddingMismatchError(
+            f"the base graph already mixes embedding dimensions {sorted(dims)}; "
+            "rebuild it from scratch before using --base"
+        )
+    graph_dim = next(iter(dims)) if dims else 0
+
+    current_id = embedder_identity(embedder)
+    current_dim = embedder_dim(embedder)
+
+    manifest = getattr(graph, "manifest", None)
+    if manifest is not None:
+        stored_id = getattr(manifest, "embedder_id", "") or ""
+        stored_dim = int(getattr(manifest, "embedder_dim", 0) or 0)
+        # Dimension first: it is the specific, easy-to-action failure; the
+        # identity check below also fires for same-dimension model switches.
+        if stored_dim and current_dim and stored_dim != current_dim:
+            raise EmbeddingMismatchError(
+                f"embedding dimension mismatch: base graph is {stored_dim}-d, current "
+                f"embedder produces {current_dim}-d; rebuild from scratch"
+            )
+        if stored_id and stored_id != current_id:
+            raise EmbeddingMismatchError(
+                f"embedder mismatch: the base graph was built with {stored_id!r} but the "
+                f"current embedder is {current_id!r}. Vectors from different models are not "
+                "comparable (even at the same dimension); rebuild from scratch or use the "
+                "original embedder."
+            )
+
+    if graph_dim and current_dim and graph_dim != current_dim:
+        raise EmbeddingMismatchError(
+            f"embedding dimension mismatch: the persisted graph holds {graph_dim}-d vectors "
+            f"but the current embedder produces {current_dim}-d ones; mixed dimensions break "
+            "cosine similarity. Rebuild from scratch (omit the incremental --base) with the "
+            "new embedder."
+        )
+    return graph_dim or current_dim
+
+
 @dataclass
 class BuildReport:
     """Summary of a single build pass (useful for CLI output and tests)."""
@@ -66,6 +133,8 @@ class BuildReport:
     categories: int = 0
     explicit_edges: int = 0
     similarity_edges: int = 0
+    llm_edges: int = 0
+    llm_induction: Dict[str, Any] = field(default_factory=dict)
     symmetric_edges_added: int = 0
     pruned_conflicts: int = 0
     cycles_broken: int = 0
@@ -78,6 +147,8 @@ class BuildReport:
             "categories": self.categories,
             "explicit_edges": self.explicit_edges,
             "similarity_edges": self.similarity_edges,
+            "llm_edges": self.llm_edges,
+            "llm_induction": self.llm_induction,
             "symmetric_edges_added": self.symmetric_edges_added,
             "pruned_conflicts": self.pruned_conflicts,
             "cycles_broken": self.cycles_broken,
@@ -94,45 +165,86 @@ class GraphBuilder:
             dependency-free, offline :class:`HashingEmbedder`. Pass the result of
             :func:`resolve_embedder` to use the project's production embedder.
         similarity_threshold: Minimum cosine similarity for an induced
-            ``similar_to`` edge.
+            ``similar_to`` edge. The default (0.30) suits the offline hashing
+            embedder; raise it (e.g. 0.72) when using a real embedding model.
         max_similar_per_node: Maximum induced ``similar_to`` neighbours per node
             (keeps the graph sparse and prevents a hub blow-up).
         enforce_dag: When True (default), break ``depends_on`` cycles.
+        edge_inducer: Optional typed-edge inducer (e.g.
+            :class:`~...edge_inducer.LLMEdgeInducer`). When provided, it replaces
+            the default similarity pass and induces *typed* edges (the
+            industry-standard SkillDAG recipe). Anything exposing
+            ``induce(graph, skills) -> InductionReport`` works.
     """
 
     def __init__(
         self,
         embedder: Optional[Embedder] = None,
-        similarity_threshold: float = 0.72,
+        similarity_threshold: float = 0.30,
         max_similar_per_node: int = 5,
         enforce_dag: bool = True,
+        edge_inducer: Optional[Any] = None,
     ):
         self.embedder = embedder or HashingEmbedder()
         self.similarity_threshold = similarity_threshold
         self.max_similar_per_node = max(1, max_similar_per_node)
         self.enforce_dag = enforce_dag
+        self.edge_inducer = edge_inducer
 
     # ── public API ───────────────────────────────────────────
-    def build(self, graph: SkillGraph, induce_similarity: bool = True) -> Tuple[SkillGraph, BuildReport]:
+    def build(
+        self,
+        graph: SkillGraph,
+        induce_similarity: bool = True,
+        new_skill_ids: Optional[Set[str]] = None,
+    ) -> Tuple[SkillGraph, BuildReport]:
         """Return ``(graph, report)`` after embedding + edge induction.
 
         The graph is mutated in place and also returned for convenience.
+
+        ``new_skill_ids`` switches to the **incremental** path: only those
+        skills are (re-)embedded, their previously induced edges (provenance
+        ``similarity``/``llm``) are dropped first so they are re-induced fresh,
+        and the typed-edge inducer is told to only propose pairs touching them.
+        Explicit front-matter edges of *all* skills are always preserved and the
+        cheap full-graph invariants (symmetric closure, conflict pruning, DAG
+        enforcement) are re-run so the merged graph stays consistent. Pass
+        ``None`` (default) for a full build.
         """
         report = BuildReport()
         skills = graph.skills()
         report.skills = len(skills)
         report.categories = len(graph.categories())
 
-        # 1. embeddings
-        report.embedding_dim = self._embed_nodes(skills)
+        if new_skill_ids is not None:
+            new_ids = {i for i in new_skill_ids if i in graph.nodes}
+            # Fail before spending a single embedding call on an incompatible base.
+            expected_dim = assert_incremental_compatible(graph, self.embedder)
+            self._drop_induced_edges(graph, new_ids)
+            targets = [n for n in skills if n.id in new_ids]
+            new_dim = self._embed_nodes(targets)
+            if new_dim and expected_dim and new_dim != expected_dim:
+                raise EmbeddingMismatchError(
+                    f"embedding dimension mismatch: the persisted graph holds {expected_dim}-d "
+                    f"vectors but the current embedder produced {new_dim}-d ones; rebuild from "
+                    "scratch (omit the incremental --base)"
+                )
+            report.embedding_dim = new_dim or expected_dim
+        else:
+            new_ids = None
+            report.embedding_dim = self._embed_nodes(skills)
 
+        self._assert_no_dangling_edges(graph)
         explicit_before = len(graph.edges)
-        report.dangling_edges = self._drop_dangling_edges(graph)
         report.explicit_edges = len(graph.edges)
 
-        # 2. similarity induction
-        if induce_similarity:
-            report.similarity_edges = self._induce_similarity(graph, skills)
+        # 2. edge induction — typed (LLM, SkillDAG recipe) or similarity-only
+        if self.edge_inducer is not None:
+            induction = self.edge_inducer.induce(graph, skills, new_skill_ids=new_ids)
+            report.llm_edges = induction.edges_added
+            report.llm_induction = induction.to_dict()
+        elif induce_similarity:
+            report.similarity_edges = self._induce_similarity(graph, skills, new_ids=new_ids)
 
         # 3. symmetric closure
         report.symmetric_edges_added = self._materialise_symmetric(graph)
@@ -143,6 +255,8 @@ class GraphBuilder:
         # 5. DAG enforcement
         if self.enforce_dag:
             report.cycles_broken = self._break_cycles(graph)
+
+        self._attach_manifest(graph, report, incremental=new_skill_ids is not None)
 
         log.info(
             "built skill graph: %d skills, %d edges (sim=%d, sym=%d, dag_breaks=%d) "
@@ -164,6 +278,28 @@ class GraphBuilder:
         return self.build(graph, **kwargs)
 
     # ── internals ────────────────────────────────────────────
+    def _attach_manifest(self, graph: SkillGraph, report: BuildReport, incremental: bool) -> None:
+        """Stamp the graph with a verifiable build identity.
+
+        The previous manifest is captured *before* replacement so lineage
+        (``previous_build``) survives and rollback knows what to go back to.
+        """
+        from hugegraph_llm.engines.skill_graph.manifest import build_manifest
+
+        previous = getattr(graph, "manifest", None)
+        dim = report.embedding_dim or embedder_dim(self.embedder)
+        if not dim:
+            # Empty graph / embedder that reports its dimension only per call:
+            # there is nothing to verify yet, so do not fabricate a fingerprint.
+            return
+        graph.manifest = build_manifest(
+            graph,
+            embedder_id=embedder_identity(self.embedder),
+            embedder_dim=dim,
+            previous_build=getattr(previous, "build_id", None),
+            mode="incremental" if incremental else "full",
+        )
+
     def _embed_nodes(self, skills: List[SkillNode]) -> int:
         dim = 0
         for node in skills:
@@ -172,25 +308,67 @@ class GraphBuilder:
             dim = len(vec) or dim
         return dim
 
-    def _drop_dangling_edges(self, graph: SkillGraph) -> int:
+    def _assert_no_dangling_edges(self, graph: SkillGraph) -> None:
+        """Fail on edges whose endpoint does not exist.
+
+        Dropping them silently hides author typos (``requires: data-ingest``
+        instead of ``data-ingestion``): the dependency simply disappears and
+        retrieval returns an incomplete plan that looks valid.
+        """
+        missing = [
+            edge
+            for edge in graph.edges
+            if edge.source not in graph.nodes or edge.target not in graph.nodes
+        ]
+        if not missing:
+            return
+        preview = "; ".join(
+            f"{e.source} -{e.edge_type.value}-> {e.target}"
+            + (f" (missing {e.target})" if e.source in graph.nodes else f" (missing {e.source})")
+            for e in missing[:5]
+        )
+        raise BuildValidationError(
+            f"{len(missing)} dangling edge(s): {preview}"
+            f"{'...' if len(missing) > 5 else ''}. Fix the 'relations:' entries or add the "
+            "missing SKILL.md files."
+        )
+
+    def _drop_induced_edges(self, graph: SkillGraph, node_ids: Set[str]) -> int:
+        """Remove induced edges touching the given nodes (explicit edges kept).
+
+        Used by the incremental path: a new/updated skill must have its
+        similarity/LLM edges re-induced from its fresh content, while explicit
+        front-matter edges are the author's declared truth and always survive.
+        """
+        if not node_ids:
+            return 0
         kept: List[SkillEdge] = []
         dropped = 0
         for edge in graph.edges:
-            if edge.source in graph.nodes and edge.target in graph.nodes:
-                kept.append(edge)
-            else:
+            if edge.provenance in ("similarity", "llm") and (edge.source in node_ids or edge.target in node_ids):
                 dropped += 1
+                continue
+            kept.append(edge)
         if dropped:
             graph.edges = kept
             graph._edge_keys = {e.key() for e in kept}  # noqa: SLF001 - internal container
         return dropped
 
-    def _induce_similarity(self, graph: SkillGraph, skills: List[SkillNode]) -> int:
+    def _induce_similarity(
+        self,
+        graph: SkillGraph,
+        skills: List[SkillNode],
+        new_ids: Optional[Set[str]] = None,
+    ) -> int:
         """Add ``similar_to`` edges for mutually-close skills.
 
         Each node proposes its top-k most similar peers above the threshold; an
         edge survives only if the proposal is *mutual* (kNN-graph style), which
         avoids one-directional hub noise.
+
+        In the incremental path (``new_ids`` given) mutual proposals are still
+        computed over the whole pool (cheap, no LLM), but only pairs touching a
+        new/updated skill are actually added — old-old edges are untouched.
         """
         embedded = [n for n in skills if n.embedding]
         if len(embedded) < 2:
@@ -214,6 +392,8 @@ class GraphBuilder:
             for tgt, sim in cands:
                 pair = (src, tgt) if src < tgt else (tgt, src)
                 if pair in seen:
+                    continue
+                if new_ids is not None and src not in new_ids and tgt not in new_ids:
                     continue
                 # Mutual check (kNN graph): keep the edge only if both ends
                 # nominated each other, which avoids one-directional hub noise.
@@ -290,6 +470,7 @@ def write_to_hugegraph(
     url: str = "http://127.0.0.1:8080",
     user: str = "admin",
     pwd: str = "admin",
+    graphspace: Optional[str] = None,
     clear: bool = False,
 ) -> Dict[str, int]:
     """Best-effort write of the skill graph into HugeGraph.
@@ -298,12 +479,15 @@ def write_to_hugegraph(
     (``skill::...`` / ``category::...``) are used directly as vertex ids. The
     schema is created on demand. Returns vertex/edge counts written.
 
+    ``graphspace`` targets a named HugeGraph graphspace (HugeGraph 1.7+); when
+    omitted the client falls back to the ``DEFAULT`` space.
+
     This is intentionally optional — the whole engine works offline from JSON —
     and raises only on schema/connection errors the caller does not handle.
     """
     from pyhugegraph.client import PyHugeClient
 
-    client = PyHugeClient(url=url, user=user, pwd=pwd, graph=graph_name)
+    client = PyHugeClient(url=url, user=user, pwd=pwd, graph=graph_name, graphspace=graphspace)
     schema = client.schema()
 
     # property keys
@@ -351,7 +535,9 @@ def write_to_hugegraph(
     if clear:
         for label in ("skill", "category"):
             try:
-                g.traversal().V().hasLabel(label).drop().iterate()
+                # PyHugeClient 1.x exposes no traversal() on GraphManager; drop
+                # through the Gremlin endpoint instead.
+                client.gremlin().exec(f"g.V().hasLabel('{label}').drop()")
             except Exception as exc:  # pragma: no cover - defensive
                 log.warning("failed to clear %s: %s", label, exc)
 
@@ -368,7 +554,7 @@ def write_to_hugegraph(
             "token_estimate": node.token_estimate(),
         }
         try:
-            g.addVertex(label, node.id, props)
+            g.addVertex(label, props, node.id)
             vertex_count += 1
         except Exception as exc:  # pragma: no cover - depends on live server
             log.warning("add vertex %s failed: %s", node.id, exc)

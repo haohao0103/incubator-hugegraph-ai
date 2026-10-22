@@ -40,13 +40,23 @@ required at query time.
 from __future__ import annotations
 
 import math
+import threading
+import weakref
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from hugegraph_llm.engines.skill_graph.embedder import Embedder, HashingEmbedder, tokenize
+from hugegraph_llm.engines.skill_graph.embedder import (
+    Embedder,
+    HashingEmbedder,
+    embedder_dim,
+    embedder_identity,
+    tokenize,
+)
+from hugegraph_llm.engines.skill_graph.errors import EmbeddingMismatchError, GraphReadError
 from hugegraph_llm.engines.skill_graph.schema import (
     PREREQUISITE_EDGE_TYPES,
     EdgeType,
+    NodeType,
     SkillGraph,
     SkillNode,
     cosine,
@@ -90,6 +100,11 @@ class RetrievalResult:
     skills: List[RetrievedSkill] = field(default_factory=list)
     total_tokens: int = 0
     dropped_tokens: int = 0
+    #: True when part of the result could not be served from the active build
+    #: (e.g. a seed missing from HugeGraph, or a candidate without a body).
+    #: Degradation is always *reported*, never silent.
+    degraded: bool = False
+    warnings: List[str] = field(default_factory=list)
 
     def to_context(self, include_body: bool = True) -> str:
         """Render the retrieved skills as an LLM-ready markdown context block."""
@@ -111,6 +126,8 @@ class RetrievalResult:
             "skills": [s.to_dict(include_body) for s in self.skills],
             "total_tokens": self.total_tokens,
             "dropped_tokens": self.dropped_tokens,
+            "degraded": self.degraded,
+            "warnings": list(self.warnings),
         }
 
 
@@ -160,6 +177,29 @@ def _rrf(rankings: List[List[str]], k: int = 60) -> Dict[str, float]:
     return fused
 
 
+#: BM25 index per immutable graph snapshot. A service that constructs a
+#: retriever per request would otherwise re-tokenize and re-index the whole
+#: skill set every time; the snapshot cache keeps the graph object stable, so
+#: the index built for it can be reused. Weak keys mean the index dies with the
+#: graph (e.g. when the snapshot cache evicts an old build) instead of pinning
+#: memory. A graph must not be mutated after indexing - which retriever
+#: construction already assumes, since it also caches ``_skills``.
+_BM25_CACHE: "weakref.WeakKeyDictionary[SkillGraph, _BM25]" = weakref.WeakKeyDictionary()
+_BM25_LOCK = threading.Lock()
+
+
+def _bm25_for(graph: SkillGraph, skills: Dict[str, SkillNode]) -> _BM25:
+    """Return the graph's BM25 index, building it once (thread-safe)."""
+    with _BM25_LOCK:
+        index = _BM25_CACHE.get(graph)
+    if index is not None:
+        return index
+    index = _BM25({sid: tokenize(node.index_text) for sid, node in skills.items()})
+    with _BM25_LOCK:
+        _BM25_CACHE[graph] = index
+    return index
+
+
 class SkillRetriever:
     """Dependency-aware skill retriever over a :class:`SkillGraph`.
 
@@ -190,9 +230,48 @@ class SkillRetriever:
         self.ppr_iterations = ppr_iterations
 
         self._skills: Dict[str, SkillNode] = {n.id: n for n in graph.skills()}
-        self._bm25 = _BM25(
-            {sid: tokenize(node.index_text) for sid, node in self._skills.items()}
-        )
+        self._validate_embedder()
+        self._bm25 = _bm25_for(graph, self._skills)
+
+    def _validate_embedder(self) -> None:
+        """Refuse to query with an embedder the graph was not built with.
+
+        This is checked once at construction (not per query) so misconfiguration
+        fails at startup instead of degrading every result. Legacy artifacts
+        without a manifest are still checked dimension-wise, which catches the
+        common "switched providers" mistake.
+        """
+        dims = {len(n.embedding) for n in self._skills.values() if n.embedding}
+        if len(dims) > 1:
+            raise EmbeddingMismatchError(
+                f"graph contains mixed embedding dimensions {sorted(dims)}; rebuild it from "
+                "a single embedder before querying"
+            )
+        graph_dim = next(iter(dims)) if dims else 0
+        query_dim = embedder_dim(self.embedder)
+        identity = embedder_identity(self.embedder)
+
+        manifest = getattr(self.graph, "manifest", None)
+        if manifest is not None:
+            stored_id = getattr(manifest, "embedder_id", "") or ""
+            stored_dim = int(getattr(manifest, "embedder_dim", 0) or 0)
+            if stored_dim and query_dim and stored_dim != query_dim:
+                raise EmbeddingMismatchError(
+                    f"query embedder produces {query_dim}-d vectors but the graph was built "
+                    f"with {stored_dim}-d ones; use a matching embedder or rebuild"
+                )
+            if stored_id and stored_id != identity:
+                raise EmbeddingMismatchError(
+                    f"query embedder {identity!r} does not match the graph's embedder "
+                    f"{stored_id!r}; semantic search would compare different vector spaces. "
+                    "Use the same embedding configuration or rebuild the graph."
+                )
+
+        if graph_dim and query_dim and graph_dim != query_dim:
+            raise EmbeddingMismatchError(
+                f"query embedder produces {query_dim}-d vectors but the graph holds "
+                f"{graph_dim}-d ones; use a matching embedder or rebuild"
+            )
 
     # ── public API ───────────────────────────────────────────
     def retrieve(
@@ -209,7 +288,33 @@ class SkillRetriever:
             return RetrievalResult(query=query)
 
         seeds = self.retrieve_seeds(query, top_k=top_k_seeds)
+        return self.retrieve_from_seeds(
+            query,
+            seeds,
+            token_budget=token_budget,
+            max_skills=max_skills,
+            include_compositions=include_compositions,
+            include_similar=include_similar,
+        )
+
+    def retrieve_from_seeds(
+        self,
+        query: str,
+        seeds: List[RetrievedSkill],
+        token_budget: int = 4000,
+        max_skills: Optional[int] = None,
+        include_compositions: bool = True,
+        include_similar: bool = False,
+    ) -> RetrievalResult:
+        """Expand an externally-produced seed ranking into the final result.
+
+        Seeds come from the caller - in the service path OceanBase has already
+        fused fulltext + vector recall - so the retriever only runs dependency
+        walking, PPR and budget packing over the graph it was given.
+        """
         seed_ids = [s.id for s in seeds]
+        if not seed_ids:
+            return RetrievalResult(query=query)
 
         reasons, depths = self._walk_dependencies(
             seed_ids,
@@ -238,11 +343,13 @@ class SkillRetriever:
 
         budget_left = max(0, token_budget)
         limit = max_skills or len(self._skills) + 1
+        # Seeds are iterated before graph-reached skills, so the user's own
+        # matches always claim the budget first; reached skills fill the rest.
         for sid in ordered + reached:
             if len(result.skills) >= limit:
                 break
-            node = self._skills[sid]
-            cost = node.token_estimate()
+            cost = self._skills[sid].token_estimate()
+            # Always admit the very first skill so a result is never empty.
             if cost > budget_left and result.skills:
                 result.dropped_tokens += cost
                 continue
@@ -389,3 +496,200 @@ class SkillRetriever:
                     nxt[n] += damping * dangling_mass * personal[n]
             rank = nxt
         return {n: v for n, v in rank.items() if v > 1e-9}
+
+
+class ServiceSkillRetriever:
+    """Query-path retriever for the production (query-down) architecture.
+
+    Flow per query::
+
+        pointer = HugeGraph.active_pointer()          # one tiny read, the snapshot
+        seeds   = OceanBase.hybrid_seed_search(...)   # bounded fulltext + vector RRF
+        subgraph= HugeGraph.expand_prerequisites(...) # bounded BFS, depth/node caps
+        bodies  = OceanBase.fetch_bodies(...)         # bounded PK lookup
+        result  = SkillRetriever.retrieve_from_seeds(...)
+
+    Nothing loads the whole graph, and every read is pinned to the ``build_id``
+    resolved once at the start of the query, so a concurrent publish/rollback
+    can never produce a mixed-version answer.
+    """
+
+    def __init__(
+        self,
+        embedder: Optional[Embedder] = None,
+        hg_url: Optional[str] = None,
+        hg_user: str = "admin",
+        hg_pwd: str = "admin",
+        hg_graphspace: Optional[str] = None,
+        hg_graph: Optional[str] = None,
+        hg_store: Optional[Any] = None,
+        ob_host: Optional[str] = None,
+        ob_port: Optional[int] = None,
+        ob_user: Optional[str] = None,
+        ob_password: Optional[str] = None,
+        ob_database: Optional[str] = None,
+        seed_candidates: int = 100,
+        per_channel: int = 50,
+        max_depth: int = 2,
+        max_nodes: int = 200,
+        max_edges: Optional[int] = None,
+    ):
+        if hg_store is None:
+            from hugegraph_llm.engines.skill_graph.service_loader import _open_hg_store
+
+            hg_store = _open_hg_store(hg_url, hg_user, hg_pwd, hg_graphspace, hg_graph)
+        self.hg_store = hg_store
+        self.embedder = embedder or HashingEmbedder()
+        self._ob_kwargs = {
+            "host": ob_host,
+            "port": ob_port,
+            "user": ob_user,
+            "password": ob_password,
+            "database": ob_database,
+        }
+        self.seed_candidates = max(1, int(seed_candidates))
+        self.per_channel = max(1, int(per_channel))
+        self.max_depth = max(0, int(max_depth))
+        self.max_nodes = max(1, int(max_nodes))
+        self.max_edges = max_edges
+
+    def retrieve(
+        self,
+        query: str,
+        top_k_seeds: int = 5,
+        token_budget: int = 4000,
+        max_skills: Optional[int] = None,
+        include_compositions: bool = True,
+        include_similar: bool = False,
+    ) -> RetrievalResult:
+        """Answer ``query`` from the active build with bounded reads only."""
+        pointer = self.hg_store.active_pointer()
+        if pointer is None:
+            raise GraphReadError(
+                "HugeGraph has no active skill-graph build pointer; publish a build first"
+            )
+        self._validate_pointer(pointer)
+
+        table = getattr(pointer, "ob_table", None)
+        if not table:
+            raise GraphReadError(
+                f"active build {pointer.build_id} has no OceanBase table recorded; "
+                "republish it with an index table"
+            )
+
+        from hugegraph_llm.engines.skill_graph.ob_store import OceanBaseSkillStore
+
+        ob = OceanBaseSkillStore(
+            table=table,
+            dim=int(getattr(pointer, "embedder_dim", 0) or 1536),
+            **self._ob_kwargs,
+        )
+        try:
+            qvec = self.embedder.embed(query) if query.strip() else None
+            hits = ob.hybrid_seed_search(
+                query,
+                qvec,
+                per_channel=self.per_channel,
+                limit=max(self.seed_candidates, top_k_seeds),
+            )
+            if not hits:
+                return RetrievalResult(query=query)
+
+            seed_ids = [h.node_id for h in hits[: max(1, top_k_seeds)]]
+            edge_types = [EdgeType.DEPENDS_ON]
+            if include_compositions:
+                edge_types.append(EdgeType.COMPOSES_WITH)
+            if include_similar:
+                edge_types.append(EdgeType.SIMILAR_TO)
+
+            subgraph = self.hg_store.expand_prerequisites(
+                seed_ids,
+                pointer.build_id,
+                max_depth=self.max_depth,
+                max_nodes=self.max_nodes,
+                max_edges=self.max_edges,
+                edge_types=edge_types,
+            )
+            if not subgraph.nodes:
+                raise GraphReadError(
+                    f"OceanBase returned {len(seed_ids)} seed(s) but HugeGraph build "
+                    f"{pointer.build_id} contains none of them; the build and its index "
+                    "table are out of sync"
+                )
+
+            bodies = ob.fetch_bodies(list(subgraph.nodes))
+        finally:
+            ob.close()
+
+        for node_id, body in bodies.items():
+            if node_id in subgraph.nodes:
+                subgraph.nodes[node_id].body = body
+
+        seed_nodes: List[RetrievedSkill] = []
+        for hit in hits:
+            node = subgraph.nodes.get(hit.node_id)
+            if node is None:
+                continue
+            seed_nodes.append(
+                RetrievedSkill(
+                    id=hit.node_id,
+                    name=node.name,
+                    score=hit.score,
+                    reason="seed",
+                    depth=0,
+                    token_estimate=node.token_estimate(),
+                    description=node.description,
+                    body=node.body,
+                )
+            )
+            if len(seed_nodes) >= max(1, top_k_seeds):
+                break
+
+        result = SkillRetriever(subgraph, embedder=self.embedder).retrieve_from_seeds(
+            query,
+            seed_nodes,
+            token_budget=token_budget,
+            max_skills=max_skills,
+            include_compositions=include_compositions,
+            include_similar=include_similar,
+        )
+
+        # Degradation is reported loudly instead of silently serving a partial
+        # answer: ops tooling can alert on either flag.
+        warnings: List[str] = []
+        missing_seeds = [sid for sid in seed_ids if sid not in subgraph.nodes]
+        if missing_seeds:
+            warnings.append(
+                f"{len(missing_seeds)} seed(s) are indexed in OceanBase but missing from "
+                f"HugeGraph build {pointer.build_id}: {', '.join(missing_seeds[:5])}"
+            )
+        missing_bodies = [
+            nid
+            for nid, node in subgraph.nodes.items()
+            if node.node_type == NodeType.SKILL and nid not in bodies
+        ]
+        if missing_bodies:
+            warnings.append(
+                f"{len(missing_bodies)} candidate(s) have no body in OceanBase table "
+                f"{table}; served with descriptions only"
+            )
+        result.warnings = warnings
+        result.degraded = bool(warnings)
+        return result
+
+    def _validate_pointer(self, pointer: Any) -> None:
+        """Fail fast when the active vectors cannot be queried with our embedder."""
+        stored_id = str(getattr(pointer, "embedder_id", "") or "")
+        stored_dim = int(getattr(pointer, "embedder_dim", 0) or 0)
+        identity = embedder_identity(self.embedder)
+        dim = embedder_dim(self.embedder)
+        if stored_id and identity and stored_id != identity:
+            raise EmbeddingMismatchError(
+                f"active build {pointer.build_id} was indexed with embedder {stored_id!r} "
+                f"but the query embedder is {identity!r}"
+            )
+        if stored_dim and dim and stored_dim != dim:
+            raise EmbeddingMismatchError(
+                f"active build {pointer.build_id} was indexed with {stored_dim}-d vectors "
+                f"but the query embedder produces {dim}-d vectors"
+            )

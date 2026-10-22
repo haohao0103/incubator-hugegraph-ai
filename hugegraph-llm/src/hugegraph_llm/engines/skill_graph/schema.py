@@ -43,11 +43,15 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
+import tempfile
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+from hugegraph_llm.engines.skill_graph.errors import EmbeddingMismatchError
 
 
 class NodeType(str, Enum):
@@ -97,9 +101,21 @@ def category_id(name: str) -> str:
 
 
 def cosine(a: Optional[List[float]], b: Optional[List[float]]) -> float:
-    """Cosine similarity between two vectors (0.0 when either is missing)."""
-    if not a or not b or len(a) != len(b):
+    """Cosine similarity between two vectors (0.0 when either is missing).
+
+    A *dimension mismatch* is never a legitimate 0.0: it means the two vectors
+    were produced by different embedders, and silently returning 0.0 would make
+    the semantic channel look healthy while comparing incomparable spaces.
+    Raise instead so the caller fails loudly.
+    """
+    if not a or not b:
         return 0.0
+    if len(a) != len(b):
+        raise EmbeddingMismatchError(
+            f"cannot compute cosine between {len(a)}-d and {len(b)}-d vectors: "
+            "the graph and the query were embedded by different models/dimensions; "
+            "rebuild the graph with the current embedder"
+        )
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
@@ -199,10 +215,15 @@ class SkillGraph:
         self,
         nodes: Optional[List[SkillNode]] = None,
         edges: Optional[List[SkillEdge]] = None,
+        manifest: Optional[Any] = None,
     ):
         self.nodes: Dict[str, SkillNode] = {}
         self.edges: List[SkillEdge] = []
         self._edge_keys: Set[Tuple[str, str, str]] = set()
+        #: Optional :class:`~...manifest.BuildManifest`. Populated by the builder
+        #: and persisted with the graph so readers can verify embedder identity,
+        #: content hash and build lineage.
+        self.manifest = manifest
         for node in nodes or []:
             self.add_node(node)
         for edge in edges or []:
@@ -211,6 +232,17 @@ class SkillGraph:
     # ── mutation ─────────────────────────────────────────────
     def add_node(self, node: SkillNode) -> None:
         self.nodes[node.id] = node
+
+    def remove_node(self, node_id: str) -> bool:
+        """Remove a node and every edge touching it (keeps the edge index exact)."""
+        if node_id not in self.nodes:
+            return False
+        del self.nodes[node_id]
+        kept = [e for e in self.edges if e.source != node_id and e.target != node_id]
+        if len(kept) != len(self.edges):
+            self.edges = kept
+            self._edge_keys = {e.key() for e in kept}
+        return True
 
     def add_edge(self, edge: SkillEdge) -> bool:
         """Add an edge if both endpoints exist and it is not a duplicate."""
@@ -339,21 +371,46 @@ class SkillGraph:
 
     # ── persistence ──────────────────────────────────────────
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data: Dict[str, Any] = {
             "nodes": [n.to_dict() for n in self.nodes.values()],
             "edges": [e.to_dict() for e in self.edges],
         }
+        if self.manifest is not None:
+            data["manifest"] = self.manifest.to_dict()
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SkillGraph":
+        from hugegraph_llm.engines.skill_graph.manifest import BuildManifest
+
         nodes = [SkillNode.from_dict(d) for d in data.get("nodes", [])]
         edges = [SkillEdge.from_dict(d) for d in data.get("edges", [])]
-        return cls(nodes=nodes, edges=edges)
+        raw_manifest = data.get("manifest")
+        manifest = BuildManifest.from_dict(raw_manifest) if raw_manifest else None
+        return cls(nodes=nodes, edges=edges, manifest=manifest)
 
     def save(self, path: str) -> None:
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(self.to_dict(), fh, ensure_ascii=False, indent=2)
+        """Atomically write the artifact (temp file in the same directory).
+
+        A crash mid-write must never leave a truncated JSON that a later
+        incremental build would happily load as the base graph.
+        """
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+        fd, tmp = tempfile.mkstemp(dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, target)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
     @classmethod
     def load(cls, path: str) -> "SkillGraph":
