@@ -78,11 +78,16 @@ def main() -> int:
         data = page.evaluate(
             "() => ({ nodes: DATA.nodes.length, edges: DATA.edges.length,"
             " labels: DATA.nodes.map(n => n.label),"
+            " edgeTypes: DATA.edges.reduce((m,e) => (m[e.type]=(m[e.type]||0)+1, m), {}),"
             " stats: DATA.stats })"
         )
         ok(f"DATA.nodes = {data['nodes']} >= 15", data["nodes"] >= 15, str(data))
         ok(f"DATA.edges = {data['edges']} > 0", data["edges"] > 0)
         ok("stats.cycles = 0 (DAG 不变量)", data["stats"].get("cycles") == 0, str(data["stats"]))
+        # 5 种关系类型全部在图上（图例不是摆设：每种颜色都有真实边可对照）
+        for etype in ("depends_on", "composes_with", "similar_to", "belongs_to", "conflicts_with"):
+            n = data["edgeTypes"].get(etype, 0)
+            ok(f"边类型 {etype} 有真实边（{n} 条）", n > 0, str(data["edgeTypes"]))
 
         # 2) canvas 真实渲染出图形（采样非背景像素）
         page.wait_for_timeout(2500)  # 布局稳定
@@ -146,7 +151,50 @@ def main() -> int:
         after = page.evaluate("() => nodes.map(n => [n.x, n.y])")
         ok("拖拽节点后布局发生变化（力导向在运行）", before != after)
 
-        # 7) console 无 JS 错误
+        # 7) 查询演示：点示例「RAG 问答」→ /api/query 真实检索 → 图谱高亮 + 对比面板
+        page.fill("#search", "")  # 清除过滤，避免干扰高亮观察
+        page.locator(".examples .ex").nth(0).click()  # 「RAG 问答」
+        page.wait_for_timeout(2500)  # 等待 fetch + 渲染 + 力导向稳定
+        qpanel = page.evaluate("() => document.getElementById('qresult').innerText")
+        ok(
+            "查询面板出现对比卡片（①关键词 vs ②图谱交付）",
+            "关键词检索命中" in qpanel and "图谱交付" in qpanel,
+            qpanel[:150],
+        )
+        hl = page.evaluate(
+            "() => ({ highlighted: Object.keys(reasons).length,"
+            " dimmed: dimmed,"
+            " addedChips: document.querySelectorAll('#qresult .added .chip').length })"
+        )
+        ok(f"图谱高亮 {hl['highlighted']} 个结果节点，其余淡出", hl["highlighted"] >= 6 and hl["dimmed"], str(hl))
+        ok(f"补齐前置技能 chips = {hl['addedChips']}（vector-index/text-embedding 等）", hl["addedChips"] >= 3, str(hl))
+        # 高亮后画布上金/青色环真实出现（采样非背景色像素增多或保持渲染）
+        painted2 = page.evaluate(
+            """() => {
+                const cv = document.getElementById('cv');
+                const ctx = cv.getContext('2d');
+                const img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+                let count = 0;
+                for (let i = 0; i < img.length; i += 4 * 97) {
+                    if (Math.abs(img[i] - 15) + Math.abs(img[i+1] - 22) + Math.abs(img[i+2] - 32) > 24) count++;
+                }
+                return count;
+            }"""
+        )
+        ok(f"高亮后 canvas 仍渲染（{painted2} 个非背景采样点）", painted2 > 20, str(painted2))
+        page.screenshot(path=SHOT.replace(".png", "_query.png"), full_page=False)
+
+        # 8) 冲突边演示：查询「内部公告」后图上可见红色冲突边（internal-comms ↔ slack-gif-creator）
+        page.locator(".examples .ex").nth(2).click()  # 「内部公告」
+        page.wait_for_timeout(2000)
+        conflict_visible = page.evaluate(
+            "() => { const pair = ['skill::internal-comms','skill::slack-gif-creator'];"
+            " return links.some(l => l.type==='conflicts_with' &&"
+            "  pair.includes(nodes[l.s].id) && pair.includes(nodes[l.t].id)); }"
+        )
+        ok("数据含 internal-comms ↔ slack-gif-creator 冲突边", conflict_visible)
+
+        # 9) console 无 JS 错误
         ok(f"console 无 error（{len(console_errors)} 条）", len(console_errors) == 0, "; ".join(console_errors[:3]))
 
         page.screenshot(path=SHOT, full_page=False)

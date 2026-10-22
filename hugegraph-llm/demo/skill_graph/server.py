@@ -67,6 +67,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict
@@ -78,14 +79,14 @@ _SRC = Path(__file__).resolve().parents[2] / "src"
 if _SRC.is_dir():
     sys.path.insert(0, str(_SRC))
 
-from flask import Flask, Response, jsonify  # noqa: E402
+from flask import Flask, Response, jsonify, request  # noqa: E402
 
 from hugegraph_llm.engines.skill_graph.errors import GraphReadError  # noqa: E402
 from hugegraph_llm.engines.skill_graph.service_loader import (  # noqa: E402
     ServiceGraphCache,
     load_graph_from_services,
 )
-from hugegraph_llm.engines.skill_graph.viz import render_html  # noqa: E402
+from hugegraph_llm.engines.skill_graph.viz import highlight_payload, render_html  # noqa: E402
 
 log = logging.getLogger("skill_graph_viz")
 
@@ -166,6 +167,68 @@ def api_stats():
         "edges": stats.get("edges"),
     }
     return jsonify(payload)
+
+
+@app.route("/api/query")
+def api_query():
+    """Run a live dependency-aware retrieval and return the highlight payload.
+
+    This is the demo hook for the visualization page: the browser calls it,
+    gets ``{highlight, value}`` (the same protocol a server-rendered result
+    uses) and re-highlights the force graph in place — showing seed hits vs.
+    graph-added prerequisites on the real production query path.
+    """
+    query = (request.args.get("q") or "").strip()
+    if not query:
+        return jsonify({"error": "missing query parameter: q"}), 400
+    try:
+        result = _retrieve(query)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the browser verbatim
+        log.exception("query failed: %s", query)
+        return jsonify({"error": str(exc)}), 502
+    payload = highlight_payload(result)
+    payload["degraded"] = getattr(result, "degraded", False)
+    payload["warnings"] = list(getattr(result, "warnings", []) or [])
+    return jsonify(payload)
+
+
+def _retrieve(query: str):
+    """Query-path retrieval: seeds from OceanBase, expansion in HugeGraph."""
+    from hugegraph_llm.engines.skill_graph.retriever import ServiceSkillRetriever
+
+    retriever = ServiceSkillRetriever(
+        embedder=_query_embedder(),
+        hg_store=None,
+        ob_host=os.environ.get("OCEANBASE_HOST"),
+        ob_port=int(os.environ.get("OCEANBASE_PORT", "3306")),
+        ob_user=os.environ.get("OCEANBASE_USER"),
+        ob_password=os.environ.get("OCEANBASE_PASSWORD"),
+        ob_database=os.environ.get("OCEANBASE_DATABASE"),
+        **_hg_kwargs(),
+    )
+    try:
+        return retriever.retrieve(query, top_k_seeds=5, token_budget=4000)
+    finally:
+        close = getattr(retriever, "close", None)
+        if callable(close):
+            close()
+
+
+_embedder_lock = threading.Lock()
+_embedder_instance = None
+
+
+def _query_embedder():
+    """Lazily build the query embedder once (HTTP call per query stays, init once)."""
+    global _embedder_instance
+    with _embedder_lock:
+        if _embedder_instance is None:
+            from hugegraph_llm.engines.skill_graph.embedder import resolve_embedder
+
+            # strict: production build vectors are 1536-d; a silent hashing
+            # fallback would compare different vector spaces and return noise.
+            _embedder_instance = resolve_embedder(strict=True)
+        return _embedder_instance
 
 
 @app.route("/")

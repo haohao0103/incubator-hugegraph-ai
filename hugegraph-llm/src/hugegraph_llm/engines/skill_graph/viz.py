@@ -28,19 +28,23 @@ from typing import Any, Dict, List, Optional
 
 from hugegraph_llm.engines.skill_graph.schema import EdgeType, SkillGraph
 
+# High-contrast palette tuned for the dark background (#0f1620): every edge
+# type must stay distinguishable at 1.4px width, so hues are spread across the
+# wheel and the two "strong" relations (dependency backbone, conflicts) get
+# the highest-saturation blues/reds.
 _EDGE_COLORS = {
-    EdgeType.DEPENDS_ON.value: "#2c3e50",
-    EdgeType.COMPOSES_WITH.value: "#8e44ad",
-    EdgeType.SIMILAR_TO.value: "#f39c12",
-    EdgeType.BELONGS_TO.value: "#95a5a6",
-    EdgeType.CONFLICTS_WITH.value: "#c0392b",
+    EdgeType.DEPENDS_ON.value: "#4fc3f7",  # sky blue — the backbone, arrows
+    EdgeType.COMPOSES_WITH.value: "#66bb6a",  # green
+    EdgeType.SIMILAR_TO.value: "#b39ddb",  # soft violet, drawn faint
+    EdgeType.BELONGS_TO.value: "#ffb74d",  # amber, dashed
+    EdgeType.CONFLICTS_WITH.value: "#ef5350",  # red, thick
 }
 
 _REASON_COLORS = {
-    "seed": "#e74c3c",
-    "prerequisite": "#27ae60",
-    "composition": "#8e44ad",
-    "similar": "#f39c12",
+    "seed": "#ffca28",  # gold — brightest: direct hits
+    "prerequisite": "#4dd0e1",  # cyan — auto-added by the graph
+    "composition": "#81c784",  # light green
+    "similar": "#b39ddb",  # violet, matches the similar edge hue
 }
 
 # Human-friendly (Chinese) labels for the beginner-facing view.
@@ -58,6 +62,39 @@ _REASON_LABELS = {
     "composition": "组合搭配",
     "similar": "相似替代",
 }
+
+
+def highlight_payload(result: Any) -> Dict[str, Any]:
+    """Build the ``highlight`` + ``value`` payload for a retrieval result.
+
+    Shared by the server-rendered page and the ``/api/query`` endpoint, so the
+    live query panel updates the graph through exactly the same protocol as a
+    page rendered with a baked-in result.
+    """
+    highlight: Dict[str, Any] = {}
+    for s in getattr(result, "skills", []):
+        highlight[s.id] = {"reason": s.reason, "depth": s.depth}
+    highlight["__meta__"] = {
+        "query": getattr(result, "query", ""),
+        "seeds": [s.id for s in getattr(result, "seeds", [])],
+        "total_tokens": getattr(result, "total_tokens", 0),
+    }
+
+    # "Keyword match" = the seed matches only; the graph additionally pulls
+    # in prerequisites / compositions the task needs. The delta is the value
+    # the skill graph adds: it completes the toolkit the task needs.
+    seeds = list(getattr(result, "seeds", []))
+    skills = list(getattr(result, "skills", []))
+    added = [s for s in skills if s.reason != "seed"]
+    value = {
+        "keyword_skills": len(seeds),
+        "keyword_tokens": sum(getattr(s, "token_estimate", 0) for s in seeds),
+        "added_skills": len(added),
+        "delivered_skills": len(skills),
+        "delivered_tokens": getattr(result, "total_tokens", 0),
+        "added": [{"id": s.id, "name": s.name, "reason": s.reason} for s in added],
+    }
+    return {"highlight": highlight, "value": value}
 
 
 def _payload(
@@ -93,32 +130,9 @@ def _payload(
     highlight: Optional[Dict[str, Any]] = None
     value: Optional[Dict[str, Any]] = None
     if result is not None:
-        highlight = {}
-        for s in getattr(result, "skills", []):
-            highlight[s.id] = {"reason": s.reason, "depth": s.depth}
-        highlight["__meta__"] = {
-            "query": getattr(result, "query", ""),
-            "seeds": [s.id for s in getattr(result, "seeds", [])],
-            "total_tokens": getattr(result, "total_tokens", 0),
-        }
-
-        # "Keyword match" = the seed matches only; the graph additionally pulls
-        # in prerequisites / compositions the task needs. The delta is the value
-        # the skill graph adds: it completes the toolkit the task needs.
-        seeds = list(getattr(result, "seeds", []))
-        skills = list(getattr(result, "skills", []))
-        added = [s for s in skills if s.reason != "seed"]
-        value = {
-            "keyword_skills": len(seeds),
-            "keyword_tokens": sum(getattr(s, "token_estimate", 0) for s in seeds),
-            "added_skills": len(added),
-            "delivered_skills": len(skills),
-            "delivered_tokens": getattr(result, "total_tokens", 0),
-            "added": [
-                {"id": s.id, "name": s.name, "reason": s.reason}
-                for s in added
-            ],
-        }
+        hv = highlight_payload(result)
+        highlight = hv["highlight"]
+        value = hv["value"]
 
     return {
         "title": title,
@@ -201,6 +215,18 @@ _TEMPLATE = """<!DOCTYPE html>
   .added { margin-top:8px; display:flex; flex-wrap:wrap; gap:5px; }
   .added .chip { font-size:11px; border-radius:6px; padding:2px 7px; background:#16281f; color:#bfe6cf; border:1px solid #2f6b4f; }
   .added .chip .rl { color:#8fb8a1; }
+  .querybox { background:#122029; border:1px solid #22303d; border-radius:8px; padding:10px; }
+  .qrow { display:flex; gap:6px; }
+  .qrow input { flex:1; padding:7px 9px; border-radius:7px; border:1px solid #2a3a4a; background:#0d151d; color:var(--fg); font-size:12.5px; }
+  .qrow button { padding:7px 13px; border-radius:7px; border:none; background:var(--accent); color:#04121b; font-weight:700; font-size:12.5px; cursor:pointer; }
+  .qrow button:disabled { opacity:.5; cursor:wait; }
+  .examples { margin-top:8px; display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .examples .exlabel { font-size:11px; color:var(--muted); }
+  .examples .ex { font-size:11px; border-radius:999px; padding:2px 9px; background:#20303f; color:#bcd2e4; border:1px solid #2a3a4a; cursor:pointer; }
+  .examples .ex:hover { border-color:var(--accent); color:var(--accent); }
+  .qerror { margin-top:8px; font-size:12px; color:#ef9a9a; background:#2a1518; border:1px solid #5c2a2e; border-radius:7px; padding:8px 10px; }
+  #qresult .cmp { margin-top:10px; }
+  #qresult .noapi { margin-top:8px; font-size:12px; color:var(--muted); line-height:1.6; }
 </style>
 </head>
 <body>
@@ -208,14 +234,30 @@ _TEMPLATE = """<!DOCTYPE html>
   <h1 id="title"></h1>
   <p>技能图谱把零散的「技能」用关系连成一张网。当 AI 接到任务时，它不再凭关键词瞎找，
      而是沿这张网找到真正需要的技能 —— 包括你<span class="kbd">没说出口、却必须先具备的前置技能</span>。
-     蓝点＝技能，橙点＝类别；连线颜色代表技能之间的关系，点任意节点可查看详情。</p>
+     蓝点＝技能，橙点＝类别；<span class="kbd">蓝实线箭头＝依赖方向</span>，红粗线＝互斥，紫虚线＝相似替代。
+     试试左侧「查询演示」：输入一个任务，看图谱如何只点亮需要的部分。</p>
 </header>
 <div id="app">
   <div id="stage"><canvas id="cv"></canvas></div>
   <div id="sidebar">
+    <h2>查询演示 · 图谱比关键词强在哪</h2>
+    <div class="querybox">
+      <div class="qrow">
+        <input id="qinput" placeholder="输入任务，如：构建 RAG 知识问答系统"/>
+        <button id="qbtn" title="运行检索">查询</button>
+      </div>
+      <div class="examples">
+        <span class="exlabel">示例：</span>
+        <button class="ex" data-q="构建一个 RAG 知识问答系统">RAG 问答</button>
+        <button class="ex" data-q="给团队做向量相似度检索">向量检索</button>
+        <button class="ex" data-q="写一篇正式的内部公告">内部公告</button>
+        <button class="ex" data-q="建立知识图谱并支持图查询">知识图谱</button>
+      </div>
+      <div id="qresult"></div>
+      <div id="qerror" class="qerror" hidden></div>
+    </div>
     <h2>这张图有多大</h2>
     <div class="stats" id="stats"></div>
-    <div id="querywrap"></div>
     <h2>图例 · 节点</h2>
     <div class="legend">
       <div><span class="dot" style="background:#4c9be8"></span>技能（一个可复用的能力）</div>
@@ -262,7 +304,7 @@ if (DATA.highlight){
   for (const k in DATA.highlight){ if (k!=='__meta__') reasons[k]=DATA.highlight[k]; }
   seeds = new Set(DATA.highlight.__meta__.seeds || []);
 }
-const dimmed = !!DATA.highlight;
+let dimmed = false;
 
 function nodeColor(n){ return n.type === 'category' ? '#e6a23c' : '#4c9be8'; }
 function ringColor(id){ const r = reasons[id]; return r ? DATA.colors.reasons[r.reason] : null; }
@@ -297,15 +339,56 @@ function step(){
   });
 }
 
+// Per-edge-type drawing style. Arrowheads make the dependency direction
+// readable; the block symbol on conflicts reads as "these two do not mix".
+const EDGE_STYLE = {
+  depends_on:   { width: 2.2, alpha: 0.9,  dash: [],      arrow: true,  block: false },
+  composes_with:{ width: 1.6, alpha: 0.75, dash: [],      arrow: false, block: false },
+  similar_to:   { width: 1.0, alpha: 0.30, dash: [3,4],   arrow: false, block: false },
+  belongs_to:   { width: 1.2, alpha: 0.55, dash: [6,5],   arrow: false, block: false },
+  conflicts_with:{width: 2.6, alpha: 0.9,  dash: [],      arrow: false, block: true  },
+};
+
+function drawArrowHead(a, b, color){
+  // small triangle at the target end, oriented along the line
+  const ang = Math.atan2(b.y-a.y, b.x-a.x);
+  const size = 8;
+  const x = b.x - Math.cos(ang)*size*1.2, y = b.y - Math.sin(ang)*size*1.2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - Math.cos(ang-0.45)*size, y - Math.sin(ang-0.45)*size);
+  ctx.lineTo(x - Math.cos(ang+0.45)*size, y - Math.sin(ang+0.45)*size);
+  ctx.closePath();
+  ctx.fillStyle = color; ctx.fill();
+}
+function drawBlock(a, b, color){
+  // perpendicular "stop" bar near each end: a visual "×" for the pair
+  [a, b].forEach(p => {
+    const ang = Math.atan2(b.y-a.y, b.x-a.x) + Math.PI/2;
+    const half = 7;
+    ctx.beginPath();
+    ctx.moveTo(p.x - Math.cos(ang)*half, p.y - Math.sin(ang)*half);
+    ctx.lineTo(p.x + Math.cos(ang)*half, p.y + Math.sin(ang)*half);
+    ctx.strokeStyle = color; ctx.lineWidth = 2.6; ctx.stroke();
+  });
+}
+
 function draw(){
   ctx.clearRect(0,0,W,H);
-  links.forEach(l => {
+  // Pass 1: edges. similar_to edges are drawn first (faint), strong relations on top.
+  const ordered = [...links].sort((x,y) => (EDGE_STYLE[x.type]?.alpha ?? .5) - (EDGE_STYLE[y.type]?.alpha ?? .5));
+  ordered.forEach(l => {
     const a=nodes[l.s], b=nodes[l.t];
-    ctx.strokeStyle = DATA.colors.edges[l.type] || '#555';
-    ctx.globalAlpha = 0.75;
-    ctx.lineWidth = l.type==='depends_on' ? 2 : 1.4;
-    ctx.setLineDash(l.type==='similar_to' ? [3,3] : (l.type==='belongs_to' ? [6,4] : []));
+    const st = EDGE_STYLE[l.type] || {width:1.4, alpha:.7, dash:[], arrow:false, block:false};
+    const color = DATA.colors.edges[l.type] || '#555';
+    const inRes = inResult(a.id) && inResult(b.id);
+    ctx.globalAlpha = (dimmed && !inRes) ? st.alpha*0.12 : st.alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = st.width * (inRes ? 1.35 : 1);
+    ctx.setLineDash(st.dash);
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    if (st.arrow && (!dimmed || inRes)) drawArrowHead(a, b, color);
+    if (st.block && (!dimmed || inRes)) drawBlock(a, b, color);
   });
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   nodes.forEach(n => {
@@ -314,7 +397,7 @@ function draw(){
     ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
     ctx.fillStyle = nodeColor(n); ctx.fill();
     const rc = ringColor(n.id);
-    if (rc){ ctx.lineWidth=3; ctx.strokeStyle=rc; ctx.stroke(); }
+    if (rc){ ctx.lineWidth=3.5; ctx.strokeStyle=rc; ctx.stroke(); }
     if (n.type !== 'category'){
       ctx.globalAlpha = (dimmed && !inResult(n.id)) ? 0.2 : 0.95;
       ctx.fillStyle = '#dce7f1';
@@ -365,8 +448,20 @@ document.getElementById('search').addEventListener('input', ev => {
 const REASON_LABELS = (DATA.labels && DATA.labels.reasons) || {};
 const EDGE_LABELS = (DATA.labels && DATA.labels.edges) || {};
 
+// Line-style hints rendered next to the colour swatches, because colour alone
+// does not encode arrows / dashes / thickness.
+const EDGE_SHAPE_HINT = {
+  depends_on: '实线＋箭头',
+  composes_with: '实线',
+  similar_to: '细虚线',
+  belongs_to: '长虚线',
+  conflicts_with: '粗线＋端点阻断记号',
+};
+
 document.getElementById('edgelist').innerHTML = Object.keys(DATA.colors.edges).map(t =>
-  `<div><span class="swatch" style="border-top-color:${DATA.colors.edges[t]}"></span>${EDGE_LABELS[t] || t}</div>`).join('');
+  `<div><span class="swatch" style="border-top-color:${DATA.colors.edges[t]}; border-top-width:${
+    t==='conflicts_with'?5:(t==='depends_on'?4:(t==='similar_to'?2:3))}"></span>${EDGE_LABELS[t] || t}` +
+  ` <span style="color:#66798c;font-size:11px">· ${EDGE_SHAPE_HINT[t]||''}</span></div>`).join('');
 
 document.getElementById('reasonlist').innerHTML = Object.keys(DATA.colors.reasons).map(r =>
   `<div><span class="dot" style="background:${DATA.colors.reasons[r]}"></span>${REASON_LABELS[r] || r}</div>`).join('');
@@ -376,31 +471,88 @@ const s = DATA.stats;
 document.getElementById('stats').innerHTML =
   `<b>${s.skills}</b> 个技能 · <b>${s.categories}</b> 个类别 · <b>${s.edges}</b> 条关系 · 依赖环 <b>${s.cycles}</b>`;
 
-if (DATA.highlight){
-  const m = DATA.highlight.__meta__;
-  const v = DATA.value;
-  let html = `<h2>本次任务</h2><div id="querywrap"><div>“${m.query}”</div>`;
+// ── live query demo: hit /api/query and re-highlight the graph in place ──
+function renderResultPanel(hl, v){
+  const box = document.getElementById('qresult');
+  const m = hl.__meta__ || {};
+  let html = `<div class="delta" style="margin-top:10px">任务：<b>“${m.query || ''}”</b></div>`;
   if (v){
     html += `<div class="cmp">
-        <div class="card"><div class="k">① 只看关键词命中</div>
-          <div class="v">${v.keyword_skills} 个</div><div class="t">~${v.keyword_tokens} tokens</div></div>
-        <div class="card graph"><div class="k">② 图谱补齐的前置技能</div>
-          <div class="v">+${v.added_skills} 个</div><div class="t">任务才能真正跑通</div></div>
+        <div class="card"><div class="k">① 关键词检索命中</div>
+          <div class="v">${v.keyword_skills} 个</div><div class="t">~${v.keyword_tokens} tokens · 全塞进上下文</div></div>
+        <div class="card graph"><div class="k">② 图谱交付</div>
+          <div class="v">${v.delivered_skills} 个</div><div class="t">~${v.delivered_tokens} tokens · 预算内完整依赖链</div></div>
       </div>`;
     if (v.added_skills > 0){
-      html += `<div class="delta">扁平检索只给你 <b>${v.keyword_skills}</b> 个“看起来相关”的技能就停下了；
-        技能图谱沿依赖关系又自动补齐了 <span class="hl">${v.added_skills} 个必须先具备的技能</span>，
-        最终交付 <b>${v.delivered_skills}</b> 个技能（约 ${v.delivered_tokens} tokens）：</div>
+      html += `<div class="delta">扁平检索只给 <b>${v.keyword_skills}</b> 个“看起来相关”的技能（约 ${v.keyword_tokens} tokens，不管预算）；
+        图谱沿依赖网自动补齐 <span class="hl">${v.added_skills} 个必须先具备的前置技能</span>，
+        并在预算内打包成能真正跑通的组合：</div>
         <div class="added">${v.added.map(a =>
           `<span class="chip">${a.name} <span class="rl">· ${REASON_LABELS[a.reason] || a.reason}</span></span>`).join('')}</div>`;
     } else {
-      html += `<div class="delta">该数据集只声明了技能本身、没有显式依赖关系，所以图谱结果与关键词命中一致（共 <b>${v.delivered_skills}</b> 个技能）。
-        “图谱补齐前置技能”的效果请看另一个演示：内置依赖语料。</div>`;
+      html += `<div class="delta">本次命中的技能没有声明额外依赖，图谱结果与关键词一致（<b>${v.delivered_skills}</b> 个技能）。
+        换个试试 “RAG 问答” 看依赖补齐效果。</div>`;
     }
+    html += `<div style="margin-top:8px;color:#8ba0b3;font-size:11.5px">金圈＝直接命中，青圈＝图谱补齐（见“为什么被选中”图例）。</div>`;
   }
-  html += `<div style="margin-top:10px;color:#8ba0b3">圈的颜色代表被选中的原因（见左侧图例）。</div></div>`;
-  document.getElementById('querywrap').innerHTML = html;
+  box.innerHTML = html;
 }
+
+function applyHighlight(hl, v){
+  for (const k of Object.keys(reasons)) delete reasons[k];
+  if (hl){
+    for (const k in hl){ if (k!=='__meta__') reasons[k]=hl[k]; }
+    seeds = new Set(hl.__meta__?.seeds || []);
+  } else {
+    seeds = new Set();
+  }
+  dimmed = !!(hl && Object.keys(reasons).length);
+  renderResultPanel(hl || {__meta__:{}}, v);
+}
+
+async function runQuery(q){
+  const btn = document.getElementById('qbtn');
+  const err = document.getElementById('qerror');
+  err.hidden = true;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const resp = await fetch('/api/query?q=' + encodeURIComponent(q));
+    if (resp.status === 404){
+      document.getElementById('qresult').innerHTML =
+        '<div class="noapi">此页面为静态导出，未连接查询服务。请访问 STG 可视化服务地址体验实时查询演示。</div>';
+      return;
+    }
+    const data = await resp.json();
+    if (!resp.ok){
+      err.textContent = data.error || ('查询失败（HTTP ' + resp.status + '）');
+      err.hidden = false;
+      return;
+    }
+    applyHighlight(data.highlight, data.value);
+  } catch (e){
+    err.textContent = '无法连接查询服务：' + e;
+    err.hidden = false;
+  } finally {
+    btn.disabled = false; btn.textContent = '查询';
+  }
+}
+
+document.getElementById('qbtn').addEventListener('click', () => {
+  const q = document.getElementById('qinput').value.trim();
+  if (q) runQuery(q);
+});
+document.getElementById('qinput').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.value.trim()) runQuery(ev.target.value.trim());
+});
+document.querySelectorAll('.examples .ex').forEach(b => {
+  b.addEventListener('click', () => {
+    document.getElementById('qinput').value = b.dataset.q;
+    runQuery(b.dataset.q);
+  });
+});
+
+// A page baked with a server-side result starts highlighted (write_html flow).
+if (DATA.highlight) applyHighlight(DATA.highlight, DATA.value);
 
 resize(); loop();
 </script>

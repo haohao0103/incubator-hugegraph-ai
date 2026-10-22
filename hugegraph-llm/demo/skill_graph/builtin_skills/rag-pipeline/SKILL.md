@@ -9,6 +9,8 @@ relations:
     - vector-index
     - reranking
     - prompt-engineering
+  composes_with:
+    - knowledge-graph-build
 ---
 
 # rag-pipeline
